@@ -1,0 +1,2182 @@
+/* ============================================================
+   PHARMAFLOW — SUPPORT CENTER
+   Version professionnelle responsive
+   Ordinateur • Tablette • Android • iPhone
+   ============================================================ */
+
+.pf-support-page {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #f5f8fc;
+  color: #172b3d;
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.pf-support-page *,
+.pf-support-page *::before,
+.pf-support-page *::after {
+  box-sizing: border-box;
+}
+
+.pf-support-page button,
+.pf-support-page textarea,
+.pf-support-page input {
+  font: inherit;
+}
+
+.pf-support-page a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.pf-support-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+
+  width: 100%;
+
+  border-bottom: 1px solid rgba(222, 231, 239, 0.9);
+
+  background: rgba(255, 255, 255, 0.94);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.pf-support-header-inner {
+  width: min(1220px, calc(100% - 48px));
+  min-height: 76px;
+
+  margin: 0 auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 25px;
+}
+
+.pf-support-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+
+  color: #123754;
+  text-decoration: none;
+
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.pf-support-brand-mark {
+  width: 40px;
+  height: 40px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1167d8 0%,
+      #0b9c91 100%
+    );
+
+  color: white;
+
+  font-size: 20px;
+  font-weight: 900;
+
+  box-shadow:
+    0 9px 24px rgba(17, 103, 216, 0.2);
+}
+
+.pf-support-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ============================================================
+   LANGUAGE
+   ============================================================ */
+
+.pf-support-language {
+  display: flex;
+  align-items: center;
+
+  padding: 3px;
+
+  border: 1px solid #e1e8ee;
+  border-radius: 10px;
+
+  background: #f7f9fb;
+}
+
+.pf-support-language button {
+  min-width: 38px;
+  height: 30px;
+
+  padding: 0 8px;
+
+  border: 0;
+  border-radius: 7px;
+
+  background: transparent;
+
+  color: #8493a1;
+
+  cursor: pointer;
+
+  font-size: 9px;
+  font-weight: 900;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pf-support-language button:hover {
+  color: #1167d8;
+}
+
+.pf-support-language button.active {
+  background: white;
+  color: #1167d8;
+
+  box-shadow:
+    0 3px 10px rgba(15, 43, 70, 0.08);
+}
+
+/* ============================================================
+   HEADER BUTTONS
+   ============================================================ */
+
+.pf-support-login {
+  min-height: 39px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 17px;
+
+  border-radius: 10px;
+
+  background: #1167d8;
+  color: white;
+
+  text-decoration: none;
+
+  font-size: 10px;
+  font-weight: 850;
+
+  box-shadow:
+    0 8px 20px rgba(17, 103, 216, 0.17);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pf-support-login:hover {
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 11px 25px rgba(17, 103, 216, 0.23);
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+
+.pf-support-hero {
+  position: relative;
+  overflow: hidden;
+
+  padding: 72px 20px 105px;
+
+  background:
+    radial-gradient(
+      circle at 8% 20%,
+      rgba(17, 103, 216, 0.13),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 92% 75%,
+      rgba(10, 156, 145, 0.13),
+      transparent 28%
+    ),
+    linear-gradient(
+      135deg,
+      #f9fcff 0%,
+      #edf6fb 100%
+    );
+}
+
+.pf-support-hero::before {
+  content: "";
+
+  position: absolute;
+
+  width: 560px;
+  height: 560px;
+
+  right: -270px;
+  top: -360px;
+
+  border: 1px solid rgba(17, 103, 216, 0.08);
+
+  border-radius: 50%;
+}
+
+.pf-support-hero::after {
+  content: "";
+
+  position: absolute;
+
+  width: 320px;
+  height: 320px;
+
+  left: -200px;
+  bottom: -220px;
+
+  border: 1px solid rgba(10, 156, 145, 0.08);
+
+  border-radius: 50%;
+}
+
+.pf-support-hero-content {
+  position: relative;
+  z-index: 2;
+
+  width: min(900px, 100%);
+
+  margin: 0 auto;
+
+  text-align: center;
+}
+
+/* ============================================================
+   BACK HOME
+   ============================================================ */
+
+.pf-support-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 20px;
+
+  color: #718395;
+
+  font-size: 10px;
+  font-weight: 750;
+
+  text-decoration: none;
+
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.pf-support-back:hover {
+  color: #1167d8;
+  transform: translateX(-2px);
+}
+
+/* ============================================================
+   STATUS
+   ============================================================ */
+
+.pf-support-status {
+  width: fit-content;
+
+  margin: 0 auto 17px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 13px;
+
+  border: 1px solid #d6e9e3;
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.8);
+
+  color: #41816f;
+
+  font-size: 9px;
+  font-weight: 850;
+
+  box-shadow:
+    0 6px 18px rgba(15, 43, 70, 0.04);
+}
+
+.pf-support-status span {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: #18af83;
+
+  box-shadow:
+    0 0 0 4px rgba(24, 175, 131, 0.1);
+}
+
+/* ============================================================
+   HERO TEXT
+   ============================================================ */
+
+.pf-support-hero h1 {
+  max-width: 800px;
+
+  margin: 0 auto;
+
+  color: #12344f;
+
+  font-size: clamp(
+    42px,
+    6vw,
+    68px
+  );
+
+  line-height: 0.98;
+
+  letter-spacing: -0.065em;
+
+  font-weight: 950;
+}
+
+.pf-support-hero-content > p {
+  max-width: 650px;
+
+  margin: 21px auto 0;
+
+  color: #748697;
+
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+/* ============================================================
+   MAIN
+   ============================================================ */
+
+.pf-support-main {
+  position: relative;
+  z-index: 10;
+
+  width: min(1220px, calc(100% - 48px));
+
+  margin: -48px auto 0;
+
+  padding-bottom: 90px;
+}
+
+.pf-support-layout {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.45fr)
+    minmax(330px, 0.75fr);
+
+  gap: 22px;
+
+  align-items: start;
+}
+
+.pf-support-primary {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 20px;
+}
+
+.pf-support-sidebar {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 17px;
+}
+
+/* ============================================================
+   AI CHAT CARD
+   ============================================================ */
+
+.pf-support-chat-card {
+  min-height: 600px;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+
+  border: 1px solid #dfe8ef;
+  border-radius: 25px;
+
+  background: white;
+
+  box-shadow:
+    0 25px 70px rgba(15, 43, 70, 0.08);
+}
+
+/* ============================================================
+   CHAT HEADER
+   ============================================================ */
+
+.pf-support-chat-header {
+  min-height: 78px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 16px 22px;
+
+  border-bottom: 1px solid #edf1f4;
+
+  background: white;
+}
+
+.pf-support-ai-avatar {
+  width: 45px;
+  height: 45px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 45px;
+
+  border-radius: 14px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1167d8,
+      #0a9a91
+    );
+
+  color: white;
+
+  font-size: 19px;
+
+  box-shadow:
+    0 8px 22px rgba(17, 103, 216, 0.18);
+}
+
+.pf-support-chat-header > div:nth-child(2) {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pf-support-chat-header strong {
+  color: #1d354b;
+
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pf-support-chat-header span {
+  color: #8a9aa8;
+
+  font-size: 9px;
+}
+
+.pf-support-ai-dot {
+  width: 8px;
+  height: 8px;
+
+  margin-left: auto;
+
+  flex: 0 0 8px;
+
+  border-radius: 50%;
+
+  background: #19ad82;
+
+  box-shadow:
+    0 0 0 5px rgba(25, 173, 130, 0.1);
+}
+
+/* ============================================================
+   CHAT START
+   ============================================================ */
+
+.pf-support-chat-start {
+  flex: 1;
+
+  min-height: 520px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 55px 35px;
+
+  text-align: center;
+
+  background:
+    radial-gradient(
+      circle at 50% 30%,
+      rgba(17, 103, 216, 0.055),
+      transparent 38%
+    ),
+    #fbfdff;
+}
+
+.pf-support-chat-icon {
+  width: 84px;
+  height: 84px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 24px;
+
+  border: 1px solid #dce9f2;
+  border-radius: 26px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #f3f9ff,
+      #edf8f6
+    );
+
+  font-size: 36px;
+
+  box-shadow:
+    0 18px 40px rgba(15, 43, 70, 0.07);
+}
+
+.pf-support-chat-start h2 {
+  margin: 0;
+
+  color: #18364f;
+
+  font-size: clamp(
+    24px,
+    3vw,
+    34px
+  );
+
+  line-height: 1.1;
+
+  letter-spacing: -0.04em;
+
+  font-weight: 900;
+}
+
+.pf-support-chat-start p {
+  max-width: 530px;
+
+  margin: 15px auto 25px;
+
+  color: #7d8e9d;
+
+  font-size: 12px;
+
+  line-height: 1.75;
+}
+
+/* ============================================================
+   PRIMARY BUTTON
+   ============================================================ */
+
+.pf-support-primary-button {
+  min-height: 48px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 14px;
+
+  padding: 0 22px;
+
+  border: 0;
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1167d8,
+      #0d83bd
+    );
+
+  color: white;
+
+  cursor: pointer;
+
+  font-size: 11px;
+  font-weight: 850;
+
+  box-shadow:
+    0 11px 25px rgba(17, 103, 216, 0.19);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pf-support-primary-button span {
+  font-size: 16px;
+}
+
+.pf-support-primary-button:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 16px 32px rgba(17, 103, 216, 0.25);
+}
+
+.pf-support-primary-button:active {
+  transform: translateY(0);
+}
+
+/* ============================================================
+   ACTIVE CHAT
+   ============================================================ */
+
+.pf-support-chat-active {
+  flex: 1;
+
+  min-height: 520px;
+
+  display: flex;
+  flex-direction: column;
+
+  background: #f8fafc;
+}
+
+.pf-support-messages {
+  flex: 1;
+
+  min-height: 390px;
+  max-height: 485px;
+
+  overflow-y: auto;
+
+  padding: 25px;
+
+  scroll-behavior: smooth;
+
+  scrollbar-width: thin;
+  scrollbar-color: #ccd9e4 transparent;
+}
+
+.pf-support-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pf-support-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pf-support-messages::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  background: #ccd9e4;
+}
+
+/* ============================================================
+   MESSAGE
+   ============================================================ */
+
+.pf-support-message {
+  display: flex;
+  align-items: flex-end;
+
+  gap: 9px;
+
+  margin-bottom: 18px;
+}
+
+.pf-support-message.user {
+  justify-content: flex-end;
+}
+
+.pf-support-message-avatar {
+  width: 31px;
+  height: 31px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 31px;
+
+  border-radius: 10px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1167d8,
+      #0a9a91
+    );
+
+  color: white;
+
+  font-size: 12px;
+}
+
+.pf-support-message-bubble {
+  max-width: min(
+    75%,
+    610px
+  );
+
+  padding: 12px 15px;
+
+  border-radius: 15px;
+
+  font-size: 11px;
+
+  line-height: 1.7;
+
+  white-space: normal;
+}
+
+.pf-support-message.ai
+  .pf-support-message-bubble {
+  border: 1px solid #e2e9ef;
+
+  border-bottom-left-radius: 5px;
+
+  background: white;
+
+  color: #52697c;
+
+  box-shadow:
+    0 5px 17px rgba(15, 43, 70, 0.04);
+}
+
+.pf-support-message.user
+  .pf-support-message-bubble {
+  border-bottom-right-radius: 5px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #1167d8,
+      #0e6fc8
+    );
+
+  color: white;
+
+  box-shadow:
+    0 8px 19px rgba(17, 103, 216, 0.15);
+}
+
+/* ============================================================
+   THINKING
+   ============================================================ */
+
+.pf-support-thinking {
+  display: flex;
+  align-items: center;
+
+  gap: 4px;
+}
+
+.pf-support-thinking > span {
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+
+  background: #8ca2b4;
+
+  animation:
+    pf-support-thinking 1.2s
+    infinite ease-in-out;
+}
+
+.pf-support-thinking > span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.pf-support-thinking > span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.pf-support-thinking small {
+  margin-left: 8px;
+
+  color: #8192a1;
+
+  font-size: 9px;
+}
+
+@keyframes pf-support-thinking {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* ============================================================
+   CHAT FORM
+   ============================================================ */
+
+.pf-support-chat-form {
+  display: flex;
+  align-items: flex-end;
+
+  gap: 9px;
+
+  padding: 16px;
+
+  border-top: 1px solid #e7edf2;
+
+  background: white;
+}
+
+.pf-support-chat-form textarea {
+  flex: 1;
+
+  min-width: 0;
+  min-height: 48px;
+  max-height: 130px;
+
+  resize: vertical;
+
+  padding: 14px 15px;
+
+  border: 1px solid #dce5ec;
+  border-radius: 12px;
+
+  outline: none;
+
+  background: #f9fbfc;
+  color: #30475b;
+
+  font-size: 11px;
+  line-height: 1.5;
+
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pf-support-chat-form textarea::placeholder {
+  color: #9aa8b4;
+}
+
+.pf-support-chat-form textarea:focus {
+  border-color: #91b9da;
+
+  background: white;
+
+  box-shadow:
+    0 0 0 3px rgba(17, 103, 216, 0.06);
+}
+
+.pf-support-chat-form button {
+  width: 48px;
+  height: 48px;
+
+  flex: 0 0 48px;
+
+  display: grid;
+  place-items: center;
+
+  border: 0;
+  border-radius: 12px;
+
+  background: #1167d8;
+  color: white;
+
+  cursor: pointer;
+
+  font-size: 18px;
+  font-weight: 900;
+
+  box-shadow:
+    0 8px 20px rgba(17, 103, 216, 0.18);
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.pf-support-chat-form button:hover {
+  transform: translateY(-2px);
+  background: #0d5fbe;
+}
+
+.pf-support-chat-form button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================================================
+   CATEGORY SECTION
+   ============================================================ */
+
+.pf-support-category-section {
+  padding: 27px;
+
+  border: 1px solid #e1e9ef;
+  border-radius: 23px;
+
+  background: white;
+
+  box-shadow:
+    0 15px 40px rgba(15, 43, 70, 0.04);
+}
+
+.pf-support-section-heading {
+  margin-bottom: 19px;
+}
+
+.pf-support-section-heading > span {
+  display: block;
+
+  margin-bottom: 6px;
+
+  color: #1167d8;
+
+  font-size: 8px;
+  font-weight: 900;
+
+  letter-spacing: 0.1em;
+
+  text-transform: uppercase;
+}
+
+.pf-support-section-heading h2 {
+  margin: 0;
+
+  color: #1c354b;
+
+  font-size: 18px;
+
+  line-height: 1.3;
+
+  font-weight: 900;
+
+  letter-spacing: -0.025em;
+}
+
+/* ============================================================
+   CATEGORY GRID
+   ============================================================ */
+
+.pf-support-category-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+
+  gap: 9px;
+}
+
+.pf-support-category-card {
+  position: relative;
+
+  min-width: 0;
+  min-height: 175px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  padding: 15px;
+
+  border: 1px solid #e3eaf0;
+  border-radius: 15px;
+
+  background: #fbfcfd;
+
+  cursor: pointer;
+
+  text-align: left;
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pf-support-category-card:hover {
+  transform: translateY(-2px);
+
+  border-color: #c8dbea;
+
+  background: white;
+
+  box-shadow:
+    0 10px 25px rgba(15, 43, 70, 0.06);
+}
+
+.pf-support-category-card.selected {
+  border-color: #1167d8;
+
+  background:
+    linear-gradient(
+      145deg,
+      #f5faff,
+      #f9fcff
+    );
+
+  box-shadow:
+    0 10px 28px rgba(17, 103, 216, 0.09);
+}
+
+.pf-support-category-icon {
+  width: 36px;
+  height: 36px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 12px;
+
+  border-radius: 10px;
+
+  background: #edf5fc;
+
+  font-size: 16px;
+}
+
+.pf-support-category-card:nth-child(2)
+  .pf-support-category-icon {
+  background: #edf8f5;
+}
+
+.pf-support-category-card:nth-child(3)
+  .pf-support-category-icon {
+  background: #fff7e6;
+}
+
+.pf-support-category-card:nth-child(4)
+  .pf-support-category-icon {
+  background: #fff0f0;
+}
+
+.pf-support-category-card:nth-child(5)
+  .pf-support-category-icon {
+  background: #f3efff;
+}
+
+.pf-support-category-card strong {
+  color: #2b4256;
+
+  font-size: 10px;
+
+  line-height: 1.35;
+
+  font-weight: 900;
+}
+
+.pf-support-category-card p {
+  margin: 7px 0 0;
+
+  color: #8393a1;
+
+  font-size: 8px;
+
+  line-height: 1.55;
+}
+
+.pf-support-category-arrow {
+  margin-top: auto;
+
+  padding-top: 10px;
+
+  color: #1167d8;
+
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* ============================================================
+   HUMAN SUPPORT
+   ============================================================ */
+
+.pf-support-human-card {
+  display: grid;
+
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto;
+
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 22px 24px;
+
+  border: 1px solid #dbe9e5;
+  border-radius: 21px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #f4fffb,
+      #ffffff
+    );
+
+  box-shadow:
+    0 13px 35px rgba(15, 43, 70, 0.04);
+}
+
+.pf-support-human-icon {
+  width: 48px;
+  height: 48px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 14px;
+
+  background: #e6f8f2;
+
+  font-size: 20px;
+}
+
+.pf-support-human-card > div:nth-child(2) {
+  min-width: 0;
+}
+
+.pf-support-human-card > div:nth-child(2) > span {
+  display: block;
+
+  color: #24485a;
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pf-support-human-card p {
+  margin: 4px 0 0;
+
+  color: #728b86;
+
+  font-size: 9px;
+
+  line-height: 1.5;
+}
+
+.pf-support-outline-button {
+  min-height: 41px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+
+  padding: 0 14px;
+
+  border: 1px solid #b9ddd3;
+  border-radius: 10px;
+
+  background: white;
+
+  color: #197d6b;
+
+  text-decoration: none;
+
+  font-size: 9px;
+  font-weight: 850;
+
+  white-space: nowrap;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.pf-support-outline-button:hover {
+  transform: translateY(-1px);
+  background: #f1fbf8;
+}
+
+/* ============================================================
+   SIDEBAR — CONTACT
+   ============================================================ */
+
+.pf-support-contact-card {
+  padding: 25px;
+
+  border: 1px solid #e0e8ee;
+  border-radius: 23px;
+
+  background: white;
+
+  box-shadow:
+    0 17px 43px rgba(15, 43, 70, 0.055);
+}
+
+.pf-support-sidebar-icon {
+  width: 44px;
+  height: 44px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 16px;
+
+  border-radius: 13px;
+
+  background: #edf5fc;
+
+  font-size: 19px;
+}
+
+.pf-support-contact-card h3 {
+  margin: 0;
+
+  color: #20394f;
+
+  font-size: 16px;
+  font-weight: 900;
+
+  letter-spacing: -0.02em;
+}
+
+.pf-support-contact-card > p {
+  margin: 8px 0 18px;
+
+  color: #82919e;
+
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.pf-support-contact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.pf-support-contact-list button {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    35px
+    minmax(0, 1fr)
+    auto;
+
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 9px 10px;
+
+  border: 1px solid #edf1f4;
+  border-radius: 12px;
+
+  background: #fbfcfd;
+
+  cursor: pointer;
+
+  text-align: left;
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.pf-support-contact-list button:hover {
+  transform: translateX(2px);
+
+  border-color: #d4e1ea;
+
+  background: #f7fafc;
+}
+
+.pf-support-contact-list button > span {
+  width: 35px;
+  height: 35px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  background: #eef5fb;
+
+  font-size: 14px;
+}
+
+.pf-support-contact-list button > div {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.pf-support-contact-list small {
+  color: #94a1ad;
+
+  font-size: 7px;
+}
+
+.pf-support-contact-list strong {
+  overflow: hidden;
+
+  color: #435b6e;
+
+  font-size: 9px;
+
+  font-weight: 850;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-support-contact-list b {
+  color: #1167d8;
+
+  font-size: 14px;
+}
+
+/* ============================================================
+   EXTRA CONTACTS
+   ============================================================ */
+
+.pf-support-show-contacts {
+  width: 100%;
+
+  margin-top: 13px;
+
+  padding: 8px 0;
+
+  border: 0;
+
+  background: transparent;
+
+  color: #1167d8;
+
+  cursor: pointer;
+
+  font-size: 9px;
+  font-weight: 850;
+
+  text-align: left;
+}
+
+.pf-support-extra-contacts {
+  display: grid;
+  gap: 7px;
+
+  padding-top: 5px;
+}
+
+.pf-support-extra-contacts > div {
+  display: grid;
+
+  grid-template-columns:
+    31px
+    minmax(0, 1fr);
+
+  column-gap: 9px;
+
+  padding: 9px;
+
+  border: 1px solid #edf1f4;
+  border-radius: 10px;
+
+  background: #fbfcfd;
+}
+
+.pf-support-extra-contacts > div > span {
+  grid-row: span 2;
+
+  width: 31px;
+  height: 31px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 8px;
+
+  background: #f0f5f8;
+}
+
+.pf-support-extra-contacts strong {
+  color: #4c6375;
+
+  font-size: 8px;
+}
+
+.pf-support-extra-contacts small {
+  color: #98a5b0;
+
+  font-size: 7px;
+}
+
+/* ============================================================
+   HOURS
+   ============================================================ */
+
+.pf-support-hours-card {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 12px;
+
+  padding: 19px;
+
+  border: 1px solid #e2e9ef;
+  border-radius: 19px;
+
+  background: white;
+
+  box-shadow:
+    0 11px 30px rgba(15, 43, 70, 0.04);
+}
+
+.pf-support-hours-card > span {
+  width: 37px;
+  height: 37px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 37px;
+
+  border-radius: 10px;
+
+  background: #fff7e7;
+
+  font-size: 15px;
+}
+
+.pf-support-hours-card strong {
+  display: block;
+
+  color: #30485c;
+
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.pf-support-hours-card p {
+  margin: 4px 0 0;
+
+  color: #8998a5;
+
+  font-size: 8px;
+
+  line-height: 1.6;
+}
+
+/* ============================================================
+   SECURITY
+   ============================================================ */
+
+.pf-support-security-card {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    37px
+    minmax(0, 1fr)
+    auto;
+
+  align-items: start;
+
+  gap: 11px;
+
+  padding: 19px;
+
+  border: 1px solid #eedeb7;
+  border-radius: 19px;
+
+  background: #fffaf0;
+
+  cursor: pointer;
+
+  text-align: left;
+}
+
+.pf-support-security-card > span {
+  width: 37px;
+  height: 37px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 10px;
+
+  background: #fff0c9;
+
+  font-size: 15px;
+}
+
+.pf-support-security-card strong {
+  display: block;
+
+  color: #765b23;
+
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.pf-support-security-card p {
+  margin: 4px 0 0;
+
+  color: #947d4e;
+
+  font-size: 8px;
+
+  line-height: 1.65;
+}
+
+.pf-support-security-card b {
+  color: #9a814b;
+
+  font-size: 15px;
+}
+
+/* ============================================================
+   TICKETS
+   ============================================================ */
+
+.pf-support-ticket-card {
+  padding: 24px;
+
+  border: 1px solid #dce6ef;
+  border-radius: 21px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #f7fbff,
+      #ffffff
+    );
+
+  box-shadow:
+    0 14px 35px rgba(15, 43, 70, 0.045);
+}
+
+.pf-support-ticket-card > span {
+  width: 43px;
+  height: 43px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 15px;
+
+  border-radius: 13px;
+
+  background: #edf5fc;
+
+  font-size: 18px;
+}
+
+.pf-support-ticket-card h3 {
+  margin: 0;
+
+  color: #233d54;
+
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.pf-support-ticket-card p {
+  margin: 8px 0 17px;
+
+  color: #81919f;
+
+  font-size: 9px;
+
+  line-height: 1.65;
+}
+
+.pf-support-ticket-button {
+  min-height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 10px;
+
+  background: #1167d8;
+
+  color: white;
+
+  text-decoration: none;
+
+  font-size: 9px;
+  font-weight: 850;
+
+  box-shadow:
+    0 8px 18px rgba(17, 103, 216, 0.14);
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+
+.pf-support-footer {
+  border-top: 1px solid #e2e9ef;
+
+  background: white;
+}
+
+.pf-support-footer > div {
+  width: min(1220px, calc(100% - 48px));
+
+  margin: 0 auto;
+
+  padding: 28px 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 25px;
+}
+
+.pf-support-footer > div:first-child {
+  padding-top: 30px;
+  padding-bottom: 30px;
+}
+
+.pf-support-footer > div > strong {
+  color: #25445d;
+
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pf-support-footer > div > span {
+  margin-left: 8px;
+
+  color: #8b99a6;
+
+  font-size: 8px;
+}
+
+.pf-support-footer > div:last-child {
+  padding-top: 0;
+  padding-bottom: 30px;
+
+  justify-content: flex-end;
+
+  border-top: 1px solid #f0f3f5;
+}
+
+.pf-support-footer a {
+  color: #758695;
+
+  font-size: 9px;
+  font-weight: 750;
+
+  text-decoration: none;
+
+  transition: color 0.2s ease;
+}
+
+.pf-support-footer a:hover {
+  color: #1167d8;
+}
+
+/* ============================================================
+   TABLET — 1200px
+   ============================================================ */
+
+@media (max-width: 1200px) {
+  .pf-support-category-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+
+  .pf-support-category-card {
+    min-height: 155px;
+  }
+}
+
+/* ============================================================
+   TABLET — 1000px
+   ============================================================ */
+
+@media (max-width: 1000px) {
+  .pf-support-header-inner,
+  .pf-support-main,
+  .pf-support-footer > div {
+    width: min(
+      100% - 36px,
+      850px
+    );
+  }
+
+  .pf-support-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-support-sidebar {
+    display: grid;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    align-items: start;
+  }
+
+  .pf-support-contact-card {
+    grid-column: span 2;
+  }
+
+  .pf-support-ticket-card {
+    grid-column: span 2;
+  }
+
+  .pf-support-category-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ============================================================
+   TABLET PORTRAIT — 768px
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .pf-support-header-inner {
+    min-height: 68px;
+  }
+
+  .pf-support-hero {
+    padding: 58px 18px 90px;
+  }
+
+  .pf-support-hero h1 {
+    font-size: clamp(
+      38px,
+      9vw,
+      54px
+    );
+  }
+
+  .pf-support-main {
+    margin-top: -40px;
+  }
+
+  .pf-support-category-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .pf-support-human-card {
+    grid-template-columns:
+      auto
+      minmax(0, 1fr);
+  }
+
+  .pf-support-outline-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+/* ============================================================
+   MOBILE — 600px
+   ============================================================ */
+
+@media (max-width: 600px) {
+  .pf-support-header-inner,
+  .pf-support-main,
+  .pf-support-footer > div {
+    width: calc(100% - 28px);
+  }
+
+  .pf-support-brand {
+    font-size: 16px;
+  }
+
+  .pf-support-brand-mark {
+    width: 36px;
+    height: 36px;
+
+    border-radius: 11px;
+
+    font-size: 17px;
+  }
+
+  .pf-support-header-actions {
+    gap: 7px;
+  }
+
+  .pf-support-language {
+    padding: 2px;
+  }
+
+  .pf-support-language button {
+    min-width: 32px;
+    height: 28px;
+  }
+
+  .pf-support-login {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+
+  .pf-support-hero {
+    padding: 48px 14px 82px;
+  }
+
+  .pf-support-hero h1 {
+    font-size: 39px;
+    letter-spacing: -0.055em;
+  }
+
+  .pf-support-hero-content > p {
+    font-size: 12px;
+  }
+
+  .pf-support-main {
+    margin-top: -35px;
+    padding-bottom: 60px;
+  }
+
+  .pf-support-layout {
+    gap: 15px;
+  }
+
+  .pf-support-primary,
+  .pf-support-sidebar {
+    gap: 15px;
+  }
+
+  .pf-support-chat-card {
+    min-height: 560px;
+    border-radius: 20px;
+  }
+
+  .pf-support-chat-header {
+    min-height: 70px;
+    padding: 13px 15px;
+  }
+
+  .pf-support-ai-avatar {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border-radius: 12px;
+  }
+
+  .pf-support-chat-start {
+    min-height: 485px;
+    padding: 40px 20px;
+  }
+
+  .pf-support-chat-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 21px;
+    font-size: 30px;
+  }
+
+  .pf-support-chat-start h2 {
+    font-size: 25px;
+  }
+
+  .pf-support-chat-start p {
+    font-size: 11px;
+  }
+
+  .pf-support-messages {
+    min-height: 350px;
+    max-height: 450px;
+    padding: 17px;
+  }
+
+  .pf-support-message-bubble {
+    max-width: 87%;
+    font-size: 10px;
+  }
+
+  .pf-support-chat-form {
+    padding: 10px;
+  }
+
+  .pf-support-chat-form textarea {
+    min-height: 45px;
+    padding: 12px;
+  }
+
+  .pf-support-chat-form button {
+    width: 45px;
+    height: 45px;
+    flex-basis: 45px;
+  }
+
+  .pf-support-category-section {
+    padding: 19px;
+    border-radius: 19px;
+  }
+
+  .pf-support-category-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pf-support-category-card {
+    min-height: 150px;
+    padding: 13px;
+  }
+
+  .pf-support-category-card p {
+    font-size: 8px;
+  }
+
+  .pf-support-human-card {
+    padding: 18px;
+  }
+
+  .pf-support-sidebar {
+    display: flex;
+  }
+
+  .pf-support-contact-card,
+  .pf-support-hours-card,
+  .pf-support-security-card,
+  .pf-support-ticket-card {
+    border-radius: 18px;
+  }
+
+  .pf-support-footer > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .pf-support-footer > div:last-child {
+    justify-content: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* ============================================================
+   MOBILE SMALL — 430px
+   ============================================================ */
+
+@media (max-width: 430px) {
+  .pf-support-header-inner {
+    min-height: 63px;
+  }
+
+  .pf-support-brand {
+    font-size: 14px;
+  }
+
+  .pf-support-brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .pf-support-language {
+    display: none;
+  }
+
+  .pf-support-login {
+    font-size: 9px;
+  }
+
+  .pf-support-hero {
+    padding: 42px 12px 74px;
+  }
+
+  .pf-support-back {
+    font-size: 9px;
+  }
+
+  .pf-support-status {
+    font-size: 8px;
+  }
+
+  .pf-support-hero h1 {
+    font-size: 35px;
+  }
+
+  .pf-support-hero-content > p {
+    margin-top: 16px;
+    font-size: 11px;
+  }
+
+  .pf-support-main {
+    width: calc(100% - 20px);
+    margin-top: -28px;
+  }
+
+  .pf-support-chat-card {
+    min-height: 530px;
+    border-radius: 17px;
+  }
+
+  .pf-support-chat-header {
+    padding: 12px;
+  }
+
+  .pf-support-chat-header strong {
+    font-size: 11px;
+  }
+
+  .pf-support-chat-start {
+    min-height: 450px;
+    padding: 35px 16px;
+  }
+
+  .pf-support-chat-start h2 {
+    font-size: 22px;
+  }
+
+  .pf-support-chat-start p {
+    font-size: 10px;
+  }
+
+  .pf-support-primary-button {
+    width: 100%;
+    min-height: 45px;
+  }
+
+  .pf-support-category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-support-category-card {
+    min-height: 115px;
+  }
+
+  .pf-support-category-icon {
+    margin-bottom: 8px;
+  }
+
+  .pf-support-category-card p {
+    max-width: 95%;
+  }
+
+  .pf-support-human-card {
+    grid-template-columns:
+      42px
+      minmax(0, 1fr);
+
+    gap: 11px;
+  }
+
+  .pf-support-human-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .pf-support-outline-button {
+    min-height: 43px;
+    margin-top: 5px;
+  }
+
+  .pf-support-contact-card {
+    padding: 19px;
+  }
+
+  .pf-support-hours-card,
+  .pf-support-security-card,
+  .pf-support-ticket-card {
+    padding: 17px;
+  }
+
+  .pf-support-footer {
+    padding-bottom: env(
+      safe-area-inset-bottom
+    );
+  }
+}
+
+/* ============================================================
+   IPHONE SAFE AREA
+   ============================================================ */
+
+@supports (
+  padding: max(
+    0px
+  )
+) {
+  .pf-support-header-inner {
+    padding-left: max(
+      0px,
+      env(safe-area-inset-left)
+    );
+
+    padding-right: max(
+      0px,
+      env(safe-area-inset-right)
+    );
+  }
+
+  .pf-support-footer {
+    padding-bottom: max(
+      20px,
+      env(safe-area-inset-bottom)
+    );
+  }
+}
+
+/* ============================================================
+   ACCESSIBILITY
+   ============================================================ */
+
+.pf-support-page
+  button:focus-visible,
+.pf-support-page
+  a:focus-visible,
+.pf-support-page
+  textarea:focus-visible {
+  outline: 3px solid
+    rgba(17, 103, 216, 0.22);
+
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-support-page *,
+  .pf-support-page *::before,
+  .pf-support-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
