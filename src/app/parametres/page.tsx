@@ -579,7 +579,10 @@ export default function ParametresPage() {
                 </div>
                 <div className="pf-info-card">
                   <span>{t.function}</span>
-                  <strong>{function getRoleLabel(profile?.role || "", t)}</strong>
+                  <strong>function getRoleLabel(
+  role: string,
+  t: (typeof TEXT)[keyof typeof TEXT],
+) {</strong>
                 </div>
                 <div className="pf-info-card">
                   <span>{t.pharmacy}</span>
