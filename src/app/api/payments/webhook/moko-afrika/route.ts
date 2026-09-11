@@ -464,8 +464,7 @@ export async function POST(
         const parsed =
           mokoAfrikaAdapter.parseWebhook(
             body,
-            Object.fromEntries(
-              request.headers.entries(),
+              request.headers,
             ),
           );
 
