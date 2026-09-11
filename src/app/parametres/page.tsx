@@ -187,7 +187,7 @@ const TEXT = {
   },
 } as const;
 
-function getRoleLabel(role: string, t: (typeof TEXT)["fr"]) {
+function getRoleLabel(role: string, t: (typeof TEXT)[keyof typeof TEXT]) {
   switch (role) {
     case "owner": return t.role.owner;
     case "admin": return t.role.admin;
@@ -579,10 +579,7 @@ export default function ParametresPage() {
                 </div>
                 <div className="pf-info-card">
                   <span>{t.function}</span>
-                  <strong>function getRoleLabel(
-  role: string,
-  t: (typeof TEXT)[keyof typeof TEXT],
-) {</strong>
+                 <strong>{getRoleLabel(profile?.role || "", t)}</strong>
                 </div>
                 <div className="pf-info-card">
                   <span>{t.pharmacy}</span>
