@@ -279,8 +279,6 @@ export default function VentesPage() {
             "Phone",
           note:
             "Note",
-          payment:
-            "Payment",
           received:
             "Amount received",
           changeLabel:
