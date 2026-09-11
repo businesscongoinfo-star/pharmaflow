@@ -1545,20 +1545,23 @@ export function sanitizeSupportHistory(
     return [];
   }
 
-  return history
-    .filter((item): item is {
-      role: string;
-      content: string;
-    } => {
-      return (
-        typeof item === "object" &&
-        item !== null &&
-        "role" in item &&
-        "content" in item &&
-        typeof (item as { role?: unknown }).role === "string" &&
-        typeof (item as { content?: unknown }).content === "string"
-      );
-    })
+return history.map(
+  (
+    item
+  ): {
+    role: "user" | "assistant";
+    content: string;
+  } => ({
+    role:
+      item.role === "assistant"
+        ? "assistant"
+        : "user",
+    content:
+      item.content
+        .trim()
+        .slice(0, 4000),
+  }),
+);
     .map((item) => ({
       role:
         item.role === "assistant"
