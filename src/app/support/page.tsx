@@ -252,7 +252,7 @@ const TEXT = {
 
     reopenTicket:
       "Reprendre ma conversation",
-
+ticketClosed: "This request is closed.",
     aiUnavailable:
       "L'assistant IA est momentanément indisponible. Vous pouvez ouvrir une demande auprès d'un conseiller.",
 
@@ -471,7 +471,7 @@ const TEXT = {
 
     reopenTicket:
       "Continue my conversation",
-
+ticketClosed: "This request is closed.",
     aiUnavailable:
       "The AI assistant is temporarily unavailable. You can open a request with a support agent.",
 
