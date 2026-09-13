@@ -1,7 +1,15 @@
-import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import {
+  createServerClient,
+} from "@supabase/ssr";
 
-function getRoleHome(role: string) {
+import {
+  NextResponse,
+  type NextRequest,
+} from "next/server";
+
+function getRoleHome(
+  role: string
+) {
   switch (role) {
     case "owner":
       return "/dashboard";
@@ -23,70 +31,91 @@ function getRoleHome(role: string) {
   }
 }
 
-function isAllowed(pathname: string, role: string) {
-  /*
-   * ---------------------------------------------------------
-   * SUPER ADMIN / AGENT
-   * ---------------------------------------------------------
-   *
-   * Ces espaces ne dépendent pas de pharmacy_id.
-   * Leur autorisation réelle est vérifiée dans leurs propres
-   * fonctions requireSuperAdmin / requireSuperAdminApi.
-   */
-  if (pathname.startsWith("/super-admin")) {
-    return true;
-  }
+function isAllowed(
+  pathname: string,
+  role: string
+) {
+  /* ================================================
+     PROPRIÉTAIRE
+     ================================================ */
 
-  if (pathname.startsWith("/agent")) {
-    return true;
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * ESPACES PAR RÔLE
-   * ---------------------------------------------------------
-   */
-
-  if (pathname.startsWith("/dashboard")) {
+  if (
+    pathname.startsWith(
+      "/dashboard"
+    )
+  ) {
     return role === "owner";
   }
 
-  if (pathname.startsWith("/admin")) {
-    return role === "owner" || role === "admin";
+  /* ================================================
+     ADMINISTRATION
+     ================================================ */
+
+  if (
+    pathname.startsWith("/admin")
+  ) {
+    return (
+      role === "owner" ||
+      role === "admin"
+    );
   }
 
-  if (pathname.startsWith("/pharmacien")) {
-    return role === "owner" || role === "pharmacist";
+  /* ================================================
+     PHARMACIEN
+     ================================================ */
+
+  if (
+    pathname.startsWith(
+      "/pharmacien"
+    )
+  ) {
+    return (
+      role === "owner" ||
+      role === "pharmacist"
+    );
   }
 
-  if (pathname.startsWith("/caisse")) {
-    return role === "owner" || role === "cashier";
+  /* ================================================
+     CAISSE
+     ================================================ */
+
+  if (
+    pathname.startsWith("/caisse")
+  ) {
+    return (
+      role === "owner" ||
+      role === "cashier"
+    );
   }
 
-  if (pathname.startsWith("/employe")) {
-    return role === "owner" || role === "employee";
+  /* ================================================
+     EMPLOYÉ
+     ================================================ */
+
+  if (
+    pathname.startsWith("/employe")
+  ) {
+    return (
+      role === "owner" ||
+      role === "employee"
+    );
   }
 
-  /*
-   * ---------------------------------------------------------
-   * MODULES PHARMACIE
-   * ---------------------------------------------------------
-   */
+  /* ================================================
+     MODULES PHARMACIE EXISTANTS
+     ================================================ */
 
   const pharmacyModules = [
-    "/produits",
+    "/products",
     "/stock",
     "/ventes",
     "/utilisateurs",
-    "/rapports",
-    "/paiements",
-    "/parametres",
-    "/abonnement",
   ];
 
   if (
-    pharmacyModules.some((path) =>
-      pathname.startsWith(path),
+    pharmacyModules.some(
+      (path) =>
+        pathname.startsWith(path)
     )
   ) {
     return (
@@ -100,252 +129,213 @@ function isAllowed(pathname: string, role: string) {
   return true;
 }
 
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request,
-  });
+export async function middleware(
+  request: NextRequest
+) {
+  let response =
+    NextResponse.next({
+      request,
+    });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
+  const supabase =
+    createServerClient(
+      process.env
+        .NEXT_PUBLIC_SUPABASE_URL!,
+      process.env
+        .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
 
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(
-            ({ name, value, options }) => {
-              request.cookies.set(name, value);
-
-              response = NextResponse.next({
-                request,
-              });
-
-              response.cookies.set(
+          setAll(
+            cookiesToSet
+          ) {
+            cookiesToSet.forEach(
+              ({
                 name,
                 value,
                 options,
-              );
-            },
-          );
+              }) => {
+                request.cookies.set(
+                  name,
+                  value
+                );
+
+                response =
+                  NextResponse.next({
+                    request,
+                  });
+
+                response.cookies.set(
+                  name,
+                  value,
+                  options
+                );
+              }
+            );
+          },
         },
-      },
+      }
+    );
+
+  const {
+    data: {
+      user,
     },
-  );
+  } =
+    await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-
-  /*
-   * ---------------------------------------------------------
-   * ROUTES PUBLIQUES
-   * ---------------------------------------------------------
-   */
+  const pathname =
+    request.nextUrl.pathname;
 
   const isPublicRoute =
     pathname === "/" ||
-    pathname.startsWith("/support") ||
-    pathname.startsWith("/confidentialite") ||
-    pathname.startsWith("/conditions");
-
-  /*
-   * ---------------------------------------------------------
-   * API PUBLIQUES / AUTO-AUTHENTIFIANTES
-   * ---------------------------------------------------------
-   *
-   * Ces routes doivent atteindre leur Route Handler
-   * directement et retourner leur propre JSON.
-   */
-
-  const isPublicApi =
-    pathname.startsWith("/api/auth/platform-access") ||
-    pathname.startsWith("/api/auth/inscription") ||
-    pathname.startsWith("/api/subscription/status") ||
-    pathname.startsWith("/api/support/ai") ||
-    pathname.startsWith("/api/support/tickets");
-
-  if (isPublicApi) {
-    response.headers.set(
-      "Cache-Control",
-      "private, no-store",
+    pathname.startsWith(
+      "/login"
+    ) ||
+    pathname.startsWith(
+      "/register"
+    ) ||
+    pathname.startsWith(
+      "/forgot-password"
     );
 
-    return response;
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * RÉCUPÉRATION DE LA SESSION
-   * ---------------------------------------------------------
-   */
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  /*
-   * ---------------------------------------------------------
-   * UTILISATEUR NON CONNECTÉ
-   * ---------------------------------------------------------
-   */
+  /* ================================================
+     PAS CONNECTÉ
+     ================================================ */
 
   if (!user) {
     if (isPublicRoute) {
       return response;
     }
 
-    const loginUrl = request.nextUrl.clone();
+    const loginUrl =
+      request.nextUrl.clone();
 
     loginUrl.pathname = "/login";
+
     loginUrl.searchParams.set(
       "redirect",
-      pathname,
+      pathname
     );
 
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(
+      loginUrl
+    );
   }
 
-  /*
-   * ---------------------------------------------------------
-   * ESPACES PLATEFORME
-   * ---------------------------------------------------------
-   *
-   * IMPORTANT :
-   *
-   * Un Super Admin n'a pas besoin de pharmacy_id.
-   * On laisse donc la page Super Admin effectuer sa propre
-   * vérification via requireSuperAdmin().
-   *
-   * Même principe pour les agents plateforme.
-   */
+  /* ================================================
+     UTILISATEUR DÉJÀ CONNECTÉ
+     ================================================ */
 
   if (
-    pathname.startsWith("/super-admin") ||
-    pathname.startsWith("/agent")
+    isPublicRoute &&
+    pathname !== "/"
   ) {
-    response.headers.set(
-      "Cache-Control",
-      "private, no-store",
-    );
-
-    return response;
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * ROUTES LOGIN / REGISTER / FORGOT PASSWORD
-   * ---------------------------------------------------------
-   */
-
-  const isAuthRoute =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/register") ||
-    pathname.startsWith("/forgot-password");
-
-  if (isAuthRoute) {
     const {
       data: profile,
-    } = await supabase
-      .from("profiles")
-      .select("role, pharmacy_id")
-      .eq("id", user.id)
-      .maybeSingle();
+    } =
+      await supabase
+        .from("profiles")
+        .select(
+          "role, pharmacy_id"
+        )
+        .eq("id", user.id)
+        .maybeSingle();
 
-    /*
-     * Si aucun profil pharmacie n'existe, on laisse
-     * le parcours plateforme gérer le Super Admin / Agent.
-     */
     if (!profile) {
-      return response;
+      await supabase.auth.signOut();
+
+      const loginUrl =
+        request.nextUrl.clone();
+
+      loginUrl.pathname = "/login";
+
+      return NextResponse.redirect(
+        loginUrl
+      );
     }
 
     return NextResponse.redirect(
       new URL(
-        getRoleHome(profile.role),
-        request.url,
-      ),
+        getRoleHome(
+          profile.role
+        ),
+        request.url
+      )
     );
   }
 
-  /*
-   * ---------------------------------------------------------
-   * PROFIL PHARMACIE
-   * ---------------------------------------------------------
-   */
+  /* ================================================
+     RÉCUPÉRER LE RÔLE
+     ================================================ */
 
   const {
     data: profile,
-  } = await supabase
-    .from("profiles")
-    .select("role, pharmacy_id")
-    .eq("id", user.id)
-    .maybeSingle();
+  } =
+    await supabase
+      .from("profiles")
+      .select(
+        "role, pharmacy_id"
+      )
+      .eq("id", user.id)
+      .maybeSingle();
 
-  /*
-   * Pas de profil :
-   * on renvoie vers login.
-   */
   if (!profile) {
     await supabase.auth.signOut();
 
     return NextResponse.redirect(
-      new URL("/login", request.url),
+      new URL(
+        "/login",
+        request.url
+      )
     );
   }
 
-  /*
-   * ---------------------------------------------------------
-   * PHARMACY_ID OBLIGATOIRE UNIQUEMENT POUR LES COMPTES
-   * PHARMACIE
-   * ---------------------------------------------------------
-   */
+  /* ================================================
+     VÉRIFICATION PHARMACIE
+     ================================================ */
 
   if (!profile.pharmacy_id) {
     return NextResponse.redirect(
       new URL(
         "/login?error=no_pharmacy",
-        request.url,
-      ),
+        request.url
+      )
     );
   }
 
-  /*
-   * ---------------------------------------------------------
-   * AUTORISATION PAR RÔLE
-   * ---------------------------------------------------------
-   */
+  /* ================================================
+     VÉRIFICATION DU RÔLE
+     ================================================ */
 
   if (
     !isAllowed(
       pathname,
-      profile.role,
+      profile.role
     )
   ) {
     return NextResponse.redirect(
       new URL(
-        getRoleHome(profile.role),
-        request.url,
-      ),
+        getRoleHome(
+          profile.role
+        ),
+        request.url
+      )
     );
   }
-
-  /*
-   * ---------------------------------------------------------
-   * CACHE
-   * ---------------------------------------------------------
-   */
-
-  response.headers.set(
-    "Cache-Control",
-    "private, no-store",
-  );
 
   return response;
 }
 
 export const config = {
   matcher: [
+    /*
+     * Exclut les ressources Next.js
+     * et les fichiers statiques.
+     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)",
   ],
 };
