@@ -11,48 +11,52 @@ import type {
   PaymentProviderCode,
 } from "@/app/lib/payments/types";
 
-type BillingCycle = "monthly" | "yearly";
+type BillingCycle =
+  | "monthly"
+  | "yearly";
 
 type RequestBody = {
   billingCycle?: BillingCycle;
-  paymentMethod?: "mobile_money" | "card";
+
+  paymentMethod?:
+    | "mobile_money"
+    | "card";
+
   phone?: string;
 };
 
-const ALLOWED_BILLING_CYCLES: BillingCycle[] = [
-  "monthly",
-  "yearly",
-];
+const ALLOWED_BILLING_CYCLES: BillingCycle[] =
+  [
+    "monthly",
+    "yearly",
+  ];
 
 /**
  * =========================================================
- * DEVISES
+ * DEVISE
  * =========================================================
- *
- * PharmaFlow ne limite plus les devises à XAF / CDF / USD.
- *
- * La devise est validée selon le format ISO 4217 :
- * exactement 3 lettres, par exemple :
- *
- * USD, EUR, GBP, CDF, XAF, NGN, GHS, KES, ZAR,
- * TZS, UGX, RWF, ZMW, MAD, DZD, etc.
- *
- * La devise réellement disponible dépend ensuite :
- * - du prix configuré dans subscription_plan_prices ;
- * - du fournisseur de paiement disponible.
  */
+
 function normalizeCurrency(
   value: unknown,
 ): string | null {
-  if (typeof value !== "string") {
+  if (
+    typeof value !==
+    "string"
+  ) {
     return null;
   }
 
-  const normalized = value
-    .trim()
-    .toUpperCase();
+  const normalized =
+    value
+      .trim()
+      .toUpperCase();
 
-  if (!/^[A-Z]{3}$/.test(normalized)) {
+  if (
+    !/^[A-Z]{3}$/.test(
+      normalized,
+    )
+  ) {
     return null;
   }
 
@@ -61,14 +65,18 @@ function normalizeCurrency(
 
 /**
  * =========================================================
- * FOURNISSEURS DE PAIEMENT
+ * PRIORITÉ FOURNISSEURS
  * =========================================================
  *
- * L'ordre reste prioritaire pour les pays déjà configurés.
+ * La priorité reste spécifique au pays.
  *
- * Les autres pays peuvent utiliser un fournisseur configuré
- * dans la table payment_providers.
+ * Le fournisseur est ensuite filtré selon :
+ *
+ * - pays
+ * - moyen de paiement
+ * - activation dans payment_providers
  */
+
 const COUNTRY_PROVIDER_PRIORITY: Record<
   string,
   PaymentProviderCode[]
@@ -78,22 +86,33 @@ const COUNTRY_PROVIDER_PRIORITY: Record<
     "gofreshpay",
     "moko_afrika",
   ],
+
   CD: [
     "gofreshpay",
     "moko_afrika",
   ],
 };
 
+/**
+ * =========================================================
+ * NORMALISATION
+ * =========================================================
+ */
+
 function normalizeBillingCycle(
   value: unknown,
 ): BillingCycle | null {
-  if (typeof value !== "string") {
+  if (
+    typeof value !==
+    "string"
+  ) {
     return null;
   }
 
-  const normalized = value
-    .trim()
-    .toLowerCase();
+  const normalized =
+    value
+      .trim()
+      .toLowerCase();
 
   if (
     !ALLOWED_BILLING_CYCLES.includes(
@@ -108,20 +127,33 @@ function normalizeBillingCycle(
 
 function normalizePaymentMethod(
   value: unknown,
-): "mobile_money" | "card" | null {
-  if (typeof value !== "string") {
+):
+  | "mobile_money"
+  | "card"
+  | null {
+  if (
+    typeof value !==
+    "string"
+  ) {
     return null;
   }
 
-  const normalized = value
-    .trim()
-    .toLowerCase();
+  const normalized =
+    value
+      .trim()
+      .toLowerCase();
 
-  if (normalized === "mobile_money") {
+  if (
+    normalized ===
+    "mobile_money"
+  ) {
     return "mobile_money";
   }
 
-  if (normalized === "card") {
+  if (
+    normalized ===
+    "card"
+  ) {
     return "card";
   }
 
@@ -131,11 +163,15 @@ function normalizePaymentMethod(
 function normalizePhone(
   value: unknown,
 ): string | null {
-  if (typeof value !== "string") {
+  if (
+    typeof value !==
+    "string"
+  ) {
     return null;
   }
 
-  const phone = value.trim();
+  const phone =
+    value.trim();
 
   if (!phone) {
     return null;
@@ -145,11 +181,15 @@ function normalizePhone(
 }
 
 function splitName(
-  fullName: string | null | undefined,
+  fullName:
+    | string
+    | null
+    | undefined,
 ) {
-  const cleanName = (
-    fullName ?? ""
-  ).trim();
+  const cleanName =
+    (
+      fullName ?? ""
+    ).trim();
 
   if (!cleanName) {
     return {
@@ -158,27 +198,40 @@ function splitName(
     };
   }
 
-  const parts = cleanName.split(/\s+/);
+  const parts =
+    cleanName.split(
+      /\s+/,
+    );
 
-  if (parts.length === 1) {
+  if (
+    parts.length ===
+    1
+  ) {
     return {
-      firstName: parts[0],
+      firstName:
+        parts[0],
       lastName: "",
     };
   }
 
   return {
-    firstName: parts[0],
-    lastName: parts
-      .slice(1)
-      .join(" "),
+    firstName:
+      parts[0],
+
+    lastName:
+      parts
+        .slice(1)
+        .join(" "),
   };
 }
 
 function jsonError(
   message: string,
   status = 400,
-  extra: Record<string, unknown> = {},
+  extra: Record<
+    string,
+    unknown
+  > = {},
 ) {
   return NextResponse.json(
     {
@@ -192,6 +245,12 @@ function jsonError(
   );
 }
 
+/**
+ * =========================================================
+ * POST
+ * =========================================================
+ */
+
 export async function POST(
   request: Request,
 ) {
@@ -199,26 +258,32 @@ export async function POST(
     const supabase =
       await createClient();
 
-    // =========================================================
-    // 1. VÉRIFIER L'UTILISATEUR CONNECTÉ
-    // =========================================================
+    // =======================================================
+    // 1. UTILISATEUR CONNECTÉ
+    // =======================================================
 
     const {
-      data: { user },
-      error: userError,
+      data: {
+        user,
+      },
+      error:
+        userError,
     } =
       await supabase.auth.getUser();
 
-    if (userError || !user) {
+    if (
+      userError ||
+      !user
+    ) {
       return jsonError(
         "Votre session a expiré. Veuillez vous reconnecter.",
         401,
       );
     }
 
-    // =========================================================
-    // 2. LIRE ET VALIDER LA REQUÊTE
-    // =========================================================
+    // =======================================================
+    // 2. REQUÊTE
+    // =======================================================
 
     let body: RequestBody;
 
@@ -241,34 +306,47 @@ export async function POST(
         body.paymentMethod,
       );
 
-    if (!billingCycle) {
+    if (
+      !billingCycle
+    ) {
       return jsonError(
         "La formule d'abonnement sélectionnée est invalide.",
       );
     }
 
-    if (!paymentMethod) {
+    if (
+      !paymentMethod
+    ) {
       return jsonError(
         "Le mode de paiement sélectionné est invalide.",
       );
     }
 
-    // =========================================================
-    // 3. RÉCUPÉRER LE PROFIL
-    // =========================================================
+    // =======================================================
+    // 3. PROFIL
+    // =======================================================
 
     const {
       data: profile,
-      error: profileError,
-    } = await supabase
-      .from("profiles")
-      .select(
-        "id, full_name, phone, role, pharmacy_id, language",
-      )
-      .eq("id", user.id)
-      .maybeSingle();
+      error:
+        profileError,
+    } =
+      await supabase
+        .from(
+          "profiles",
+        )
+        .select(
+          "id, full_name, phone, role, pharmacy_id, language",
+        )
+        .eq(
+          "id",
+          user.id,
+        )
+        .maybeSingle();
 
-    if (profileError) {
+    if (
+      profileError
+    ) {
       console.error(
         "Erreur récupération profil paiement:",
         profileError,
@@ -287,7 +365,9 @@ export async function POST(
       );
     }
 
-    if (!profile.pharmacy_id) {
+    if (
+      !profile.pharmacy_id
+    ) {
       return jsonError(
         "Aucune pharmacie n'est associée à votre compte.",
         400,
@@ -297,23 +377,31 @@ export async function POST(
     const pharmacyId =
       profile.pharmacy_id;
 
-    // =========================================================
-    // 4. RÉCUPÉRER LA PHARMACIE
-    // =========================================================
+    // =======================================================
+    // 4. PHARMACIE
+    // =======================================================
 
     const {
       data: pharmacy,
-      error: pharmacyError,
+      error:
+        pharmacyError,
     } =
       await supabase
-        .from("pharmacies")
+        .from(
+          "pharmacies",
+        )
         .select(
           "id, name, address, country_code, city, currency_code, owner_id, status",
         )
-        .eq("id", pharmacyId)
+        .eq(
+          "id",
+          pharmacyId,
+        )
         .maybeSingle();
 
-    if (pharmacyError) {
+    if (
+      pharmacyError
+    ) {
       console.error(
         "Erreur récupération pharmacie paiement:",
         pharmacyError,
@@ -332,24 +420,26 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 5. VÉRIFIER LE STATUT DE LA PHARMACIE
-    // =========================================================
+    // =======================================================
+    // 5. STATUT PHARMACIE
+    // =======================================================
 
     const pharmacyStatus =
       String(
-        pharmacy.status ?? "active",
+        pharmacy.status ??
+          "active",
       )
         .trim()
         .toLowerCase();
 
-    const blockedPharmacyStatuses = [
-      "inactive",
-      "disabled",
-      "blocked",
-      "suspended",
-      "closed",
-    ];
+    const blockedPharmacyStatuses =
+      [
+        "inactive",
+        "disabled",
+        "blocked",
+        "suspended",
+        "closed",
+      ];
 
     if (
       blockedPharmacyStatuses.includes(
@@ -362,17 +452,9 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 6. DÉTERMINER LA DEVISE
-    // =========================================================
-    //
-    // IMPORTANT :
-    // Nous ne faisons plus de liste XAF/CDF/USD.
-    //
-    // La pharmacie peut utiliser toute devise ISO 4217
-    // correctement configurée dans sa fiche et dans
-    // subscription_plan_prices.
-    // =========================================================
+    // =======================================================
+    // 6. DEVISE
+    // =======================================================
 
     const currency =
       normalizeCurrency(
@@ -390,57 +472,38 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 7. PAIEMENT PAR CARTE
-    // =========================================================
-
-    if (
-      paymentMethod === "card"
-    ) {
-      return jsonError(
-        "Le paiement par carte n'est pas encore disponible pour cette configuration. Veuillez utiliser Mobile Money.",
-        400,
-        {
-          code:
-            "CARD_PAYMENT_NOT_AVAILABLE",
-        },
-      );
-    }
-
-    // =========================================================
-    // 8. RÉCUPÉRER LE PLAN
-    // =========================================================
-    //
-    // La structure réelle utilise :
-    //
-    // subscription_plans.code
-    // subscription_plans.name
-    //
-    // et non plan_code / plan_name.
-    // =========================================================
+    // =======================================================
+    // 7. PLAN
+    // =======================================================
 
     const planCode =
       billingCycle;
 
     const {
       data: plan,
-      error: planError,
-    } = await supabase
-      .from("subscription_plans")
-      .select(
-        "id, code, name, description, duration_days, is_active",
-      )
-      .eq(
-        "code",
-        planCode,
-      )
-      .eq(
-        "is_active",
-        true,
-      )
-      .maybeSingle();
+      error:
+        planError,
+    } =
+      await supabase
+        .from(
+          "subscription_plans",
+        )
+        .select(
+          "id, code, name, description, duration_days, is_active",
+        )
+        .eq(
+          "code",
+          planCode,
+        )
+        .eq(
+          "is_active",
+          true,
+        )
+        .maybeSingle();
 
-    if (planError) {
+    if (
+      planError
+    ) {
       console.error(
         "Erreur récupération plan paiement:",
         planError,
@@ -459,26 +522,14 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 9. RÉCUPÉRER LE PRIX
-    // =========================================================
-    //
-    // Le prix dépend maintenant entièrement de la devise
-    // configurée dans subscription_plan_prices.
-    //
-    // Exemple :
-    // monthly + USD
-    // monthly + EUR
-    // monthly + XAF
-    // monthly + CDF
-    // etc.
-    //
-    // Aucun montant n'est codé en dur ici.
-    // =========================================================
+    // =======================================================
+    // 8. PRIX
+    // =======================================================
 
     const {
       data: planPrice,
-      error: planPriceError,
+      error:
+        planPriceError,
     } =
       await supabase
         .from(
@@ -501,7 +552,9 @@ export async function POST(
         )
         .maybeSingle();
 
-    if (planPriceError) {
+    if (
+      planPriceError
+    ) {
       console.error(
         "Erreur récupération prix abonnement:",
         planPriceError,
@@ -520,17 +573,23 @@ export async function POST(
         {
           code:
             "SUBSCRIPTION_PRICE_NOT_CONFIGURED",
+
           currency,
+
           billingCycle,
         },
       );
     }
 
     const amount =
-      Number(planPrice.price);
+      Number(
+        planPrice.price,
+      );
 
     if (
-      !Number.isFinite(amount) ||
+      !Number.isFinite(
+        amount,
+      ) ||
       amount <= 0
     ) {
       return jsonError(
@@ -543,16 +602,19 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 10. RÉCUPÉRER L'ABONNEMENT ACTUEL
-    // =========================================================
+    // =======================================================
+    // 9. ABONNEMENT ACTUEL
+    // =======================================================
 
     const {
       data: subscription,
-      error: subscriptionError,
+      error:
+        subscriptionError,
     } =
       await supabase
-        .from("subscriptions")
+        .from(
+          "subscriptions",
+        )
         .select(
           "id, pharmacy_id, plan_id, status, trial_started_at, trial_ends_at, expires_at, created_at, updated_at",
         )
@@ -563,13 +625,16 @@ export async function POST(
         .order(
           "created_at",
           {
-            ascending: false,
+            ascending:
+              false,
           },
         )
         .limit(1)
         .maybeSingle();
 
-    if (subscriptionError) {
+    if (
+      subscriptionError
+    ) {
       console.error(
         "Erreur récupération abonnement paiement:",
         subscriptionError,
@@ -588,13 +653,14 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 11. PAYS
-    // =========================================================
+    // =======================================================
+    // 10. PAYS
+    // =======================================================
 
     const countryCode =
       String(
-        pharmacy.country_code ?? "",
+        pharmacy.country_code ??
+          "",
       )
         .trim()
         .toUpperCase();
@@ -606,13 +672,14 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 12. FOURNISSEURS ACTIVÉS
-    // =========================================================
+    // =======================================================
+    // 11. FOURNISSEURS ACTIVÉS
+    // =======================================================
 
     const {
       data: providers,
-      error: providersError,
+      error:
+        providersError,
     } =
       await supabase
         .from(
@@ -626,7 +693,9 @@ export async function POST(
           true,
         );
 
-    if (providersError) {
+    if (
+      providersError
+    ) {
       console.error(
         "Erreur récupération fournisseurs paiement:",
         providersError,
@@ -638,22 +707,22 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 13. SÉLECTION DU FOURNISSEUR
-    // =========================================================
+    // =======================================================
+    // 12. SÉLECTION FOURNISSEUR
+    // =======================================================
     //
-    // Pour CG/CD, nous conservons l'ordre existant.
+    // On sélectionne maintenant selon le MOYEN réellement
+    // demandé :
     //
-    // Pour les autres pays, PharmaFlow recherche parmi les
-    // fournisseurs activés celui qui :
+    // mobile_money
+    // OU
+    // card
     //
-    // - accepte le pays ;
-    // - accepte Mobile Money ;
-    // - est configuré dans payment_providers.
-    //
-    // Cela permet d'étendre progressivement PharmaFlow à
-    // d'autres pays sans modifier ce fichier à chaque fois.
-    // =========================================================
+    // Cela permet à Moko Afrika de recevoir le bon flux.
+    // =======================================================
+
+    const requestedProviderMethod =
+      paymentMethod;
 
     const providerPriority =
       COUNTRY_PROVIDER_PRIORITY[
@@ -665,7 +734,8 @@ export async function POST(
         (provider) => {
           const providerCode =
             String(
-              provider.code ?? "",
+              provider.code ??
+                "",
             )
               .trim()
               .toLowerCase() as PaymentProviderCode;
@@ -675,10 +745,14 @@ export async function POST(
               provider.countries,
             )
               ? provider.countries.map(
-                  (value) =>
+                  (
+                    value,
+                  ) =>
                     String(
                       value,
-                    ).toUpperCase(),
+                    )
+                      .trim()
+                      .toUpperCase(),
                 )
               : [];
 
@@ -687,27 +761,32 @@ export async function POST(
               provider.payment_methods,
             )
               ? provider.payment_methods.map(
-                  (value) =>
+                  (
+                    value,
+                  ) =>
                     String(
                       value,
-                    ).toLowerCase(),
+                    )
+                      .trim()
+                      .toLowerCase(),
                 )
               : [];
 
           const countrySupported =
-            countries.length === 0 ||
+            countries.length ===
+              0 ||
             countries.includes(
               countryCode,
             );
 
-          const mobileMoneySupported =
+          const methodSupported =
             paymentMethods.includes(
-              "mobile_money",
+              requestedProviderMethod,
             );
 
           return (
             countrySupported &&
-            mobileMoneySupported &&
+            methodSupported &&
             (
               providerPriority.length ===
                 0 ||
@@ -724,46 +803,68 @@ export async function POST(
       0
     ) {
       return jsonError(
-        `Aucun fournisseur Mobile Money activé n'est disponible pour le pays ${countryCode}.`,
+        paymentMethod ===
+          "card"
+          ? `Aucun fournisseur de carte activé n'est disponible pour ${countryCode}.`
+          : `Aucun fournisseur Mobile Money activé n'est disponible pour ${countryCode}.`,
         400,
         {
           code:
-            "NO_ENABLED_MOBILE_MONEY_PROVIDER",
+            paymentMethod ===
+            "card"
+              ? "NO_ENABLED_CARD_PROVIDER"
+              : "NO_ENABLED_MOBILE_MONEY_PROVIDER",
+
           countryCode,
+
           currency,
+
+          paymentMethod,
         },
       );
     }
 
-    // =========================================================
-    // 14. CHOISIR LE FOURNISSEUR
-    // =========================================================
+    // =======================================================
+    // 13. CHOISIR LE FOURNISSEUR
+    // =======================================================
 
-    let selectedProvider;
+    let selectedProvider:
+      | (typeof compatibleProviders)[number]
+      | undefined;
 
     if (
-      providerPriority.length > 0
+      providerPriority.length >
+      0
     ) {
       selectedProvider =
         providerPriority
-          .map((code) =>
-            compatibleProviders.find(
-              (provider) =>
-                String(
-                  provider.code,
-                )
-                  .trim()
-                  .toLowerCase() ===
-                code,
-            ),
+          .map(
+            (
+              code,
+            ) =>
+              compatibleProviders.find(
+                (
+                  provider,
+                ) =>
+                  String(
+                    provider.code,
+                  )
+                    .trim()
+                    .toLowerCase() ===
+                  code,
+              ),
           )
-          .find(Boolean);
+          .find(
+            Boolean,
+          );
     } else {
       selectedProvider =
         compatibleProviders[0];
     }
 
-    if (!selectedProvider) {
+    if (
+      !selectedProvider
+    ) {
       return jsonError(
         "Impossible de sélectionner un fournisseur de paiement.",
         400,
@@ -781,17 +882,65 @@ export async function POST(
         .trim()
         .toLowerCase() as PaymentProviderCode;
 
-    // =========================================================
-    // 15. NUMÉRO MOBILE MONEY
-    // =========================================================
+    // =======================================================
+    // 14. COMPATIBILITÉ CARTE MOKO AFRIKA
+    // =======================================================
+    //
+    // Le Hosted Checkout carte Moko utilisé par PharmaFlow
+    // accepte USD ou CDF.
+    //
+    // Nous ne transformons PAS silencieusement une autre
+    // devise en USD/CDF.
+    // =======================================================
+
+    if (
+      paymentMethod ===
+        "card" &&
+      providerCode ===
+        "moko_afrika" &&
+      ![
+        "USD",
+        "CDF",
+      ].includes(
+        currency,
+      )
+    ) {
+      return jsonError(
+        `Le paiement par carte Moko Afrika n'est actuellement disponible que pour USD ou CDF. La devise configurée pour cette pharmacie est ${currency}.`,
+        400,
+        {
+          code:
+            "MOKO_CARD_CURRENCY_NOT_SUPPORTED",
+
+          provider:
+            providerCode,
+
+          currency,
+
+          supportedCurrencies:
+            [
+              "USD",
+              "CDF",
+            ],
+        },
+      );
+    }
+
+    // =======================================================
+    // 15. CLIENT
+    // =======================================================
 
     const customerPhone =
-      normalizePhone(body.phone) ??
-      normalizePhone(profile.phone);
+      normalizePhone(
+        body.phone,
+      ) ??
+      normalizePhone(
+        profile.phone,
+      );
 
     if (!customerPhone) {
       return jsonError(
-        "Aucun numéro de téléphone n'est associé à votre compte. Veuillez renseigner votre numéro Mobile Money.",
+        "Aucun numéro de téléphone n'est associé à votre compte. Veuillez renseigner votre numéro de téléphone.",
         400,
         {
           code:
@@ -800,21 +949,19 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 16. INFORMATIONS CLIENT
-    // =========================================================
-
     const customerName =
       String(
-        profile.full_name ?? "",
+        profile.full_name ??
+          "",
       ).trim();
 
     const {
       firstName,
       lastName,
-    } = splitName(
-      customerName,
-    );
+    } =
+      splitName(
+        customerName,
+      );
 
     const email =
       typeof user.email ===
@@ -824,18 +971,107 @@ export async function POST(
             .toLowerCase()
         : "";
 
-    // =========================================================
-    // 17. RÉFÉRENCE UNIQUE
-    // =========================================================
+    // =======================================================
+    // 16. EMAIL OBLIGATOIRE POUR CARTE
+    // =======================================================
+
+    if (
+      paymentMethod ===
+        "card" &&
+      !email
+    ) {
+      return jsonError(
+        "Une adresse e-mail est obligatoire pour le paiement par carte.",
+        400,
+        {
+          code:
+            "CUSTOMER_EMAIL_REQUIRED",
+        },
+      );
+    }
+
+    // =======================================================
+    // 17. ADRESSE CLIENT / PHARMACIE
+    // =======================================================
+    //
+    // Moko Card demande notamment :
+    //
+    // bill_to_address_line1
+    // bill_to_address_city
+    // bill_to_address_country
+    //
+    // Ces informations sont envoyées via metadata afin que
+    // l'adapter Moko puisse les utiliser.
+    // =======================================================
+
+    const addressLine1 =
+      String(
+        pharmacy.address ??
+          "",
+      ).trim();
+
+    const customerCity =
+      String(
+        pharmacy.city ??
+          "",
+      ).trim();
+
+    if (
+      paymentMethod ===
+        "card" &&
+      !addressLine1
+    ) {
+      return jsonError(
+        "L'adresse de la pharmacie est obligatoire pour préparer le paiement par carte.",
+        400,
+        {
+          code:
+            "BILLING_ADDRESS_REQUIRED",
+        },
+      );
+    }
+
+    if (
+      paymentMethod ===
+        "card" &&
+      !customerCity
+    ) {
+      return jsonError(
+        "La ville de la pharmacie est obligatoire pour préparer le paiement par carte.",
+        400,
+        {
+          code:
+            "BILLING_CITY_REQUIRED",
+        },
+      );
+    }
+
+    // =======================================================
+    // 18. RÉFÉRENCE UNIQUE
+    // =======================================================
 
     const merchantReference =
       generateMerchantReference();
 
-    // =========================================================
-    // 18. MÉTADONNÉES
-    // =========================================================
+    // =======================================================
+    // 19. TYPE DE PAIEMENT
+    // =======================================================
 
-    const metadata = {
+    const paymentMethodType:
+      PaymentMethodType =
+      paymentMethod ===
+      "card"
+        ? "card"
+        : "mobile_money";
+
+    // =======================================================
+    // 20. MÉTADONNÉES
+    // =======================================================
+
+    const metadata: Record<
+      string,
+      unknown
+    > = {
       billing_cycle:
         billingCycle,
 
@@ -852,7 +1088,7 @@ export async function POST(
         user.id,
 
       payment_method_type:
-        "mobile_money",
+        paymentMethodType,
 
       provider_code:
         providerCode,
@@ -862,22 +1098,88 @@ export async function POST(
 
       currency,
 
-      // Informations utiles pour le suivi
-      // international des paiements.
       reference_currency:
         currency,
 
       reference_amount:
         amount,
+
+      // -------------------------------------------------------
+      // Informations client
+      // -------------------------------------------------------
+
+      customer_name:
+        customerName ||
+        null,
+
+      customer_email:
+        email ||
+        null,
+
+      customer_phone:
+        customerPhone,
+
+      // -------------------------------------------------------
+      // Informations de facturation
+      // -------------------------------------------------------
+
+      addressLine1:
+        addressLine1 ||
+        null,
+
+      city:
+        customerCity ||
+        null,
+
+      countryCode,
+
+      // -------------------------------------------------------
+      // Compatibilité avec l'adapter Moko Card
+      // -------------------------------------------------------
+
+      bill_to_forename:
+        firstName ||
+        null,
+
+      bill_to_surname:
+        lastName ||
+        null,
+
+      bill_to_email:
+        email ||
+        null,
+
+      bill_to_phone:
+        customerPhone,
+
+      bill_to_address_line1:
+        addressLine1 ||
+        null,
+
+      bill_to_address_city:
+        customerCity ||
+        null,
+
+      bill_to_address_country:
+        countryCode,
+
+      // -------------------------------------------------------
+      // Valeurs serveur
+      // -------------------------------------------------------
+
+      server_created_at:
+        new Date().toISOString(),
     };
 
-    // =========================================================
-    // 19. CRÉER LA TRANSACTION LOCALE
-    // =========================================================
+    // =======================================================
+    // 21. TRANSACTION LOCALE
+    // =======================================================
 
     const {
-      data: paymentTransaction,
-      error: insertError,
+      data:
+        paymentTransaction,
+      error:
+        insertError,
     } =
       await supabase
         .from(
@@ -904,7 +1206,7 @@ export async function POST(
           currency,
 
           payment_method:
-            "mobile_money",
+            paymentMethod,
 
           status:
             "created",
@@ -914,7 +1216,8 @@ export async function POST(
             null,
 
           customer_email:
-            email || null,
+            email ||
+            null,
 
           customer_phone:
             customerPhone,
@@ -941,62 +1244,116 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 20. APPELER LE MOTEUR DE PAIEMENT
-    // =========================================================
+    // =======================================================
+    // 22. APPEL DU MOTEUR
+    // =======================================================
 
-    const paymentMethodType:
-      PaymentMethodType =
-      "mobile_money";
+    let paymentResult;
 
-    const paymentResult =
-      await createPayment(
-        providerCode,
-        {
+    try {
+      paymentResult =
+        await createPayment(
+          providerCode,
+          {
+            pharmacyId,
+
+            subscriptionId:
+              subscription.id,
+
+            merchantReference,
+
+            amount,
+
+            currency,
+
+            paymentMethodType,
+
+            paymentMethod,
+
+            customer: {
+              firstName,
+
+              lastName,
+
+              name:
+                customerName,
+
+              email:
+                email ||
+                undefined,
+
+              phone:
+                customerPhone,
+
+              countryCode,
+            },
+
+            description:
+              `Abonnement PharmaFlow ${billingCycle}`,
+
+            metadata,
+          },
+        );
+    } catch (providerError) {
+      console.error(
+        "Erreur appel fournisseur paiement:",
+        providerError,
+      );
+
+      const failureReason =
+        providerError instanceof
+        Error
+          ? providerError.message
+          : "Erreur lors de la communication avec le fournisseur de paiement.";
+
+      await supabase
+        .from(
+          "payment_transactions",
+        )
+        .update({
+          status:
+            "failed",
+
+          failure_reason:
+            failureReason,
+
+          metadata: {
+            ...metadata,
+
+            provider_error:
+              failureReason,
+          },
+        })
+        .eq(
+          "id",
+          paymentTransaction.id,
+        )
+        .eq(
+          "pharmacy_id",
           pharmacyId,
+        );
 
-          subscriptionId:
-            subscription.id,
+      return jsonError(
+        failureReason,
+        502,
+        {
+          code:
+            "PAYMENT_PROVIDER_REQUEST_ERROR",
+
+          paymentTransactionId:
+            paymentTransaction.id,
 
           merchantReference,
 
-          amount,
-
-          currency,
-
-          paymentMethodType,
-
-          paymentMethod:
-            "mobile_money",
-
-          customer: {
-            firstName,
-
-            lastName,
-
-            name:
-              customerName,
-
-            email:
-              email ||
-              undefined,
-
-            phone:
-              customerPhone,
-
-            countryCode,
-          },
-
-          description:
-            `Abonnement PharmaFlow ${billingCycle}`,
-
-          metadata,
+          provider:
+            providerCode,
         },
       );
+    }
 
-    // =========================================================
-    // 21. LE FOURNISSEUR A REFUSÉ LE PAIEMENT
-    // =========================================================
+    // =======================================================
+    // 23. FOURNISSEUR REFUSE
+    // =======================================================
 
     if (
       !paymentResult.success
@@ -1064,9 +1421,9 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 22. STATUT LOCAL
-    // =========================================================
+    // =======================================================
+    // 24. STATUT LOCAL
+    // =======================================================
 
     const localStatus =
       paymentResult.status ===
@@ -1083,9 +1440,9 @@ export async function POST(
               ? "expired"
               : "pending";
 
-    // =========================================================
-    // 23. PRÉPARER LA MISE À JOUR
-    // =========================================================
+    // =======================================================
+    // 25. MISE À JOUR TRANSACTION
+    // =======================================================
 
     const updatePayload:
       Record<
@@ -1133,13 +1490,11 @@ export async function POST(
         "Le paiement n'a pas abouti.";
     }
 
-    // =========================================================
-    // 24. METTRE À JOUR LA TRANSACTION
-    // =========================================================
-
     const {
-      data: updatedTransaction,
-      error: updateError,
+      data:
+        updatedTransaction,
+      error:
+        updateError,
     } =
       await supabase
         .from(
@@ -1185,15 +1540,32 @@ export async function POST(
       );
     }
 
-    // =========================================================
-    // 25. ACTIVATION DE L'ABONNEMENT
+    // =======================================================
+    // 26. RÉPONSE
+    // =======================================================
     //
-    // L'abonnement n'est PAS activé ici simplement parce que
-    // la création du paiement a répondu "successful".
+    // IMPORTANT :
     //
-    // L'activation définitive est effectuée après vérification
-    // du paiement par /api/payments/verify ou par webhook.
-    // =========================================================
+    // Nous n'activons PAS l'abonnement ici.
+    //
+    // Pour une carte Moko :
+    //
+    // create
+    //   ↓
+    // checkoutUrl
+    //   ↓
+    // paiement
+    //   ↓
+    // callback Moko
+    //   ↓
+    // vérification
+    //   ↓
+    // activation abonnement
+    //
+    // La documentation Moko précise que le callback serveur
+    // est la source de vérité et que la redirection navigateur
+    // ne suffit pas à confirmer le paiement. 
+    // =======================================================
 
     return NextResponse.json({
       success: true,
