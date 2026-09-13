@@ -1,11 +1,21 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useState,
+} from "react";
+
 import Link from "next/link";
+
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import { createClient } from "../lib/supabase/client";
+
+/* ============================================================
+   TYPES
+============================================================ */
 
 type Locale = "fr" | "en";
 
@@ -39,11 +49,13 @@ type PlatformAccessResponse = {
 
 type SubscriptionStatusResponse = {
   success?: boolean;
+
   access?: {
     allowed?: boolean;
     blocked?: boolean;
     reason?: string | null;
   };
+
   subscription?: {
     status?: string | null;
     expires_at?: string | null;
@@ -51,26 +63,56 @@ type SubscriptionStatusResponse = {
   } | null;
 };
 
+/* ============================================================
+   TEXTES
+============================================================ */
+
 const TEXT = {
   fr: {
     brand: "PharmaFlow",
-    subtitle: "Gestion intelligente des pharmacies",
+    subtitle:
+      "Gestion intelligente des pharmacies",
+
     badge: "ESPACE PROFESSIONNEL",
+
     title: "Bienvenue 👋",
-    description: "Connectez-vous à votre espace PharmaFlow.",
+
+    description:
+      "Connectez-vous à votre espace PharmaFlow.",
+
     email: "Adresse e-mail",
-    emailPlaceholder: "exemple@pharmacie.com",
+
+    emailPlaceholder:
+      "exemple@pharmacie.com",
+
     password: "Mot de passe",
-    passwordPlaceholder: "Votre mot de passe",
-    forgot: "Mot de passe oublié ?",
-    login: "Se connecter",
-    loggingIn: "Connexion...",
-    noAccount: "Vous n'avez pas encore de compte ?",
-    createAccount: "Créer une pharmacie",
-    security: "Connexion sécurisée",
+
+    passwordPlaceholder:
+      "Votre mot de passe",
+
+    forgot:
+      "Mot de passe oublié ?",
+
+    login:
+      "Se connecter",
+
+    loggingIn:
+      "Connexion...",
+
+    noAccount:
+      "Vous n'avez pas encore de compte ?",
+
+    createAccount:
+      "Créer une pharmacie",
+
+    security:
+      "Connexion sécurisée",
+
     securityDescription:
       "Vos données sont protégées par l'authentification sécurisée de PharmaFlow.",
-    footer: "© 2026 PharmaFlow. Tous droits réservés.",
+
+    footer:
+      "©️ 2026 PharmaFlow. Tous droits réservés.",
 
     invalidEmail:
       "Veuillez saisir une adresse e-mail valide.",
@@ -120,23 +162,54 @@ const TEXT = {
 
   en: {
     brand: "PharmaFlow",
-    subtitle: "Smart pharmacy management",
-    badge: "PROFESSIONAL AREA",
-    title: "Welcome 👋",
-    description: "Sign in to your PharmaFlow workspace.",
-    email: "Email address",
-    emailPlaceholder: "example@pharmacy.com",
-    password: "Password",
-    passwordPlaceholder: "Your password",
-    forgot: "Forgot your password?",
-    login: "Sign in",
-    loggingIn: "Signing in...",
-    noAccount: "Don't have an account yet?",
-    createAccount: "Create a pharmacy",
-    security: "Secure sign-in",
+
+    subtitle:
+      "Smart pharmacy management",
+
+    badge:
+      "PROFESSIONAL AREA",
+
+    title:
+      "Welcome 👋",
+
+    description:
+      "Sign in to your PharmaFlow workspace.",
+
+    email:
+      "Email address",
+
+    emailPlaceholder:
+      "example@pharmacy.com",
+
+    password:
+      "Password",
+
+    passwordPlaceholder:
+      "Your password",
+
+    forgot:
+      "Forgot your password?",
+
+    login:
+      "Sign in",
+
+    loggingIn:
+      "Signing in...",
+
+    noAccount:
+      "Don't have an account yet?",
+
+    createAccount:
+      "Create a pharmacy",
+
+    security:
+      "Secure sign-in",
+
     securityDescription:
       "Your data is protected by PharmaFlow's secure authentication system.",
-    footer: "© 2026 PharmaFlow. All rights reserved.",
+
+    footer:
+      "©️ 2026 PharmaFlow. All rights reserved.",
 
     invalidEmail:
       "Please enter a valid email address.",
@@ -185,7 +258,13 @@ const TEXT = {
   },
 } as const;
 
-function setLocaleCookie(locale: Locale) {
+/* ============================================================
+   COOKIE LANGUE
+============================================================ */
+
+function setLocaleCookie(
+  locale: Locale,
+) {
   document.cookie = [
     `pf_locale=${locale}`,
     "Path=/",
@@ -193,6 +272,10 @@ function setLocaleCookie(locale: Locale) {
     "SameSite=Lax",
   ].join("; ");
 }
+
+/* ============================================================
+   REDIRECTION PAR RÔLE
+============================================================ */
 
 function getRoleHome(
   role: string | null | undefined,
@@ -218,6 +301,10 @@ function getRoleHome(
   }
 }
 
+/* ============================================================
+   NORMALISATION DU RÔLE
+============================================================ */
+
 function normalizeRole(
   role: string | null | undefined,
 ) {
@@ -225,6 +312,10 @@ function normalizeRole(
     .trim()
     .toLowerCase();
 }
+
+/* ============================================================
+   VÉRIFICATION ACCÈS PLATEFORME
+============================================================ */
 
 async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
   const response = await fetch(
@@ -247,6 +338,10 @@ async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
   return (await response.json()) as PlatformAccessResponse;
 }
 
+/* ============================================================
+   VÉRIFICATION ABONNEMENT
+============================================================ */
+
 async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
   const response = await fetch(
     "/api/subscription/status",
@@ -267,6 +362,10 @@ async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
 
   return (await response.json()) as SubscriptionStatusResponse;
 }
+
+/* ============================================================
+   MESSAGE SELON LE MOTIF D'ABONNEMENT
+============================================================ */
 
 function getSubscriptionReasonMessage(
   reason: string | null | undefined,
@@ -309,18 +408,34 @@ function getSubscriptionReasonMessage(
   }
 }
 
+/* ============================================================
+   PAGE DE CONNEXION
+============================================================ */
+
 export default function LoginPage() {
   const locale = useLocale();
+
   const router = useRouter();
+
   const supabase = createClient();
 
   const currentLocale: Locale =
-    locale === "en" ? "en" : "fr";
+    locale === "en"
+      ? "en"
+      : "fr";
 
-  const t = TEXT[currentLocale];
+  const t =
+    TEXT[currentLocale];
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  /* ==========================================================
+     ÉTATS
+  ========================================================== */
+
+  const [email, setEmail] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
 
   const [loading, setLoading] =
     useState(false);
@@ -334,22 +449,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] =
     useState(false);
 
-  /*
-   * ==========================================================
-   * SESSION EXISTANTE
-   * ==========================================================
-   *
-   * Cette vérification est effectuée dès l'ouverture de /login.
-   *
-   * Priorité :
-   *
-   * 1. Super Admin
-   * 2. Agent plateforme
-   * 3. Utilisateur pharmacie
-   *
-   * Ainsi, un Super Admin ou un Agent déjà connecté ne
-   * repasse pas par les contrôles d'une pharmacie.
-   */
+  /* ==========================================================
+     SESSION EXISTANTE
+  ========================================================== */
+
   useEffect(() => {
     let mounted = true;
 
@@ -357,26 +460,32 @@ export default function LoginPage() {
       try {
         const {
           data: { user },
-        } = await supabase.auth.getUser();
+        } =
+          await supabase.auth.getUser();
 
-        if (!mounted || !user) {
+        if (
+          !mounted ||
+          !user
+        ) {
           return;
         }
 
-        /*
-         * ------------------------------------------------------
-         * 1. VÉRIFICATION ACCÈS PLATEFORME
-         * ------------------------------------------------------
-         */
+        /* ====================================================
+           1. ACCÈS PLATEFORME
+        ==================================================== */
+
         try {
           const platformAccess =
             await checkPlatformAccess();
+
+          /* SUPER ADMIN */
 
           if (
             mounted &&
             platformAccess.type ===
               "super_admin" &&
-            platformAccess.active === true &&
+            platformAccess.active ===
+              true &&
             platformAccess.redirect
           ) {
             setLocaleCookie(
@@ -390,11 +499,14 @@ export default function LoginPage() {
             return;
           }
 
+          /* AGENT PLATEFORME */
+
           if (
             mounted &&
             platformAccess.type ===
               "agent" &&
-            platformAccess.active === true &&
+            platformAccess.active ===
+              true &&
             platformAccess.redirect
           ) {
             setLocaleCookie(
@@ -414,21 +526,24 @@ export default function LoginPage() {
           );
         }
 
-        /*
-         * ------------------------------------------------------
-         * 2. PROFIL PHARMACIE
-         * ------------------------------------------------------
-         */
+        /* ====================================================
+           2. PROFIL PHARMACIE
+        ==================================================== */
+
         const {
           data: profile,
           error: profileError,
-        } = await supabase
-          .from("profiles")
-          .select(
-            "role, pharmacy_id",
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+        } =
+          await supabase
+            .from("profiles")
+            .select(
+              "role, pharmacy_id",
+            )
+            .eq(
+              "id",
+              user.id,
+            )
+            .maybeSingle();
 
         if (
           !mounted ||
@@ -438,23 +553,23 @@ export default function LoginPage() {
           return;
         }
 
-        /*
-         * ------------------------------------------------------
-         * 3. PHARMACIE
-         * ------------------------------------------------------
-         */
+        /* ====================================================
+           3. PHARMACIE
+        ==================================================== */
+
         const {
           data: pharmacy,
-        } = await supabase
-          .from("pharmacies")
-          .select(
-            "language, status",
-          )
-          .eq(
-            "id",
-            profile.pharmacy_id,
-          )
-          .maybeSingle();
+        } =
+          await supabase
+            .from("pharmacies")
+            .select(
+              "language, status",
+            )
+            .eq(
+              "id",
+              profile.pharmacy_id,
+            )
+            .maybeSingle();
 
         if (
           !mounted ||
@@ -464,7 +579,8 @@ export default function LoginPage() {
         }
 
         const pharmacyLanguage: Locale =
-          pharmacy.language === "en"
+          pharmacy.language ===
+          "en"
             ? "en"
             : "fr";
 
@@ -472,19 +588,21 @@ export default function LoginPage() {
           pharmacyLanguage,
         );
 
-        /*
-         * ------------------------------------------------------
-         * 4. RÔLE
-         * ------------------------------------------------------
-         */
+        /* ====================================================
+           4. RÔLE
+        ==================================================== */
+
         const role =
-          normalizeRole(profile.role);
+          normalizeRole(
+            profile.role,
+          );
 
         const destination =
           getRoleHome(role);
 
         if (
-          destination !== "/login"
+          destination !==
+          "/login"
         ) {
           router.replace(
             destination,
@@ -509,11 +627,10 @@ export default function LoginPage() {
     currentLocale,
   ]);
 
-  /*
-   * ==========================================================
-   * VALIDATION FORMULAIRE
-   * ==========================================================
-   */
+  /* ==========================================================
+     VALIDATION FORMULAIRE
+  ========================================================== */
+
   function validateForm() {
     const cleanEmail =
       email
@@ -551,11 +668,10 @@ export default function LoginPage() {
     return true;
   }
 
-  /*
-   * ==========================================================
-   * CONNEXION
-   * ==========================================================
-   */
+  /* ==========================================================
+     CONNEXION
+  ========================================================== */
+
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -568,6 +684,7 @@ export default function LoginPage() {
     }
 
     setLoading(true);
+    setSyncing(false);
 
     try {
       const cleanEmail =
@@ -575,11 +692,10 @@ export default function LoginPage() {
           .trim()
           .toLowerCase();
 
-      /*
-       * ========================================================
-       * 1. AUTHENTIFICATION SUPABASE
-       * ========================================================
-       */
+      /* ======================================================
+         1. AUTHENTIFICATION SUPABASE
+      ====================================================== */
+
       const {
         data: authData,
         error: authError,
@@ -591,6 +707,13 @@ export default function LoginPage() {
           },
         );
 
+      /*
+       * IMPORTANT :
+       *
+       * Si le compte n'existe pas ou si le mot de passe
+       * est incorrect, on arrête immédiatement le chargement.
+       */
+
       if (
         authError ||
         !authData.user
@@ -599,6 +722,9 @@ export default function LoginPage() {
           "LOGIN AUTH:",
           authError,
         );
+
+        setLoading(false);
+        setSyncing(false);
 
         setError(
           t.loginError,
@@ -610,28 +736,10 @@ export default function LoginPage() {
       const user =
         authData.user;
 
-      /*
-       * ========================================================
-       * 2. VÉRIFICATION PLATEFORME
-       * ========================================================
-       *
-       * IMPORTANT :
-       *
-       * Cette vérification arrive AVANT profiles/pharmacies.
-       *
-       * Un Super Admin n'a pas besoin d'avoir :
-       *
-       * - pharmacy_id
-       * - profil pharmacie
-       * - abonnement pharmacie
-       *
-       * Un Agent plateforme non plus.
-       *
-       * Le compte plateforme est contrôlé par :
-       *
-       * platform_admins
-       * platform_agents
-       */
+      /* ======================================================
+         2. VÉRIFICATION PLATEFORME
+      ====================================================== */
+
       setSyncing(true);
 
       let platformAccess:
@@ -658,11 +766,10 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * --------------------------------------------------------
-       * SUPER ADMIN
-       * --------------------------------------------------------
-       */
+      /* ======================================================
+         SUPER ADMIN
+      ====================================================== */
+
       if (
         platformAccess.type ===
           "super_admin" &&
@@ -681,11 +788,10 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * --------------------------------------------------------
-       * AGENT PLATEFORME
-       * --------------------------------------------------------
-       */
+      /* ======================================================
+         AGENT PLATEFORME
+      ====================================================== */
+
       if (
         platformAccess.type ===
           "agent" &&
@@ -704,11 +810,10 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * ========================================================
-       * 3. PROFIL UTILISATEUR PHARMACIE
-       * ========================================================
-       */
+      /* ======================================================
+         3. PROFIL UTILISATEUR PHARMACIE
+      ====================================================== */
+
       const {
         data: profileData,
         error: profileError,
@@ -764,12 +869,10 @@ export default function LoginPage() {
       const profile =
         profileData as Profile;
 
-      /*
-       * ========================================================
-       * 4. PHARMACY_ID OBLIGATOIRE POUR LES UTILISATEURS
-       *    PHARMACIE
-       * ========================================================
-       */
+      /* ======================================================
+         4. PHARMACY_ID OBLIGATOIRE
+      ====================================================== */
+
       if (!profile.pharmacy_id) {
         await supabase.auth.signOut();
 
@@ -783,11 +886,10 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * ========================================================
-       * 5. PHARMACIE
-       * ========================================================
-       */
+      /* ======================================================
+         5. PHARMACIE
+      ====================================================== */
+
       const {
         data: pharmacyData,
         error: pharmacyError,
@@ -845,11 +947,10 @@ export default function LoginPage() {
       const pharmacy =
         pharmacyData as Pharmacy;
 
-      /*
-       * ========================================================
-       * 6. STATUT PHARMACIE
-       * ========================================================
-       */
+      /* ======================================================
+         6. STATUT PHARMACIE
+      ====================================================== */
+
       const pharmacyStatus =
         String(
           pharmacy.status ?? "",
@@ -878,13 +979,10 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * ========================================================
-       * 7. LANGUE DE LA PHARMACIE
-       * ========================================================
-       *
-       * pharmacies.language est la source de vérité.
-       */
+      /* ======================================================
+         7. LANGUE PHARMACIE
+      ====================================================== */
+
       const pharmacyLanguage:
         | Locale
         | null =
@@ -909,26 +1007,18 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * ========================================================
-       * 8. COOKIE LANGUE
-       * ========================================================
-       */
+      /* ======================================================
+         8. COOKIE LANGUE
+      ====================================================== */
+
       setLocaleCookie(
         pharmacyLanguage,
       );
 
-      /*
-       * ========================================================
-       * 9. VÉRIFICATION ABONNEMENT
-       * ========================================================
-       *
-       * Les utilisateurs d'une pharmacie doivent avoir un
-       * abonnement autorisé.
-       *
-       * Les Super Admin et Agents ont déjà été redirigés
-       * précédemment et ne passent donc jamais ici.
-       */
+      /* ======================================================
+         9. VÉRIFICATION ABONNEMENT
+      ====================================================== */
+
       try {
         const subscription =
           await checkSubscriptionAccess();
@@ -940,6 +1030,16 @@ export default function LoginPage() {
         const blocked =
           subscription.access
             ?.blocked === true;
+
+        /*
+         * Aucun accès si :
+         *
+         * - abonnement absent
+         * - abonnement expiré
+         * - abonnement bloqué
+         * - période d'essai terminée
+         * - statut non autorisé
+         */
 
         if (
           blocked ||
@@ -967,14 +1067,12 @@ export default function LoginPage() {
           );
 
           /*
-           * Redirection vers la page abonnement.
-           *
-           * Le motif est transmis afin que la page puisse
-           * afficher le contexte exact.
+           * Redirection vers l'espace abonnement.
            */
           window.location.assign(
             `/abonnement?reason=${encodeURIComponent(
-              reason ?? "subscription_required",
+              reason ??
+                "subscription_required",
             )}`,
           );
 
@@ -986,12 +1084,6 @@ export default function LoginPage() {
           subscriptionError,
         );
 
-        /*
-         * Pour éviter de bloquer complètement une pharmacie
-         * si le service de statut rencontre une erreur réseau,
-         * nous affichons l'erreur et conservons la session
-         * contrôlée côté serveur.
-         */
         setSyncing(false);
         setLoading(false);
 
@@ -1002,11 +1094,10 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * ========================================================
-       * 10. RÔLE PHARMACIE
-       * ========================================================
-       */
+      /* ======================================================
+         10. RÔLE PHARMACIE
+      ====================================================== */
+
       const role =
         normalizeRole(
           profile.role,
@@ -1016,7 +1107,8 @@ export default function LoginPage() {
         getRoleHome(role);
 
       if (
-        destination === "/login"
+        destination ===
+        "/login"
       ) {
         await supabase.auth.signOut();
 
@@ -1030,17 +1122,10 @@ export default function LoginPage() {
         return;
       }
 
-      /*
-       * ========================================================
-       * 11. REDIRECTION FINALE
-       * ========================================================
-       *
-       * owner       → /dashboard
-       * admin       → /admin
-       * pharmacist  → /pharmacien
-       * cashier     → /caisse
-       * employee    → /employe
-       */
+      /* ======================================================
+         11. REDIRECTION FINALE
+      ====================================================== */
+
       window.location.assign(
         destination,
       );
@@ -1059,27 +1144,40 @@ export default function LoginPage() {
     }
   }
 
-  /*
-   * ==========================================================
-   * ÉCRAN DE CHARGEMENT
-   * ==========================================================
-   */
+  /* ==========================================================
+     ÉCRAN DE CHARGEMENT
+  ========================================================== */
+
   if (syncing) {
     return (
       <main className="pf-auth-page">
+
         <div className="pf-auth-background">
+
           <div className="pf-auth-orb pf-auth-orb-one" />
+
           <div className="pf-auth-orb pf-auth-orb-two" />
+
         </div>
 
         <div className="pf-auth-container">
+
           <section className="pf-auth-card">
+
+            {/* LOGO */}
+
             <div className="pf-auth-logo">
+
               <div className="pf-auth-logo-icon">
-                <span>✚</span>
+
+                <span>
+                  ✚
+                </span>
+
               </div>
 
               <div>
+
                 <div className="pf-auth-logo-name">
                   {t.brand}
                 </div>
@@ -1087,10 +1185,15 @@ export default function LoginPage() {
                 <div className="pf-auth-logo-subtitle">
                   {t.subtitle}
                 </div>
+
               </div>
+
             </div>
 
+            {/* CHARGEMENT */}
+
             <div className="pf-auth-loading">
+
               <span className="pf-spinner" />
 
               <h2>
@@ -1100,14 +1203,19 @@ export default function LoginPage() {
               <p>
                 {t.loadingDescription}
               </p>
+
             </div>
 
+            {/* SÉCURITÉ */}
+
             <div className="pf-auth-security">
+
               <span className="pf-auth-security-icon">
                 🛡️
               </span>
 
               <div>
+
                 <strong>
                   {t.security}
                 </strong>
@@ -1120,44 +1228,69 @@ export default function LoginPage() {
                 >
                   {t.securityDescription}
                 </span>
+
               </div>
+
             </div>
+
           </section>
 
           <footer className="pf-auth-page-footer">
             {t.footer}
           </footer>
+
         </div>
+
       </main>
     );
   }
 
-  /*
-   * ==========================================================
-   * PAGE DE CONNEXION
-   * ==========================================================
-   */
+  /* ==========================================================
+     PAGE DE CONNEXION
+  ========================================================== */
+
   return (
     <main className="pf-auth-page">
+
+      {/* ======================================================
+          ARRIÈRE-PLAN
+      ====================================================== */}
+
       <div className="pf-auth-background">
+
         <div className="pf-auth-orb pf-auth-orb-one" />
+
         <div className="pf-auth-orb pf-auth-orb-two" />
+
       </div>
 
+      {/* ======================================================
+          CONTENEUR
+      ====================================================== */}
+
       <div className="pf-auth-container">
+
         <section className="pf-auth-card">
+
           {/* =================================================
               LOGO
           ================================================== */}
+
           <Link
             href="/"
             className="pf-auth-logo"
           >
+
             <div className="pf-auth-logo-icon">
-              <span>✚</span>
+
+              <span>
+                ✚
+              </span>
+
             </div>
 
             <div>
+
               <div className="pf-auth-logo-name">
                 {t.brand}
               </div>
@@ -1165,14 +1298,19 @@ export default function LoginPage() {
               <div className="pf-auth-logo-subtitle">
                 {t.subtitle}
               </div>
+
             </div>
+
           </Link>
 
           {/* =================================================
               HEADER
           ================================================== */}
+
           <div className="pf-auth-header">
+
             <div className="pf-auth-badge">
+
               <span className="pf-auth-badge-icon">
                 🔐
               </span>
@@ -1180,6 +1318,7 @@ export default function LoginPage() {
               <span>
                 {t.badge}
               </span>
+
             </div>
 
             <h1>
@@ -1189,16 +1328,19 @@ export default function LoginPage() {
             <p>
               {t.description}
             </p>
+
           </div>
 
           {/* =================================================
-              ERROR
+              ERREUR
           ================================================== */}
+
           {error && (
             <div
               className="pf-alert pf-alert-danger"
               role="alert"
             >
+
               <span className="pf-alert-icon">
                 !
               </span>
@@ -1206,20 +1348,25 @@ export default function LoginPage() {
               <span>
                 {error}
               </span>
+
             </div>
           )}
 
           {/* =================================================
               FORMULAIRE
           ================================================== */}
+
           <form
             onSubmit={handleSubmit}
             className="pf-auth-form"
           >
+
             {/* =================================================
                 EMAIL
             ================================================== */}
+
             <div className="pf-form-group">
+
               <label
                 htmlFor="email"
                 className="pf-form-label"
@@ -1228,6 +1375,7 @@ export default function LoginPage() {
               </label>
 
               <div className="pf-input-wrapper">
+
                 <span
                   className="pf-input-icon"
                   aria-hidden="true"
@@ -1241,6 +1389,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(event) => {
+
                     setEmail(
                       event.target.value,
                     );
@@ -1248,6 +1397,7 @@ export default function LoginPage() {
                     if (error) {
                       setError("");
                     }
+
                   }}
                   placeholder={
                     t.emailPlaceholder
@@ -1259,13 +1409,17 @@ export default function LoginPage() {
                   disabled={loading}
                   required
                 />
+
               </div>
+
             </div>
 
             {/* =================================================
                 MOT DE PASSE
             ================================================== */}
+
             <div className="pf-form-group">
+
               <div
                 style={{
                   display: "flex",
@@ -1276,6 +1430,7 @@ export default function LoginPage() {
                   marginBottom: "8px",
                 }}
               >
+
                 <label
                   htmlFor="password"
                   className="pf-form-label"
@@ -1292,9 +1447,11 @@ export default function LoginPage() {
                 >
                   {t.forgot}
                 </Link>
+
               </div>
 
               <div className="pf-input-wrapper">
+
                 <span
                   className="pf-input-icon"
                   aria-hidden="true"
@@ -1312,6 +1469,7 @@ export default function LoginPage() {
                   }
                   value={password}
                   onChange={(event) => {
+
                     setPassword(
                       event.target.value,
                     );
@@ -1319,6 +1477,7 @@ export default function LoginPage() {
                     if (error) {
                       setError("");
                     }
+
                   }}
                   placeholder={
                     t.passwordPlaceholder
@@ -1350,38 +1509,51 @@ export default function LoginPage() {
                       : t.showPassword
                   }
                 >
+
                   {showPassword
                     ? "🙈"
                     : "👁️"}
+
                 </button>
+
               </div>
+
             </div>
 
             {/* =================================================
                 BOUTON CONNEXION
             ================================================== */}
+
             <button
               type="submit"
               className="pf-btn pf-btn-primary pf-btn-full pf-auth-submit"
               disabled={loading}
             >
+
               {loading ? (
                 <>
                   <span className="pf-spinner pf-spinner-small" />
+
                   {t.loggingIn}
                 </>
               ) : (
                 <>
-                  <span>→</span>
+                  <span>
+                    →
+                  </span>
+
                   {t.login}
                 </>
               )}
+
             </button>
+
           </form>
 
           {/* =================================================
               CRÉATION COMPTE PHARMACIE
           ================================================== */}
+
           <div
             style={{
               marginTop: "24px",
@@ -1391,6 +1563,7 @@ export default function LoginPage() {
               textAlign: "center",
             }}
           >
+
             <span
               style={{
                 color:
@@ -1407,17 +1580,21 @@ export default function LoginPage() {
             >
               {t.createAccount}
             </Link>
+
           </div>
 
           {/* =================================================
               SÉCURITÉ
           ================================================== */}
+
           <div className="pf-auth-security">
+
             <span className="pf-auth-security-icon">
               🛡️
             </span>
 
             <div>
+
               <strong>
                 {t.security}
               </strong>
@@ -1430,17 +1607,23 @@ export default function LoginPage() {
               >
                 {t.securityDescription}
               </span>
+
             </div>
+
           </div>
+
         </section>
 
         {/* ===================================================
             FOOTER
         ==================================================== */}
+
         <footer className="pf-auth-page-footer">
           {t.footer}
         </footer>
+
       </div>
+
     </main>
   );
 }

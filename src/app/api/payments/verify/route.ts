@@ -1,362 +1,160 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import { createClient } from "@/app/lib/supabase/server";
 import { supabaseAdmin } from "@/app/lib/supabase/admin";
 
 import {
-  verifyPayment,
-} from "@/app/lib/payments/engine";
+  isSuccessfulPaymentStatus,
+  normalizePaymentStatus,
+} from "@/app/lib/payments/types";
 
-type TransactionRow = {
+import {
+  mokoAfrikaAdapter,
+} from "@/app/lib/payments/moko-afrika";
+
+export const runtime = "nodejs";
+
+type JsonObject = Record<string, unknown>;
+
+type PaymentTransaction = {
   id: string;
   pharmacy_id: string;
   subscription_id: string | null;
   provider_id: string | null;
   provider: string;
   provider_transaction_id: string | null;
-  merchant_reference: string;
+  merchant_reference: string | null;
   amount: number;
   currency: string;
-  payment_method: string;
+  payment_method: string | null;
   status: string;
-  checkout_url: string | null;
-  customer_name: string | null;
-  customer_email: string | null;
-  customer_phone: string | null;
-  metadata: Record<string, unknown> | null;
-  failure_reason: string | null;
+  metadata: JsonObject | null;
   created_at: string;
   updated_at: string;
   paid_at: string | null;
 };
 
-type PlanRow = {
-  id: string;
-  plan_code: string;
-  plan_name: string;
-  duration_days: number;
-  is_active: boolean;
-};
-
-type PlanPriceRow = {
-  plan_id: string;
-  currency_code: string;
-  price: number;
-  is_active: boolean;
-};
-
-type RequestBody = {
-  transactionId?: string;
-  merchantReference?: string;
-};
-
-type ProviderCode =
-  | "yabetoo"
-  | "gofreshpay"
-  | "moko_afrika";
-
-function normalizeText(
-  value: unknown,
-): string {
-  return String(
-    value ?? "",
-  ).trim();
-}
-
-function normalizeUpper(
-  value: unknown,
-): string {
-  return normalizeText(
-    value,
-  ).toUpperCase();
-}
-
-function normalizeLower(
-  value: unknown,
-): string {
-  return normalizeText(
-    value,
-  ).toLowerCase();
-}
-
-function isSuccessfulStatus(
-  status: unknown,
-): boolean {
-  return [
-    "successful",
-    "succeeded",
-    "success",
-    "paid",
-    "completed",
-    "complete",
-    "approved",
-    "successfully_paid",
-  ].includes(
-    normalizeLower(
-      status,
-    ),
-  );
-}
-
-function isPendingStatus(
-  status: unknown,
-): boolean {
-  return [
-    "created",
-    "pending",
-    "processing",
-    "submitted",
-    "in_progress",
-    "in_progress_payment",
-    "requires_payment_method",
-    "requires_confirmation",
-  ].includes(
-    normalizeLower(
-      status,
-    ),
-  );
-}
-
-function isFailedStatus(
-  status: unknown,
-): boolean {
-  return [
-    "failed",
-    "failure",
-    "declined",
-    "rejected",
-    "error",
-  ].includes(
-    normalizeLower(
-      status,
-    ),
-  );
-}
-
-function isCancelledStatus(
-  status: unknown,
-): boolean {
-  return [
-    "cancelled",
-    "canceled",
-    "cancel",
-  ].includes(
-    normalizeLower(
-      status,
-    ),
-  );
-}
-
-function isExpiredStatus(
-  status: unknown,
-): boolean {
-  return [
-    "expired",
-    "timeout",
-    "timed_out",
-  ].includes(
-    normalizeLower(
-      status,
-    ),
-  );
-}
-
-function isSupportedProvider(
-  value: string,
-): value is ProviderCode {
-  return [
-    "yabetoo",
-    "gofreshpay",
-    "moko_afrika",
-  ].includes(
-    value,
-  );
-}
-
 function jsonResponse(
-  body: Record<string, unknown>,
+  data: JsonObject,
   status = 200,
 ) {
   return NextResponse.json(
-    body,
-    {
-      status,
-    },
+    data,
+    { status },
   );
 }
 
-export async function POST(
-  request: Request,
-) {
-  try {
-    /*
-     * ==========================================================
-     * 1. CLIENT SUPABASE
-     * ==========================================================
-     */
+function isObject(
+  value: unknown,
+): value is JsonObject {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
 
-    const supabase =
-      await createClient();
+function normalizeString(
+  value: unknown,
+): string | null {
+  if (
+    typeof value !== "string"
+  ) {
+    return null;
+  }
 
-    /*
-     * ==========================================================
-     * 2. AUTHENTIFICATION
-     * ==========================================================
-     */
+  const valueTrimmed =
+    value.trim();
 
-    const {
-      data: authData,
-      error: authError,
-    } =
-      await supabase.auth.getUser();
+  return valueTrimmed.length > 0
+    ? valueTrimmed
+    : null;
+}
 
-    if (
-      authError ||
-      !authData.user
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Utilisateur non authentifié.",
-          code:
-            "UNAUTHENTICATED",
-        },
-        401,
-      );
-    }
+function normalizeAmount(
+  value: unknown,
+): number | null {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    return value;
+  }
 
-    const user =
-      authData.user;
+  if (
+    typeof value === "string" &&
+    value.trim() !== ""
+  ) {
+    const normalized =
+      value
+        .trim()
+        .replace(",", ".");
 
-    /*
-     * ==========================================================
-     * 3. LECTURE DU BODY
-     * ==========================================================
-     */
-
-    let body: RequestBody = {};
-
-    try {
-      body =
-        (await request.json()) as RequestBody;
-    } catch {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Requête invalide.",
-          code:
-            "INVALID_JSON",
-        },
-        400,
-      );
-    }
-
-    const transactionId =
-      normalizeText(
-        body.transactionId,
-      );
-
-    const merchantReference =
-      normalizeText(
-        body.merchantReference,
-      );
+    const amount =
+      Number(normalized);
 
     if (
-      !transactionId &&
-      !merchantReference
+      Number.isFinite(amount)
     ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "transactionId ou merchantReference est requis.",
-          code:
-            "TRANSACTION_REFERENCE_REQUIRED",
-        },
-        400,
-      );
+      return amount;
     }
+  }
 
-    /*
-     * ==========================================================
-     * 4. PROFIL DE L'UTILISATEUR
-     * ==========================================================
-     *
-     * pharmacy_id est récupéré depuis Supabase.
-     *
-     * Le navigateur ne peut pas choisir la pharmacie à vérifier.
-     */
+  return null;
+}
 
-    const {
-      data: profile,
-      error: profileError,
-    } =
-      await supabase
-        .from("profiles")
-        .select(
-          "id, pharmacy_id",
-        )
-        .eq(
-          "id",
-          user.id,
-        )
-        .maybeSingle();
+function normalizeCurrency(
+  value: unknown,
+): string | null {
+  const currency =
+    normalizeString(value);
 
+  if (!currency) {
+    return null;
+  }
+
+  return currency.toUpperCase();
+}
+
+function amountsMatch(
+  expected: number,
+  received: number,
+): boolean {
+  return (
+    Math.abs(
+      Number(expected) -
+        Number(received),
+    ) < 0.01
+  );
+}
+
+function getRequestValue(
+  body: JsonObject,
+  keys: string[],
+): unknown {
+  for (const key of keys) {
     if (
-      profileError
+      Object.prototype.hasOwnProperty.call(
+        body,
+        key,
+      )
     ) {
-      console.error(
-        "PharmaFlow verify profile error:",
-        profileError,
-      );
-
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Impossible de récupérer votre profil.",
-          code:
-            "PROFILE_QUERY_FAILED",
-        },
-        500,
-      );
+      return body[key];
     }
+  }
 
-    if (
-      !profile ||
-      !profile.pharmacy_id
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Votre profil PharmaFlow n'est pas correctement configuré.",
-          code:
-            "PROFILE_NOT_CONFIGURED",
-        },
-        403,
-      );
-    }
+  return undefined;
+}
 
-    const pharmacyId =
-      profile.pharmacy_id;
-
-    /*
-     * ==========================================================
-     * 5. RECHERCHE DE LA TRANSACTION
-     * ==========================================================
-     *
-     * IMPORTANT :
-     *
-     * La transaction est toujours filtrée par pharmacy_id.
-     *
-     * Cela garantit l'isolation entre les pharmacies.
-     */
-
-    let transactionQuery =
-      supabase
+async function findTransaction(
+  merchantReference: string | null,
+  providerTransactionId: string | null,
+): Promise<{
+  transaction: PaymentTransaction | null;
+  error: unknown;
+}> {
+  if (merchantReference) {
+    const result =
+      await supabaseAdmin
         .from(
           "payment_transactions",
         )
@@ -373,471 +171,351 @@ export async function POST(
             currency,
             payment_method,
             status,
-            checkout_url,
-            customer_name,
-            customer_email,
-            customer_phone,
             metadata,
-            failure_reason,
             created_at,
             updated_at,
             paid_at
           `,
         )
         .eq(
-          "pharmacy_id",
-          pharmacyId,
-        );
-
-    if (
-      transactionId
-    ) {
-      transactionQuery =
-        transactionQuery.eq(
-          "id",
-          transactionId,
-        );
-    } else {
-      transactionQuery =
-        transactionQuery.eq(
           "merchant_reference",
           merchantReference,
-        );
+        )
+        .maybeSingle();
+
+    if (result.error) {
+      return {
+        transaction: null,
+        error: result.error,
+      };
     }
 
-    const {
-      data: transaction,
-      error:
-        transactionError,
-    } =
-      await transactionQuery
-        .maybeSingle<TransactionRow>();
+    if (result.data) {
+      return {
+        transaction:
+          result.data as PaymentTransaction,
+        error: null,
+      };
+    }
+  }
 
+  if (providerTransactionId) {
+    const result =
+      await supabaseAdmin
+        .from(
+          "payment_transactions",
+        )
+        .select(
+          `
+            id,
+            pharmacy_id,
+            subscription_id,
+            provider_id,
+            provider,
+            provider_transaction_id,
+            merchant_reference,
+            amount,
+            currency,
+            payment_method,
+            status,
+            metadata,
+            created_at,
+            updated_at,
+            paid_at
+          `,
+        )
+        .eq(
+          "provider_transaction_id",
+          providerTransactionId,
+        )
+        .eq(
+          "provider",
+          "moko_afrika",
+        )
+        .maybeSingle();
+
+    if (result.error) {
+      return {
+        transaction: null,
+        error: result.error,
+      };
+    }
+
+    if (result.data) {
+      return {
+        transaction:
+          result.data as PaymentTransaction,
+        error: null,
+      };
+    }
+  }
+
+  return {
+    transaction: null,
+    error: null,
+  };
+}
+
+async function activateSubscription(
+  transaction: PaymentTransaction,
+  metadata: JsonObject,
+) {
+  const activation =
+    await supabaseAdmin.rpc(
+      "pf_activate_subscription_from_payment",
+      {
+        p_payment_id:
+          transaction.id,
+      },
+    );
+
+  if (activation.error) {
+    console.error(
+      "MOKO AFRIKA VERIFY ACTIVATION ERROR:",
+      activation.error,
+    );
+
+    await supabaseAdmin
+      .from(
+        "payment_transactions",
+      )
+      .update({
+        metadata: {
+          ...metadata,
+          activation_status:
+            "pending",
+          activation_error:
+            activation.error.message,
+          activation_retry_at:
+            new Date().toISOString(),
+        },
+      })
+      .eq(
+        "id",
+        transaction.id,
+      );
+
+    return {
+      success: false,
+      error: activation.error,
+    };
+  }
+
+  await supabaseAdmin
+    .from(
+      "payment_transactions",
+    )
+    .update({
+      metadata: {
+        ...metadata,
+        activation_status:
+          "activated",
+        activation_result:
+          activation.data ?? null,
+        activated_at:
+          new Date().toISOString(),
+      },
+    })
+    .eq(
+      "id",
+      transaction.id,
+    );
+
+  return {
+    success: true,
+    error: null,
+  };
+}
+
+export async function POST(
+  request: NextRequest,
+) {
+  try {
+    let body: unknown;
+
+    try {
+      body =
+        await request.json();
+    } catch {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Corps JSON invalide.",
+        },
+        400,
+      );
+    }
+
+    if (!isObject(body)) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Format de requête invalide.",
+        },
+        400,
+      );
+    }
+
+    /*
+     * -----------------------------------------------------
+     * PARAMÈTRES DE LA REQUÊTE
+     * -----------------------------------------------------
+     */
+
+    const merchantReference =
+      normalizeString(
+        getRequestValue(
+          body,
+          [
+            "merchantReference",
+            "merchant_reference",
+            "reference",
+          ],
+        ),
+      );
+
+    const providerTransactionId =
+      normalizeString(
+        getRequestValue(
+          body,
+          [
+            "providerTransactionId",
+            "provider_transaction_id",
+            "transactionId",
+            "transaction_id",
+            "transaction_uuid",
+          ],
+        ),
+      );
+
+    const requestedAmount =
+      normalizeAmount(
+        getRequestValue(
+          body,
+          [
+            "amount",
+            "expectedAmount",
+            "expected_amount",
+          ],
+        ),
+      );
+
+    const requestedCurrency =
+      normalizeCurrency(
+        getRequestValue(
+          body,
+          [
+            "currency",
+            "expectedCurrency",
+            "expected_currency",
+          ],
+        ),
+      );
+
+    /*
+     * Au moins une des deux références est nécessaire.
+     */
     if (
-      transactionError
+      !merchantReference &&
+      !providerTransactionId
     ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "merchantReference ou providerTransactionId est requis.",
+        },
+        400,
+      );
+    }
+
+    /*
+     * -----------------------------------------------------
+     * RECHERCHE DE LA TRANSACTION PHARMAFLOW
+     * -----------------------------------------------------
+     */
+
+    const search =
+      await findTransaction(
+        merchantReference,
+        providerTransactionId,
+      );
+
+    if (search.error) {
       console.error(
-        "PharmaFlow verify transaction query error:",
-        transactionError,
+        "MOKO AFRIKA VERIFY DATABASE SEARCH ERROR:",
+        search.error,
       );
 
       return jsonResponse(
         {
           success: false,
           error:
-            "Impossible de récupérer la transaction.",
-          code:
-            "TRANSACTION_QUERY_FAILED",
+            "Erreur lors de la recherche de la transaction.",
         },
         500,
       );
     }
 
-    if (
-      !transaction
-    ) {
+    const transaction =
+      search.transaction;
+
+    if (!transaction) {
       return jsonResponse(
         {
           success: false,
           error:
-            "Transaction de paiement introuvable.",
-          code:
-            "TRANSACTION_NOT_FOUND",
+            "Transaction PharmaFlow introuvable.",
+          merchantReference,
+          providerTransactionId,
         },
         404,
       );
     }
 
     /*
-     * ==========================================================
-     * 6. VÉRIFICATION TENANT
-     * ==========================================================
+     * -----------------------------------------------------
+     * VÉRIFICATION DU FOURNISSEUR
+     * -----------------------------------------------------
      */
 
     if (
-      transaction.pharmacy_id !==
-      pharmacyId
+      transaction.provider !==
+      "moko_afrika"
     ) {
       return jsonResponse(
         {
           success: false,
           error:
-            "Cette transaction n'appartient pas à votre pharmacie.",
-          code:
-            "TRANSACTION_ACCESS_DENIED",
+            "Cette transaction n'appartient pas à Moko Afrika.",
         },
-        403,
+        409,
       );
     }
 
     /*
-     * ==========================================================
-     * 7. INFORMATIONS DE BASE
-     * ==========================================================
+     * -----------------------------------------------------
+     * PROTECTION CONTRE LA DOUBLE ACTIVATION
+     * -----------------------------------------------------
      */
 
-    const provider =
-      normalizeLower(
-        transaction.provider,
-      );
-
-    if (
-      !isSupportedProvider(
-        provider,
+    const existingMetadata =
+      isObject(
+        transaction.metadata,
       )
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Le fournisseur de paiement associé à cette transaction n'est pas pris en charge.",
-          code:
-            "UNSUPPORTED_PAYMENT_PROVIDER",
-        },
-        400,
-      );
-    }
-
-    const amount =
-      Number(
-        transaction.amount,
-      );
-
-    const currency =
-      normalizeUpper(
-        transaction.currency,
-      );
-
-    if (
-      !Number.isFinite(
-        amount,
-      ) ||
-      amount <= 0
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Le montant de la transaction est invalide.",
-          code:
-            "INVALID_TRANSACTION_AMOUNT",
-        },
-        500,
-      );
-    }
-
-    if (!currency) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "La devise de la transaction est invalide.",
-          code:
-            "INVALID_TRANSACTION_CURRENCY",
-        },
-        500,
-      );
-    }
-
-    /*
-     * ==========================================================
-     * 8. MÉTADONNÉES DU PAIEMENT
-     * ==========================================================
-     */
-
-    const metadata =
-      transaction.metadata &&
-      typeof transaction.metadata ===
-        "object"
         ? transaction.metadata
         : {};
 
-    const planId =
-      normalizeText(
-        metadata.plan_id,
-      );
-
-    const billingCycle =
-      normalizeLower(
-        metadata.billing_cycle,
-      );
-
-    if (
-      !planId
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Le plan d'abonnement associé à cette transaction est introuvable.",
-          code:
-            "SUBSCRIPTION_PLAN_ID_MISSING",
-        },
-        500,
-      );
-    }
-
-    if (
-      billingCycle !==
-        "monthly" &&
-      billingCycle !==
-        "yearly"
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "La période d'abonnement associée à cette transaction est invalide.",
-          code:
-            "INVALID_BILLING_CYCLE",
-        },
-        500,
-      );
-    }
-
-    /*
-     * ==========================================================
-     * 9. PLAN ACTUEL
-     * ==========================================================
-     */
-
-    const {
-      data: plan,
-      error: planError,
-    } =
-      await supabase
-        .from(
-          "subscription_plans",
-        )
-        .select(
-          `
-            id,
-            plan_code,
-            plan_name,
-            duration_days,
-            is_active
-          `,
-        )
-        .eq(
-          "id",
-          planId,
-        )
-        .eq(
-          "is_active",
-          true,
-        )
-        .maybeSingle<PlanRow>();
-
-    if (
-      planError
-    ) {
-      console.error(
-        "PharmaFlow verify plan query error:",
-        planError,
-      );
-
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Impossible de vérifier le plan d'abonnement.",
-          code:
-            "PLAN_QUERY_FAILED",
-        },
-        500,
-      );
-    }
-
-    if (
-      !plan
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Le plan associé à ce paiement n'est plus disponible.",
-          code:
-            "PLAN_NOT_FOUND",
-        },
-        400,
-      );
-    }
-
-    /*
-     * ==========================================================
-     * 10. CONTRÔLE DU CODE DU PLAN
-     * ==========================================================
-     */
-
-    if (
-      normalizeLower(
-        plan.plan_code,
-      ) !==
-      billingCycle
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Le plan associé au paiement ne correspond pas à la période payée.",
-          code:
-            "PLAN_MISMATCH",
-        },
-        400,
-      );
-    }
-
-    /*
-     * ==========================================================
-     * 11. PRIX OFFICIEL
-     * ==========================================================
-     *
-     * Le prix est relu depuis subscription_plan_prices.
-     *
-     * Le client ne peut donc pas modifier le montant à payer.
-     */
-
-    const {
-      data: planPrice,
-      error:
-        planPriceError,
-    } =
-      await supabase
-        .from(
-          "subscription_plan_prices",
-        )
-        .select(
-          `
-            plan_id,
-            currency_code,
-            price,
-            is_active
-          `,
-        )
-        .eq(
-          "plan_id",
-          plan.id,
-        )
-        .eq(
-          "currency_code",
-          currency,
-        )
-        .eq(
-          "is_active",
-          true,
-        )
-        .maybeSingle<PlanPriceRow>();
-
-    if (
-      planPriceError
-    ) {
-      console.error(
-        "PharmaFlow verify plan price query error:",
-        planPriceError,
-      );
-
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Impossible de vérifier le tarif de l'abonnement.",
-          code:
-            "PLAN_PRICE_QUERY_FAILED",
-        },
-        500,
-      );
-    }
-
-    if (
-      !planPrice
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Aucun tarif actif n'est configuré pour cette devise.",
-          code:
-            "PLAN_PRICE_NOT_FOUND",
-        },
-        500,
-      );
-    }
-
-    const expectedAmount =
-      Number(
-        planPrice.price,
-      );
-
-    if (
-      !Number.isFinite(
-        expectedAmount,
-      ) ||
-      expectedAmount <= 0
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Le tarif de l'abonnement est invalide.",
-          code:
-            "INVALID_PLAN_PRICE",
-        },
-        500,
-      );
-    }
-
-    /*
-     * ==========================================================
-     * 12. CONTRÔLE DU MONTANT LOCAL
-     * ==========================================================
-     */
-
-    if (
-      Math.abs(
-        amount -
-          expectedAmount,
-      ) >= 0.01
-    ) {
-      console.error(
-        "PharmaFlow local amount mismatch:",
-        {
-          transactionId:
-            transaction.id,
-          amount,
-          expectedAmount,
-          currency,
-        },
-      );
-
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Le montant enregistré pour cette transaction ne correspond pas au tarif officiel.",
-          code:
-            "AMOUNT_MISMATCH",
-        },
-        400,
-      );
-    }
-
-    /*
-     * ==========================================================
-     * 13. TRANSACTION DÉJÀ ACTIVÉE
-     * ==========================================================
-     *
-     * Cette vérification rend l'opération idempotente.
-     */
-
     const activationStatus =
-      normalizeLower(
-        metadata.activation_status,
+      normalizeString(
+        existingMetadata.activation_status,
       );
 
     if (
-      isSuccessfulStatus(
-        transaction.status,
-      ) &&
+      transaction.status ===
+        "successful" &&
       activationStatus ===
         "activated"
     ) {
@@ -845,391 +523,310 @@ export async function POST(
         {
           success: true,
           verified: true,
-          activated: true,
-          alreadyProcessed: true,
-
-          message:
-            "Le paiement et l'abonnement sont déjà confirmés.",
-
-          transaction: {
-            id:
-              transaction.id,
-
-            merchantReference:
-              transaction.merchant_reference,
-
-            provider:
-              transaction.provider,
-
-            providerTransactionId:
-              transaction.provider_transaction_id,
-
-            amount,
-
-            currency,
-
-            paymentMethod:
-              transaction.payment_method,
-
-            status:
-              "successful",
-
-            paidAt:
-              transaction.paid_at,
-          },
-
-          subscription: {
-            id:
-              metadata.activated_subscription_id ??
-              transaction.subscription_id ??
-              null,
-
-            planId:
-              metadata.activated_plan_id ??
-              plan.id,
-
-            planCode:
-              metadata.activated_plan_code ??
-              plan.plan_code,
-
-            billingCycle:
-              metadata.activated_billing_cycle ??
-              billingCycle,
-
-            status:
-              "active",
-
-            startsAt:
-              metadata.activated_starts_at ??
-              null,
-
-            expiresAt:
-              metadata.activated_expires_at ??
-              null,
-          },
+          alreadyProcessed:
+            true,
+          paymentStatus:
+            "successful",
+          activationStatus:
+            "activated",
+          transactionId:
+            transaction.id,
+          merchantReference:
+            transaction.merchant_reference,
+          amount:
+            transaction.amount,
+          currency:
+            transaction.currency,
         },
         200,
       );
     }
 
     /*
-     * ==========================================================
-     * 14. VÉRIFICATION FOURNISSEUR
-     * ==========================================================
-     *
-     * Nous ne faisons confiance ni au navigateur ni au statut
-     * local "successful".
-     *
-     * Le fournisseur doit confirmer le paiement.
+     * -----------------------------------------------------
+     * VÉRIFICATION AUPRÈS DE MOKO AFRIKA
+     * -----------------------------------------------------
      */
 
-    let verificationResult;
-
-    try {
-      verificationResult =
-        await verifyPayment(
-          provider,
-          {
-            pharmacyId,
-
-            merchantReference:
-              transaction.merchant_reference,
-
-            providerTransactionId:
-              transaction.provider_transaction_id ??
-              undefined,
-
-            expectedAmount:
-              expectedAmount,
-
-            expectedCurrency:
-              currency,
-
-            metadata: {
-              ...metadata,
-
-              transaction_id:
-                transaction.id,
-
-              pharmacy_id:
-                pharmacyId,
-            },
-          },
-        );
-    } catch (verificationError) {
-      console.error(
-        "PharmaFlow provider verification error:",
-        verificationError,
-      );
-
-      return jsonResponse(
+    const verifyResult =
+      await mokoAfrikaAdapter.verifyPayment(
         {
-          success: false,
+          pharmacyId:
+            transaction.pharmacy_id,
 
-          verified: false,
+          merchantReference:
+            transaction.merchant_reference ??
+            merchantReference ??
+            undefined,
 
-          activated: false,
+          providerTransactionId:
+            transaction.provider_transaction_id ??
+            providerTransactionId ??
+            undefined,
 
-          error:
-            "Le fournisseur de paiement n'a pas pu confirmer cette transaction pour le moment.",
+          expectedAmount:
+            requestedAmount ??
+            Number(
+              transaction.amount,
+            ),
 
-          code:
-            "PROVIDER_VERIFICATION_FAILED",
+          expectedCurrency:
+            requestedCurrency ??
+            String(
+              transaction.currency,
+            ).toUpperCase(),
 
-          transaction: {
-            id:
+          metadata: {
+            transactionId:
               transaction.id,
-
-            merchantReference:
-              transaction.merchant_reference,
-
-            provider:
-              transaction.provider,
-
-            status:
-              transaction.status,
+            subscriptionId:
+              transaction.subscription_id,
+            paymentMethod:
+              transaction.payment_method,
           },
         },
-        502,
       );
-    }
 
     /*
-     * ==========================================================
-     * 15. RÉSULTAT DE LA VÉRIFICATION
-     * ==========================================================
+     * -----------------------------------------------------
+     * NORMALISATION DU RÉSULTAT
+     * -----------------------------------------------------
      */
 
-    const verifiedStatus =
-      normalizeLower(
-        verificationResult.status,
+    const normalizedStatus =
+      normalizePaymentStatus(
+        verifyResult.status,
+      );
+
+    const verifiedAmount =
+      normalizeAmount(
+        verifyResult.amount,
+      );
+
+    const verifiedCurrency =
+      normalizeCurrency(
+        verifyResult.currency,
+      );
+
+    const verifiedReference =
+      normalizeString(
+        verifyResult.merchantReference,
       );
 
     const verifiedProviderTransactionId =
-      verificationResult.providerTransactionId ??
-      transaction.provider_transaction_id ??
-      null;
-
-    const verifiedAmount =
-      verificationResult.amount !==
-        undefined &&
-      verificationResult.amount !==
-        null
-        ? Number(
-            verificationResult.amount,
-          )
-        : amount;
-
-    const verifiedCurrency =
-      normalizeUpper(
-        verificationResult.currency ??
-          currency,
+      normalizeString(
+        verifyResult.providerTransactionId,
       );
 
     /*
-     * ==========================================================
-     * 16. CONTRÔLE DU MONTANT FOURNISSEUR
-     * ==========================================================
+     * -----------------------------------------------------
+     * VÉRIFICATION DU MONTANT
+     * -----------------------------------------------------
      */
 
     if (
-      !Number.isFinite(
+      verifiedAmount !== null &&
+      !amountsMatch(
+        Number(
+          transaction.amount,
+        ),
         verifiedAmount,
-      ) ||
-      Math.abs(
-        verifiedAmount -
-          expectedAmount,
-      ) >= 0.01
-    ) {
-      console.error(
-        "PharmaFlow provider amount mismatch:",
-        {
-          transactionId:
-            transaction.id,
-
-          expectedAmount,
-
-          verifiedAmount,
-
-          currency,
-        },
-      );
-
-      await supabase
-        .from(
-          "payment_transactions",
-        )
-        .update({
-          status:
-            "failed",
-
-          failure_reason:
-            "Le montant confirmé par le fournisseur ne correspond pas au tarif officiel.",
-
-          metadata: {
-            ...metadata,
-
-            verification:
-              "amount_mismatch",
-
-            verified_amount:
-              verifiedAmount,
-
-            expected_amount:
-              expectedAmount,
-
-            verified_at:
-              new Date().toISOString(),
-          },
-        })
-        .eq(
-          "id",
-          transaction.id,
-        )
-        .eq(
-          "pharmacy_id",
-          pharmacyId,
-        );
-
-      return jsonResponse(
-        {
-          success: false,
-
-          verified: false,
-
-          activated: false,
-
-          error:
-            "Le montant confirmé par le fournisseur ne correspond pas au montant attendu.",
-
-          code:
-            "VERIFIED_AMOUNT_MISMATCH",
-        },
-        400,
-      );
-    }
-
-    /*
-     * ==========================================================
-     * 17. CONTRÔLE DE LA DEVISE FOURNISSEUR
-     * ==========================================================
-     */
-
-    if (
-      verifiedCurrency !==
-      currency
-    ) {
-      console.error(
-        "PharmaFlow provider currency mismatch:",
-        {
-          transactionId:
-            transaction.id,
-
-          expectedCurrency:
-            currency,
-
-          verifiedCurrency,
-        },
-      );
-
-      await supabase
-        .from(
-          "payment_transactions",
-        )
-        .update({
-          status:
-            "failed",
-
-          failure_reason:
-            "La devise confirmée par le fournisseur ne correspond pas à la devise attendue.",
-
-          metadata: {
-            ...metadata,
-
-            verification:
-              "currency_mismatch",
-
-            verified_currency:
-              verifiedCurrency,
-
-            expected_currency:
-              currency,
-
-            verified_at:
-              new Date().toISOString(),
-          },
-        })
-        .eq(
-          "id",
-          transaction.id,
-        )
-        .eq(
-          "pharmacy_id",
-          pharmacyId,
-        );
-
-      return jsonResponse(
-        {
-          success: false,
-
-          verified: false,
-
-          activated: false,
-
-          error:
-            "La devise confirmée par le fournisseur ne correspond pas à la devise attendue.",
-
-          code:
-            "VERIFIED_CURRENCY_MISMATCH",
-        },
-        400,
-      );
-    }
-    /*
-     * ==========================================================
-     * 18. PAIEMENT CONFIRMÉ
-     * ==========================================================
-     */
-
-    if (
-      isSuccessfulStatus(
-        verifiedStatus,
       )
     ) {
-      const paidAt =
-        new Date().toISOString();
+      console.error(
+        "MOKO AFRIKA VERIFY AMOUNT MISMATCH:",
+        {
+          transactionId:
+            transaction.id,
+          expected:
+            transaction.amount,
+          received:
+            verifiedAmount,
+        },
+      );
 
-      const updatedMetadata = {
-        ...metadata,
+      const mismatchMetadata =
+        {
+          ...existingMetadata,
+          verification_status:
+            "amount_mismatch",
+          verification_amount:
+            verifiedAmount,
+          verification_currency:
+            verifiedCurrency,
+          verification_reference:
+            verifiedReference,
+          verification_provider_transaction_id:
+            verifiedProviderTransactionId,
+          verification_checked_at:
+            new Date().toISOString(),
+        };
 
-        verification:
-          "successful",
+      await supabaseAdmin
+        .from(
+          "payment_transactions",
+        )
+        .update({
+          status:
+            "failed",
+          failure_reason:
+            "Le montant confirmé par Moko Afrika est différent du montant attendu.",
+          metadata:
+            mismatchMetadata,
+        })
+        .eq(
+          "id",
+          transaction.id,
+        );
 
-        verified_at:
-          paidAt,
+      return jsonResponse(
+        {
+          success: false,
+          verified: false,
+          paymentStatus:
+            "failed",
+          error:
+            "Le montant du paiement ne correspond pas.",
+          expectedAmount:
+            transaction.amount,
+          receivedAmount:
+            verifiedAmount,
+        },
+        409,
+      );
+    }
 
-        verified_status:
-          verifiedStatus,
+    /*
+     * -----------------------------------------------------
+     * VÉRIFICATION DE LA DEVISE
+     * -----------------------------------------------------
+     */
 
-        verified_amount:
-          verifiedAmount,
+    if (
+      verifiedCurrency &&
+      String(
+        transaction.currency,
+      ).toUpperCase() !==
+        verifiedCurrency
+    ) {
+      console.error(
+        "MOKO AFRIKA VERIFY CURRENCY MISMATCH:",
+        {
+          transactionId:
+            transaction.id,
+          expected:
+            transaction.currency,
+          received:
+            verifiedCurrency,
+        },
+      );
 
-        verified_currency:
-          verifiedCurrency,
-      };
+      const mismatchMetadata =
+        {
+          ...existingMetadata,
+          verification_status:
+            "currency_mismatch",
+          verification_amount:
+            verifiedAmount,
+          verification_currency:
+            verifiedCurrency,
+          verification_checked_at:
+            new Date().toISOString(),
+        };
 
-      /*
-       * --------------------------------------------------------
-       * Enregistrer le paiement comme successful
-       * --------------------------------------------------------
-       */
+      await supabaseAdmin
+        .from(
+          "payment_transactions",
+        )
+        .update({
+          status:
+            "failed",
+          failure_reason:
+            "La devise confirmée par Moko Afrika est différente de la devise attendue.",
+          metadata:
+            mismatchMetadata,
+        })
+        .eq(
+          "id",
+          transaction.id,
+        );
 
-      const {
-        data: updatedTransaction,
-        error:
-          transactionUpdateError,
-      } =
-        await supabase
+      return jsonResponse(
+        {
+          success: false,
+          verified: false,
+          paymentStatus:
+            "failed",
+          error:
+            "La devise du paiement ne correspond pas.",
+          expectedCurrency:
+            transaction.currency,
+          receivedCurrency:
+            verifiedCurrency,
+        },
+        409,
+      );
+    }
+
+    /*
+     * -----------------------------------------------------
+     * MÉTADONNÉES DE VÉRIFICATION
+     * -----------------------------------------------------
+     */
+
+    const verificationMetadata:
+      JsonObject = {
+      ...existingMetadata,
+
+      verification_provider:
+        "moko_afrika",
+
+      verification_status:
+        normalizedStatus,
+
+      verification_checked_at:
+        new Date().toISOString(),
+
+      verification_amount:
+        verifiedAmount,
+
+      verification_currency:
+        verifiedCurrency,
+
+      verification_reference:
+        verifiedReference,
+
+      verification_provider_transaction_id:
+        verifiedProviderTransactionId,
+    };
+
+    if (
+      verifyResult.message
+    ) {
+      verificationMetadata.verification_message =
+        verifyResult.message;
+    }
+
+    if (
+      verifyResult.failureReason
+    ) {
+      verificationMetadata.verification_failure_reason =
+        verifyResult.failureReason;
+    }
+
+    /*
+     * -----------------------------------------------------
+     * CAS 1 : PAIEMENT RÉUSSI
+     * -----------------------------------------------------
+     */
+
+    if (
+      isSuccessfulPaymentStatus(
+        normalizedStatus,
+      )
+    ) {
+      const updateResult =
+        await supabaseAdmin
           .from(
             "payment_transactions",
           )
@@ -1238,393 +835,124 @@ export async function POST(
               "successful",
 
             provider_transaction_id:
-              verifiedProviderTransactionId,
+              verifiedProviderTransactionId ??
+              transaction.provider_transaction_id ??
+              providerTransactionId,
+
+            paid_at:
+              transaction.paid_at ??
+              new Date().toISOString(),
 
             failure_reason:
               null,
 
-            metadata:
-              updatedMetadata,
-
-            paid_at:
-              paidAt,
-          })
-          .eq(
-            "id",
-            transaction.id,
-          )
-          .eq(
-            "pharmacy_id",
-            pharmacyId,
-          )
-          .select(
-            `
-              id,
-              merchant_reference,
-              provider,
-              provider_transaction_id,
-              amount,
-              currency,
-              payment_method,
-              status,
-              paid_at
-            `,
-          )
-          .single();
-
-      if (
-        transactionUpdateError ||
-        !updatedTransaction
-      ) {
-        console.error(
-          "PharmaFlow successful payment update error:",
-          transactionUpdateError,
-        );
-
-        return jsonResponse(
-          {
-            success: false,
-
-            verified: true,
-
-            activated: false,
-
-            error:
-              "Le paiement a été confirmé par le fournisseur, mais son enregistrement n'a pas pu être finalisé.",
-
-            code:
-              "PAYMENT_UPDATE_FAILED",
-
-            transactionId:
-              transaction.id,
-          },
-          500,
-        );
-      }
-
-      /*
-       * ========================================================
-       * 19. ACTIVATION DE L'ABONNEMENT
-       * ========================================================
-       *
-       * L'activation est effectuée côté serveur avec
-       * supabaseAdmin.
-       *
-       * Le navigateur ne peut jamais appeler directement
-       * la fonction SQL privilégiée.
-       */
-
-      const {
-        data: activationResult,
-        error:
-          activationError,
-      } =
-        await supabaseAdmin.rpc(
-          "pf_activate_subscription_from_payment",
-          {
-            p_payment_id:
-              transaction.id,
-          },
-        );
-
-      if (
-        activationError
-      ) {
-        console.error(
-          "PharmaFlow subscription activation error:",
-          activationError,
-        );
-
-        return jsonResponse(
-          {
-            success: false,
-
-            verified: true,
-
-            activated: false,
-
-            activationPending:
-              true,
-
-            error:
-              "Le paiement est confirmé, mais l'activation de votre abonnement est encore en attente.",
-
-            code:
-              "SUBSCRIPTION_ACTIVATION_FAILED",
-
-            transaction: {
-              id:
-                updatedTransaction.id,
-
-              merchantReference:
-                updatedTransaction.merchant_reference,
-
-              provider:
-                updatedTransaction.provider,
-
-              providerTransactionId:
-                updatedTransaction.provider_transaction_id,
-
-              amount:
-                Number(
-                  updatedTransaction.amount,
-                ),
-
-              currency:
-                updatedTransaction.currency,
-
-              paymentMethod:
-                updatedTransaction.payment_method,
-
-              status:
-                "successful",
-
-              paidAt:
-                updatedTransaction.paid_at,
+            metadata: {
+              ...verificationMetadata,
+              activation_status:
+                "pending",
             },
-          },
-          500,
-        );
-      }
-
-      /*
-       * ========================================================
-       * 20. TRAITER LE RÉSULTAT SQL
-       * ========================================================
-       */
-
-      const activation =
-        activationResult &&
-        typeof activationResult ===
-          "object"
-          ? activationResult as Record<
-              string,
-              unknown
-            >
-          : null;
-
-      const activationSubscriptionId =
-        activation?.subscription_id ??
-        transaction.subscription_id ??
-        null;
-
-      const activationPlanId =
-        activation?.plan_id ??
-        plan.id;
-
-      const activationPlanCode =
-        activation?.plan_code ??
-        plan.plan_code;
-
-      const activationBillingCycle =
-        activation?.billing_cycle ??
-        billingCycle;
-
-      const activationStartsAt =
-        activation?.starts_at ??
-        null;
-
-      const activationExpiresAt =
-        activation?.expires_at ??
-        null;
-
-      const alreadyActivated =
-        Boolean(
-          activation?.already_activated,
-        );
-
-      /*
-       * --------------------------------------------------------
-       * Mettre également à jour les métadonnées locales.
-       *
-       * Cela permet à une prochaine vérification de savoir
-       * que l'activation a déjà été effectuée.
-       * --------------------------------------------------------
-       */
-
-      const finalMetadata = {
-        ...updatedMetadata,
-
-        activation_status:
-          "activated",
-
-        activated_at:
-          new Date().toISOString(),
-
-        activated_subscription_id:
-          activationSubscriptionId,
-
-        activated_plan_id:
-          activationPlanId,
-
-        activated_plan_code:
-          activationPlanCode,
-
-        activated_billing_cycle:
-          activationBillingCycle,
-
-        activated_starts_at:
-          activationStartsAt,
-
-        activated_expires_at:
-          activationExpiresAt,
-      };
-
-      const {
-        error:
-          metadataUpdateError,
-      } =
-        await supabase
-          .from(
-            "payment_transactions",
-          )
-          .update({
-            metadata:
-              finalMetadata,
           })
           .eq(
             "id",
             transaction.id,
-          )
-          .eq(
-            "pharmacy_id",
-            pharmacyId,
           );
 
       if (
-        metadataUpdateError
+        updateResult.error
       ) {
-        /*
-         * L'abonnement a déjà été activé.
-         *
-         * Une erreur de mise à jour des métadonnées ne doit
-         * surtout pas faire croire que le paiement a échoué.
-         */
-
         console.error(
-          "PharmaFlow activation metadata update warning:",
-          metadataUpdateError,
+          "MOKO AFRIKA VERIFY PAYMENT UPDATE ERROR:",
+          updateResult.error,
+        );
+
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Impossible d'enregistrer le paiement vérifié.",
+          },
+          500,
         );
       }
 
       /*
-       * ========================================================
-       * 21. RÉPONSE SUCCÈS
-       * ========================================================
+       * Activation du forfait.
        */
+      const activation =
+        await activateSubscription(
+          transaction,
+          {
+            ...verificationMetadata,
+            activation_status:
+              "pending",
+          },
+        );
+
+      if (!activation.success) {
+        /*
+         * Le paiement reste successful.
+         * L'activation pourra être retentée.
+         */
+        return jsonResponse(
+          {
+            success: true,
+            verified: true,
+            paymentStatus:
+              "successful",
+            activationStatus:
+              "pending",
+            transactionId:
+              transaction.id,
+            merchantReference:
+              transaction.merchant_reference,
+            message:
+              "Paiement confirmé. Activation de l'abonnement en attente.",
+          },
+          200,
+        );
+      }
 
       return jsonResponse(
         {
           success: true,
-
           verified: true,
-
-          activated: true,
-
-          alreadyProcessed:
-            alreadyActivated,
-
+          paymentStatus:
+            "successful",
+          activationStatus:
+            "activated",
+          transactionId:
+            transaction.id,
+          merchantReference:
+            transaction.merchant_reference,
+          providerTransactionId:
+            verifiedProviderTransactionId ??
+            transaction.provider_transaction_id ??
+            providerTransactionId,
+          amount:
+            verifiedAmount ??
+            transaction.amount,
+          currency:
+            verifiedCurrency ??
+            transaction.currency,
           message:
-            alreadyActivated
-              ? "Le paiement était déjà confirmé et l'abonnement est actif."
-              : "Paiement confirmé et abonnement activé avec succès.",
-
-          transaction: {
-            id:
-              updatedTransaction.id,
-
-            merchantReference:
-              updatedTransaction.merchant_reference,
-
-            provider:
-              updatedTransaction.provider,
-
-            providerTransactionId:
-              updatedTransaction.provider_transaction_id,
-
-            amount:
-              Number(
-                updatedTransaction.amount,
-              ),
-
-            currency:
-              updatedTransaction.currency,
-
-            paymentMethod:
-              updatedTransaction.payment_method,
-
-            status:
-              "successful",
-
-            paidAt:
-              updatedTransaction.paid_at,
-          },
-
-          subscription: {
-            id:
-              activationSubscriptionId,
-
-            planId:
-              activationPlanId,
-
-            planCode:
-              activationPlanCode,
-
-            billingCycle:
-              activationBillingCycle,
-
-            amount:
-              expectedAmount,
-
-            currency,
-
-            status:
-              "active",
-
-            startsAt:
-              activationStartsAt,
-
-            expiresAt:
-              activationExpiresAt,
-          },
+            "Paiement confirmé et abonnement activé.",
         },
         200,
       );
     }
 
     /*
-     * ==========================================================
-     * 22. PAIEMENT EN ATTENTE
-     * ==========================================================
+     * -----------------------------------------------------
+     * CAS 2 : PAIEMENT EN ATTENTE
+     * -----------------------------------------------------
      */
 
     if (
-      isPendingStatus(
-        verifiedStatus,
-      )
+      normalizedStatus ===
+      "pending"
     ) {
-      const pendingMetadata = {
-        ...metadata,
-
-        verification:
-          "pending",
-
-        verified_at:
-          new Date().toISOString(),
-
-        verified_status:
-          verifiedStatus,
-
-        provider_transaction_id:
-          verifiedProviderTransactionId,
-      };
-
-      const {
-        data: pendingTransaction,
-        error:
-          pendingUpdateError,
-      } =
-        await supabase
+      const updateResult =
+        await supabaseAdmin
           .from(
             "payment_transactions",
           )
@@ -1633,515 +961,384 @@ export async function POST(
               "pending",
 
             provider_transaction_id:
-              verifiedProviderTransactionId,
+              verifiedProviderTransactionId ??
+              transaction.provider_transaction_id ??
+              providerTransactionId,
 
             metadata:
-              pendingMetadata,
+              verificationMetadata,
           })
           .eq(
             "id",
             transaction.id,
-          )
-          .eq(
-            "pharmacy_id",
-            pharmacyId,
-          )
-          .select(
-            `
-              id,
-              merchant_reference,
-              provider,
-              provider_transaction_id,
-              amount,
-              currency,
-              payment_method,
-              status
-            `,
-          )
-          .single();
+          );
 
       if (
-        pendingUpdateError
+        updateResult.error
       ) {
         console.error(
-          "PharmaFlow pending transaction update error:",
-          pendingUpdateError,
+          "MOKO AFRIKA VERIFY PENDING UPDATE ERROR:",
+          updateResult.error,
+        );
+
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Impossible d'enregistrer le statut pending.",
+          },
+          500,
         );
       }
 
       return jsonResponse(
         {
           success: true,
-
-          verified: false,
-
-          activated: false,
-
-          activationPending:
-            false,
-
+          verified: true,
+          paymentStatus:
+            "pending",
+          activationStatus:
+            "not_activated",
+          transactionId:
+            transaction.id,
+          merchantReference:
+            transaction.merchant_reference,
+          providerTransactionId:
+            verifiedProviderTransactionId ??
+            transaction.provider_transaction_id ??
+            providerTransactionId,
+          amount:
+            verifiedAmount ??
+            transaction.amount,
+          currency:
+            verifiedCurrency ??
+            transaction.currency,
           message:
-            "Le paiement est toujours en attente de confirmation.",
-
-          transaction: {
-            id:
-              pendingTransaction?.id ??
-              transaction.id,
-
-            merchantReference:
-              pendingTransaction?.merchant_reference ??
-              transaction.merchant_reference,
-
-            provider:
-              pendingTransaction?.provider ??
-              transaction.provider,
-
-            providerTransactionId:
-              pendingTransaction?.provider_transaction_id ??
-              verifiedProviderTransactionId,
-
-            amount:
-              Number(
-                pendingTransaction?.amount ??
-                  transaction.amount,
-              ),
-
-            currency:
-              pendingTransaction?.currency ??
-              transaction.currency,
-
-            paymentMethod:
-              pendingTransaction?.payment_method ??
-              transaction.payment_method,
-
-            status:
-              "pending",
-          },
+            verifyResult.message ??
+            "Le paiement est encore en attente.",
         },
         200,
       );
     }
 
     /*
-     * ==========================================================
-     * 23. PAIEMENT ÉCHOUÉ
-     * ==========================================================
+     * -----------------------------------------------------
+     * CAS 3 : PAIEMENT ÉCHOUÉ
+     * -----------------------------------------------------
      */
 
     if (
-      isFailedStatus(
-        verifiedStatus,
-      )
+      normalizedStatus ===
+      "failed"
     ) {
-      const failureReason =
-        normalizeText(
-          verificationResult.failureReason,
-        ) ||
-        "Le paiement n'a pas été confirmé par le fournisseur.";
-
-      const failedMetadata = {
-        ...metadata,
-
-        verification:
-          "failed",
-
-        verified_at:
-          new Date().toISOString(),
-
-        verified_status:
-          verifiedStatus,
-
-        provider_transaction_id:
-          verifiedProviderTransactionId,
-      };
-
-      await supabase
-        .from(
-          "payment_transactions",
-        )
-        .update({
-          status:
-            "failed",
-
-          provider_transaction_id:
-            verifiedProviderTransactionId,
-
-          failure_reason:
-            failureReason,
-
-          metadata:
-            failedMetadata,
-        })
-        .eq(
-          "id",
-          transaction.id,
-        )
-        .eq(
-          "pharmacy_id",
-          pharmacyId,
-        );
-
-      return jsonResponse(
-        {
-          success: false,
-
-          verified: false,
-
-          activated: false,
-
-          message:
-            "Le paiement a échoué.",
-
-          error:
-            failureReason,
-
-          code:
-            "PAYMENT_FAILED",
-
-          transaction: {
-            id:
-              transaction.id,
-
-            merchantReference:
-              transaction.merchant_reference,
-
-            provider:
-              transaction.provider,
-
-            providerTransactionId:
-              verifiedProviderTransactionId,
-
-            amount,
-
-            currency,
-
-            paymentMethod:
-              transaction.payment_method,
-
+      const updateResult =
+        await supabaseAdmin
+          .from(
+            "payment_transactions",
+          )
+          .update({
             status:
               "failed",
+
+            provider_transaction_id:
+              verifiedProviderTransactionId ??
+              transaction.provider_transaction_id ??
+              providerTransactionId,
+
+            failure_reason:
+              verifyResult.failureReason ??
+              verifyResult.message ??
+              "Paiement échoué.",
+
+            metadata:
+              verificationMetadata,
+          })
+          .eq(
+            "id",
+            transaction.id,
+          );
+
+      if (
+        updateResult.error
+      ) {
+        console.error(
+          "MOKO AFRIKA VERIFY FAILED UPDATE ERROR:",
+          updateResult.error,
+        );
+
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Impossible d'enregistrer l'échec du paiement.",
           },
+          500,
+        );
+      }
+
+      return jsonResponse(
+        {
+          success: true,
+          verified: true,
+          paymentStatus:
+            "failed",
+          activationStatus:
+            "not_activated",
+          transactionId:
+            transaction.id,
+          merchantReference:
+            transaction.merchant_reference,
+          message:
+            verifyResult.failureReason ??
+            verifyResult.message ??
+            "Le paiement a échoué.",
         },
         200,
       );
     }
 
     /*
-     * ==========================================================
-     * 24. PAIEMENT ANNULÉ
-     * ==========================================================
+     * -----------------------------------------------------
+     * CAS 4 : PAIEMENT ANNULÉ
+     * -----------------------------------------------------
      */
 
     if (
-      isCancelledStatus(
-        verifiedStatus,
-      )
+      normalizedStatus ===
+      "cancelled"
     ) {
-      const cancelledMetadata = {
-        ...metadata,
-
-        verification:
-          "cancelled",
-
-        verified_at:
-          new Date().toISOString(),
-
-        verified_status:
-          verifiedStatus,
-
-        provider_transaction_id:
-          verifiedProviderTransactionId,
-      };
-
-      await supabase
-        .from(
-          "payment_transactions",
-        )
-        .update({
-          status:
-            "cancelled",
-
-          provider_transaction_id:
-            verifiedProviderTransactionId,
-
-          failure_reason:
-            "Le paiement a été annulé.",
-
-          metadata:
-            cancelledMetadata,
-        })
-        .eq(
-          "id",
-          transaction.id,
-        )
-        .eq(
-          "pharmacy_id",
-          pharmacyId,
-        );
-
-      return jsonResponse(
-        {
-          success: false,
-
-          verified: false,
-
-          activated: false,
-
-          message:
-            "Le paiement a été annulé.",
-
-          code:
-            "PAYMENT_CANCELLED",
-
-          transaction: {
-            id:
-              transaction.id,
-
-            merchantReference:
-              transaction.merchant_reference,
-
-            provider:
-              transaction.provider,
-
-            providerTransactionId:
-              verifiedProviderTransactionId,
-
-            amount,
-
-            currency,
-
-            paymentMethod:
-              transaction.payment_method,
-
+      const updateResult =
+        await supabaseAdmin
+          .from(
+            "payment_transactions",
+          )
+          .update({
             status:
               "cancelled",
+
+            provider_transaction_id:
+              verifiedProviderTransactionId ??
+              transaction.provider_transaction_id ??
+              providerTransactionId,
+
+            failure_reason:
+              verifyResult.failureReason ??
+              verifyResult.message ??
+              "Paiement annulé.",
+
+            metadata:
+              verificationMetadata,
+          })
+          .eq(
+            "id",
+            transaction.id,
+          );
+
+      if (
+        updateResult.error
+      ) {
+        console.error(
+          "MOKO AFRIKA VERIFY CANCELLED UPDATE ERROR:",
+          updateResult.error,
+        );
+
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Impossible d'enregistrer l'annulation du paiement.",
           },
+          500,
+        );
+      }
+
+      return jsonResponse(
+        {
+          success: true,
+          verified: true,
+          paymentStatus:
+            "cancelled",
+          activationStatus:
+            "not_activated",
+          transactionId:
+            transaction.id,
+          merchantReference:
+            transaction.merchant_reference,
+          message:
+            verifyResult.message ??
+            "Le paiement a été annulé.",
         },
         200,
       );
     }
 
     /*
-     * ==========================================================
-     * 25. PAIEMENT EXPIRÉ
-     * ==========================================================
+     * -----------------------------------------------------
+     * CAS 5 : PAIEMENT EXPIRÉ
+     * -----------------------------------------------------
      */
 
     if (
-      isExpiredStatus(
-        verifiedStatus,
-      )
+      normalizedStatus ===
+      "expired"
     ) {
-      const expiredMetadata = {
-        ...metadata,
+      const updateResult =
+        await supabaseAdmin
+          .from(
+            "payment_transactions",
+          )
+          .update({
+            status:
+              "expired",
 
-        verification:
-          "expired",
+            provider_transaction_id:
+              verifiedProviderTransactionId ??
+              transaction.provider_transaction_id ??
+              providerTransactionId,
 
-        verified_at:
-          new Date().toISOString(),
+            failure_reason:
+              verifyResult.failureReason ??
+              verifyResult.message ??
+              "Paiement expiré.",
 
-        verified_status:
-          verifiedStatus,
+            metadata:
+              verificationMetadata,
+          })
+          .eq(
+            "id",
+            transaction.id,
+          );
 
-        provider_transaction_id:
-          verifiedProviderTransactionId,
-      };
+      if (
+        updateResult.error
+      ) {
+        console.error(
+          "MOKO AFRIKA VERIFY EXPIRED UPDATE ERROR:",
+          updateResult.error,
+        );
 
-      await supabase
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Impossible d'enregistrer l'expiration du paiement.",
+          },
+          500,
+        );
+      }
+
+      return jsonResponse(
+        {
+          success: true,
+          verified: true,
+          paymentStatus:
+            "expired",
+          activationStatus:
+            "not_activated",
+          transactionId:
+            transaction.id,
+          merchantReference:
+            transaction.merchant_reference,
+          message:
+            verifyResult.message ??
+            "Le paiement a expiré.",
+        },
+        200,
+      );
+    }
+
+    /*
+     * -----------------------------------------------------
+     * FALLBACK
+     * -----------------------------------------------------
+     *
+     * Si Moko renvoie un statut non reconnu,
+     * nous conservons pending par sécurité.
+     */
+    const fallbackResult =
+      await supabaseAdmin
         .from(
           "payment_transactions",
         )
         .update({
           status:
-            "expired",
-
+            "pending",
           provider_transaction_id:
-            verifiedProviderTransactionId,
-
-          failure_reason:
-            "Le paiement a expiré.",
-
+            verifiedProviderTransactionId ??
+            transaction.provider_transaction_id ??
+            providerTransactionId,
           metadata:
-            expiredMetadata,
+            verificationMetadata,
         })
         .eq(
           "id",
           transaction.id,
-        )
-        .eq(
-          "pharmacy_id",
-          pharmacyId,
         );
+
+    if (
+      fallbackResult.error
+    ) {
+      console.error(
+        "MOKO AFRIKA VERIFY FALLBACK UPDATE ERROR:",
+        fallbackResult.error,
+      );
 
       return jsonResponse(
         {
           success: false,
-
-          verified: false,
-
-          activated: false,
-
-          message:
-            "Le paiement a expiré.",
-
-          code:
-            "PAYMENT_EXPIRED",
-
-          transaction: {
-            id:
-              transaction.id,
-
-            merchantReference:
-              transaction.merchant_reference,
-
-            provider:
-              transaction.provider,
-
-            providerTransactionId:
-              verifiedProviderTransactionId,
-
-            amount,
-
-            currency,
-
-            paymentMethod:
-              transaction.payment_method,
-
-            status:
-              "expired",
-          },
+          error:
+            "Impossible d'enregistrer le résultat de vérification.",
         },
-        200,
+        500,
       );
     }
-
-    /*
-     * ==========================================================
-     * 26. STATUT INCONNU
-     * ==========================================================
-     *
-     * Par sécurité, un statut inconnu n'est jamais considéré
-     * comme successful.
-     *
-     * La transaction reste pending.
-     */
-
-    console.warn(
-      "PharmaFlow unknown provider payment status:",
-      {
-        transactionId:
-          transaction.id,
-
-        provider,
-
-        status:
-          verifiedStatus,
-      },
-    );
-
-    const unknownStatusMetadata = {
-      ...metadata,
-
-      verification:
-        "unknown",
-
-      verified_at:
-        new Date().toISOString(),
-
-      verified_status:
-        verifiedStatus,
-
-      provider_transaction_id:
-        verifiedProviderTransactionId,
-    };
-
-    await supabase
-      .from(
-        "payment_transactions",
-      )
-      .update({
-        status:
-          "pending",
-
-        provider_transaction_id:
-          verifiedProviderTransactionId,
-
-        metadata:
-          unknownStatusMetadata,
-      })
-      .eq(
-        "id",
-        transaction.id,
-      )
-      .eq(
-        "pharmacy_id",
-        pharmacyId,
-      );
 
     return jsonResponse(
       {
         success: true,
-
-        verified: false,
-
-        activated: false,
-
-        activationPending:
-          false,
-
+        verified: true,
+        paymentStatus:
+          "pending",
+        activationStatus:
+          "not_activated",
+        transactionId:
+          transaction.id,
+        merchantReference:
+          transaction.merchant_reference,
         message:
-          "Le fournisseur n'a pas encore retourné un statut définitif. La transaction reste en attente.",
-
-        transaction: {
-          id:
-            transaction.id,
-
-          merchantReference:
-            transaction.merchant_reference,
-
-          provider:
-            transaction.provider,
-
-          providerTransactionId:
-            verifiedProviderTransactionId,
-
-          amount,
-
-          currency,
-
-          paymentMethod:
-            transaction.payment_method,
-
-          status:
-            "pending",
-        },
+          verifyResult.message ??
+          "Le statut du paiement reste en attente de confirmation.",
       },
       200,
     );
   } catch (error) {
-    /*
-     * ==========================================================
-     * 27. ERREUR INTERNE
-     * ==========================================================
-     */
-
     console.error(
-      "PharmaFlow /api/payments/verify error:",
+      "MOKO AFRIKA VERIFY UNEXPECTED ERROR:",
       error,
     );
 
     return jsonResponse(
       {
         success: false,
-
         error:
-          "Une erreur interne est survenue pendant la vérification du paiement.",
-
-        code:
-          "INTERNAL_PAYMENT_VERIFY_ERROR",
+          "Erreur interne lors de la vérification du paiement.",
       },
       500,
     );
   }
+}
+
+export async function GET() {
+  return jsonResponse(
+    {
+      success: true,
+      provider:
+        "moko_afrika",
+      endpoint:
+        "/api/payments/verify",
+      message:
+        "Endpoint de vérification Moko Afrika opérationnel.",
+    },
+    200,
+  );
 }

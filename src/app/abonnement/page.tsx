@@ -10,6 +10,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 type Locale = "fr" | "en";
 
+type PlanPrice = {
+  plan_id: string;
+  code: string | null;
+  name: string | null;
+  description: string | null;
+  duration_days: number | null;
+  price: number;
+  currency_code: string;
+};
+
 type SubscriptionStatusResponse = {
   success: boolean;
   authenticated?: boolean;
@@ -57,6 +67,22 @@ type SubscriptionStatusResponse = {
     updated_at: string | null;
   } | null;
 
+  plan?: {
+    id: string;
+    name: string | null;
+    code: string | null;
+    description?: string | null;
+    duration_days: number | null;
+    is_active: boolean | null;
+  } | null;
+
+  prices?: {
+    currency_code: string | null;
+    available: boolean;
+    monthly: PlanPrice | null;
+    yearly: PlanPrice | null;
+  };
+
   trial?: {
     active: boolean;
     started_at: string | null;
@@ -84,9 +110,7 @@ type SubscriptionStatusResponse = {
 
 type BillingCycle = "monthly" | "yearly";
 
-type PaymentMethod =
-  | "mobile_money"
-  | "card";
+type PaymentMethod = "mobile_money" | "card";
 
 const TEXT = {
   fr: {
@@ -107,8 +131,10 @@ const TEXT = {
 
     trialDescription:
       "Profitez gratuitement de PharmaFlow pendant votre période d'essai.",
+
     trialExpiredDescription:
       "Votre période d'essai de 7 jours est arrivée à son terme. Choisissez un abonnement pour continuer.",
+
     activeDescription:
       "Votre abonnement est actif. Merci de faire confiance à PharmaFlow.",
 
@@ -127,6 +153,7 @@ const TEXT = {
     activeUntil: "Actif jusqu'au",
 
     pricing: "Choisissez votre abonnement",
+
     pricingDescription:
       "Des tarifs simples pour continuer à utiliser toute la puissance de PharmaFlow.",
 
@@ -137,41 +164,60 @@ const TEXT = {
     year: "an",
 
     monthlyDescription:
-      "Facturation tous les mois.",
+      "Facturation tous les mois. Si vous renouvelez avant expiration, les jours restants sont conservés et 7 jours bonus sont ajoutés.",
+
     yearlyDescription:
-      "Facturation annuelle. Économisez sur votre abonnement.",
+      "12 mois d'abonnement + 1 mois offert. En cas de renouvellement anticipé, les jours restants sont conservés et 7 jours bonus sont ajoutés.",
 
     popular: "RECOMMANDÉ",
-
-    priceMonthlyXaf: "8 500 XAF",
-    priceMonthlyUsd: "15 USD",
-
-    priceYearlyXaf: "85 000 XAF",
-    priceYearlyUsd: "150 USD",
 
     perMonth: "/ mois",
     perYear: "/ an",
 
+    monthlyBonus:
+      "+ 7 jours bonus en cas de renouvellement anticipé",
+
+    yearlyBonus:
+      "12 mois + 1 mois offert",
+
+    yearlyTotal:
+      "13 mois d'accès au total",
+
+    advancePayment:
+      "Paiement anticipé",
+
+    advancePaymentDescription:
+      "Vous pouvez payer avant l'expiration. Votre période restante est conservée.",
+
     payNow: "Choisir ce forfait",
+
     processing: "Préparation du paiement...",
 
-    paymentTitle: "Choisissez votre moyen de paiement",
+    paymentTitle:
+      "Choisissez votre moyen de paiement",
+
     paymentDescription:
       "Sélectionnez le moyen avec lequel vous souhaitez régler votre abonnement.",
 
     mobileMoney: "Mobile Money",
+
     mobileMoneyDescription:
       "Payez avec un service Mobile Money disponible dans votre pays.",
 
     card: "Carte bancaire",
+
     cardDescription:
-      "Payez avec une carte Visa ou Mastercard lorsque ce moyen est disponible.",
+      "Payez avec une carte Visa ou Mastercard lorsque ce moyen sera disponible.",
+
+    cardUnavailable:
+      "Le paiement par carte n'est pas encore disponible pour cette configuration.",
 
     continue: "Continuer",
     back: "Retour",
     cancel: "Annuler",
 
     securePayment: "Paiement sécurisé",
+
     securePaymentDescription:
       "PharmaFlow ne stocke pas les données sensibles de votre carte bancaire.",
 
@@ -193,7 +239,7 @@ const TEXT = {
     logout: "Se déconnecter",
 
     footer:
-      "© 2026 PharmaFlow. Tous droits réservés.",
+      "©️ 2026 PharmaFlow. Tous droits réservés.",
 
     contact:
       "Besoin d'aide ? Contactez l'assistance PharmaFlow.",
@@ -207,17 +253,40 @@ const TEXT = {
     blockedNotice:
       "L'accès à votre espace est actuellement suspendu jusqu'à l'activation d'un abonnement.",
 
-    currency:
-      "Devise",
+    currency: "Devise",
 
-    pharmacy:
-      "Pharmacie",
+    pharmacy: "Pharmacie",
 
-    currentPlan:
-      "Forfait actuel",
+    currentPlan: "Forfait actuel",
 
     noSubscription:
       "Aucun abonnement actif",
+
+    currentAccess: "Accès actuel",
+
+    bonusSecurity:
+      "Les périodes et bonus sont calculés automatiquement par PharmaFlow après confirmation du paiement.",
+
+    currencyNotConfigured:
+      "Les tarifs de cette devise ne sont pas encore configurés pour cette pharmacie.",
+
+    monthlyPriceUnavailable:
+      "Tarif mensuel non configuré",
+
+    yearlyPriceUnavailable:
+      "Tarif annuel non configuré",
+
+    unavailable:
+      "Indisponible",
+
+    paymentUnavailable:
+      "Le paiement n'est pas encore disponible pour cette devise.",
+
+    configuredCurrency:
+      "Devise configurée",
+
+    subscriptionPrice:
+      "Prix de l'abonnement",
   },
 
   en: {
@@ -225,84 +294,121 @@ const TEXT = {
     subtitle: "Smart pharmacy management",
 
     title: "Your PharmaFlow subscription",
+
     subtitlePage:
       "Keep managing your pharmacy without interruption.",
 
     loading: "Checking your subscription...",
+
     loadingDescription:
       "We are checking the status of your account.",
 
     trialActive: "Free trial active",
+
     trialExpired: "Your free trial has ended",
+
     subscriptionActive: "Active subscription",
 
     trialDescription:
       "Enjoy PharmaFlow for free during your trial period.",
+
     trialExpiredDescription:
       "Your 7-day trial has ended. Choose a subscription to continue.",
+
     activeDescription:
       "Your subscription is active. Thank you for choosing PharmaFlow.",
 
     remaining: "Time remaining",
+
     days: "days",
     day: "day",
+
     hours: "hours",
     hour: "hour",
+
     minutes: "minutes",
     minute: "minute",
+
     seconds: "seconds",
     second: "second",
 
     expired: "Expired",
+
     expiresOn: "Expires on",
+
     activeUntil: "Active until",
 
     pricing: "Choose your subscription",
+
     pricingDescription:
       "Simple pricing to keep using the full power of PharmaFlow.",
 
     monthly: "Monthly",
+
     yearly: "Yearly",
 
     month: "month",
+
     year: "year",
 
     monthlyDescription:
-      "Billed every month.",
+      "Billed every month. If you renew before expiration, your remaining days are kept and 7 bonus days are added.",
+
     yearlyDescription:
-      "Billed yearly. Save on your subscription.",
+      "12 months of subscription + 1 month free. If you renew early, your remaining days are kept and 7 bonus days are added.",
 
     popular: "RECOMMENDED",
 
-    priceMonthlyXaf: "8,500 XAF",
-    priceMonthlyUsd: "15 USD",
-
-    priceYearlyXaf: "85,000 XAF",
-    priceYearlyUsd: "150 USD",
-
     perMonth: "/ month",
+
     perYear: "/ year",
 
+    monthlyBonus:
+      "+ 7 bonus days for early renewal",
+
+    yearlyBonus:
+      "12 months + 1 month free",
+
+    yearlyTotal:
+      "13 months of access in total",
+
+    advancePayment:
+      "Early payment",
+
+    advancePaymentDescription:
+      "You can pay before expiration. Your remaining subscription period is preserved.",
+
     payNow: "Choose this plan",
+
     processing: "Preparing payment...",
 
-    paymentTitle: "Choose your payment method",
+    paymentTitle:
+      "Choose your payment method",
+
     paymentDescription:
       "Select how you want to pay for your subscription.",
 
     mobileMoney: "Mobile Money",
+
     mobileMoneyDescription:
       "Pay with a Mobile Money service available in your country.",
 
     card: "Bank card",
+
     cardDescription:
-      "Pay with a Visa or Mastercard when this method is available.",
+      "Pay with a Visa or Mastercard when this method becomes available.",
+
+    cardUnavailable:
+      "Card payments are not yet available for this configuration.",
 
     continue: "Continue",
+
     back: "Back",
+
     cancel: "Cancel",
 
     securePayment: "Secure payment",
+
     securePaymentDescription:
       "PharmaFlow does not store sensitive bank card details.",
 
@@ -324,7 +430,7 @@ const TEXT = {
     logout: "Sign out",
 
     footer:
-      "© 2026 PharmaFlow. All rights reserved.",
+      "©️ 2026 PharmaFlow. All rights reserved.",
 
     contact:
       "Need help? Contact PharmaFlow support.",
@@ -338,17 +444,40 @@ const TEXT = {
     blockedNotice:
       "Access to your workspace is currently suspended until a subscription is activated.",
 
-    currency:
-      "Currency",
+    currency: "Currency",
 
-    pharmacy:
-      "Pharmacy",
+    pharmacy: "Pharmacy",
 
-    currentPlan:
-      "Current plan",
+    currentPlan: "Current plan",
 
     noSubscription:
       "No active subscription",
+
+    currentAccess: "Current access",
+
+    bonusSecurity:
+      "Periods and bonuses are automatically calculated by PharmaFlow after payment confirmation.",
+
+    currencyNotConfigured:
+      "Pricing for this currency has not yet been configured for this pharmacy.",
+
+    monthlyPriceUnavailable:
+      "Monthly price not configured",
+
+    yearlyPriceUnavailable:
+      "Yearly price not configured",
+
+    unavailable:
+      "Unavailable",
+
+    paymentUnavailable:
+      "Payment is not yet available for this currency.",
+
+    configuredCurrency:
+      "Configured currency",
+
+    subscriptionPrice:
+      "Subscription price",
   },
 } as const;
 
@@ -385,9 +514,9 @@ export default function SubscriptionPage() {
   const [paymentMessage, setPaymentMessage] =
     useState("");
 
-  // ------------------------------------------------------------
+  // ============================================================
   // CHARGEMENT DU STATUT
-  // ------------------------------------------------------------
+  // ============================================================
 
   const loadSubscription =
     useCallback(async () => {
@@ -395,16 +524,18 @@ export default function SubscriptionPage() {
         setLoading(true);
         setError("");
 
-        const response = await fetch(
-          "/api/subscription/status",
-          {
-            method: "GET",
-            cache: "no-store",
-            headers: {
-              Accept: "application/json",
+        const response =
+          await fetch(
+            "/api/subscription/status",
+            {
+              method: "GET",
+              cache: "no-store",
+              headers: {
+                Accept:
+                  "application/json",
+              },
             },
-          },
-        );
+          );
 
         const result =
           (await response.json()) as SubscriptionStatusResponse;
@@ -419,7 +550,10 @@ export default function SubscriptionPage() {
           return;
         }
 
-        if (!response.ok || !result.success) {
+        if (
+          !response.ok ||
+          !result.success
+        ) {
           throw new Error(
             result.message ||
               "Impossible de vérifier votre abonnement.",
@@ -432,7 +566,9 @@ export default function SubscriptionPage() {
           result.locale === "en" ||
           result.locale === "fr"
         ) {
-          setLocale(result.locale);
+          setLocale(
+            result.locale,
+          );
         }
       } catch (err) {
         console.error(
@@ -454,12 +590,31 @@ export default function SubscriptionPage() {
     loadSubscription();
   }, [loadSubscription]);
 
-  const t =
-    TEXT[locale];
+  const t = TEXT[locale];
 
-  // ------------------------------------------------------------
-  // COMPTE À REBOURS LOCAL
-  // ------------------------------------------------------------
+  // ============================================================
+  // PARAMÈTRES URL
+  // ============================================================
+
+  useEffect(() => {
+    const reason =
+      searchParams.get("reason");
+
+    if (reason === "expired") {
+      setPaymentMessage(
+        locale === "fr"
+          ? "Votre abonnement a expiré. Choisissez un forfait pour continuer."
+          : "Your subscription has expired. Choose a plan to continue.",
+      );
+    }
+  }, [
+    searchParams,
+    locale,
+  ]);
+
+  // ============================================================
+  // COMPTE À REBOURS
+  // ============================================================
 
   const [remainingMs, setRemainingMs] =
     useState(0);
@@ -482,13 +637,19 @@ export default function SubscriptionPage() {
 
     const timer =
       window.setInterval(() => {
-        setRemainingMs((current) =>
-          Math.max(current - 1000, 0),
+        setRemainingMs(
+          (current) =>
+            Math.max(
+              current - 1000,
+              0,
+            ),
         );
       }, 1000);
 
     return () => {
-      window.clearInterval(timer);
+      window.clearInterval(
+        timer,
+      );
     };
   }, [
     data?.trial?.active,
@@ -498,23 +659,31 @@ export default function SubscriptionPage() {
   const countdown = useMemo(() => {
     const totalSeconds =
       Math.floor(
-        Math.max(remainingMs, 0) /
-          1000,
+        Math.max(
+          remainingMs,
+          0,
+        ) / 1000,
       );
 
-    const days = Math.floor(
-      totalSeconds / 86400,
-    );
+    const days =
+      Math.floor(
+        totalSeconds /
+          86400,
+      );
 
-    const hours = Math.floor(
-      (totalSeconds % 86400) /
-        3600,
-    );
+    const hours =
+      Math.floor(
+        (totalSeconds %
+          86400) /
+          3600,
+      );
 
-    const minutes = Math.floor(
-      (totalSeconds % 3600) /
-        60,
-    );
+    const minutes =
+      Math.floor(
+        (totalSeconds %
+          3600) /
+          60,
+      );
 
     const seconds =
       totalSeconds % 60;
@@ -527,70 +696,187 @@ export default function SubscriptionPage() {
     };
   }, [remainingMs]);
 
-  // ------------------------------------------------------------
+  // ============================================================
   // DEVISE
-  // ------------------------------------------------------------
+  // ============================================================
 
   const currency =
     (
-      data?.pharmacy?.currency_code ||
-      "XAF"
-    ).toUpperCase();
+      data?.pharmacy
+        ?.currency_code ||
+      data?.prices
+        ?.currency_code ||
+      ""
+    )
+      .trim()
+      .toUpperCase();
 
-  const isXaf =
-    currency === "XAF";
+  const hasCurrency =
+    /^[A-Z]{3}$/.test(
+      currency,
+    );
 
-  // ------------------------------------------------------------
-  // TARIFS
-  // ------------------------------------------------------------
+  // ============================================================
+  // TARIFS DYNAMIQUES
+  // ============================================================
 
-  const prices = useMemo(() => {
-    if (isXaf) {
-      return {
-        monthly: {
-          amount: 8500,
-          label: t.priceMonthlyXaf,
-        },
-        yearly: {
-          amount: 85000,
-          label: t.priceYearlyXaf,
-        },
-      };
-    }
+  const monthlyPrice =
+    data?.prices?.monthly ??
+    null;
 
-    return {
-      monthly: {
-        amount: 15,
-        label: t.priceMonthlyUsd,
-      },
-      yearly: {
-        amount: 150,
-        label: t.priceYearlyUsd,
-      },
-    };
-  }, [
-    isXaf,
-    t.priceMonthlyXaf,
-    t.priceMonthlyUsd,
-    t.priceYearlyXaf,
-    t.priceYearlyUsd,
-  ]);
+  const yearlyPrice =
+    data?.prices?.yearly ??
+    null;
 
-  // ------------------------------------------------------------
+  const pricesAvailable =
+    data?.prices?.available ===
+      true &&
+    Boolean(
+      monthlyPrice &&
+        yearlyPrice,
+    );
+
+  const monthlyAvailable =
+    Boolean(
+      monthlyPrice &&
+        Number.isFinite(
+          Number(
+            monthlyPrice.price,
+          ),
+        ),
+    );
+
+  const yearlyAvailable =
+    Boolean(
+      yearlyPrice &&
+        Number.isFinite(
+          Number(
+            yearlyPrice.price,
+          ),
+        ),
+    );
+
+  const formatPrice = useCallback(
+    (
+      price: number | null | undefined,
+      currencyCode: string | null | undefined,
+    ) => {
+      if (
+        price === null ||
+        price === undefined ||
+        !Number.isFinite(
+          Number(price),
+        )
+      ) {
+        return t.unavailable;
+      }
+
+      const code =
+        String(
+          currencyCode ??
+            currency ??
+            "",
+        )
+          .trim()
+          .toUpperCase();
+
+      if (
+        !/^[A-Z]{3}$/.test(
+          code,
+        )
+      ) {
+        return String(price);
+      }
+
+      try {
+        return new Intl.NumberFormat(
+          locale === "en"
+            ? "en-US"
+            : "fr-FR",
+          {
+            style: "currency",
+            currency: code,
+            currencyDisplay:
+              "code",
+            maximumFractionDigits:
+              2,
+          },
+        ).format(
+          Number(price),
+        );
+      } catch {
+        return `${Number(price).toLocaleString(
+          locale === "en"
+            ? "en-US"
+            : "fr-FR",
+        )} ${code}`;
+      }
+    },
+    [
+      currency,
+      locale,
+      t.unavailable,
+    ],
+  );
+
+  const monthlyLabel =
+    monthlyAvailable
+      ? formatPrice(
+          monthlyPrice?.price,
+          monthlyPrice?.currency_code,
+        )
+      : t.monthlyPriceUnavailable;
+
+  const yearlyLabel =
+    yearlyAvailable
+      ? formatPrice(
+          yearlyPrice?.price,
+          yearlyPrice?.currency_code,
+        )
+      : t.yearlyPriceUnavailable;
+
+  // ============================================================
   // CHOIX DU FORFAIT
-  // ------------------------------------------------------------
+  // ============================================================
 
   function choosePlan(
     cycle: BillingCycle,
   ) {
-    setBillingCycle(cycle);
-    setPaymentMessage("");
-    setShowPaymentMethods(true);
+    const available =
+      cycle === "monthly"
+        ? monthlyAvailable
+        : yearlyAvailable;
+
+    if (!available) {
+      setPaymentMessage(
+        cycle === "monthly"
+          ? t.monthlyPriceUnavailable
+          : t.yearlyPriceUnavailable,
+      );
+
+      return;
+    }
+
+    setBillingCycle(
+      cycle,
+    );
+
+    setPaymentMethod(
+      null,
+    );
+
+    setPaymentMessage(
+      "",
+    );
+
+    setShowPaymentMethods(
+      true,
+    );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // PAIEMENT
-  // ------------------------------------------------------------
+  // ============================================================
 
   async function startPayment() {
     if (!billingCycle) {
@@ -607,22 +893,61 @@ export default function SubscriptionPage() {
       return;
     }
 
+    /*
+     * Le endpoint actuel /api/payments/create accepte
+     * actuellement :
+     *
+     * mobile_money
+     * card
+     *
+     * mais la carte est volontairement désactivée dans
+     * l'interface tant que le backend/provider correspondant
+     * n'est pas opérationnel.
+     */
+
+    if (
+      paymentMethod ===
+      "card"
+    ) {
+      setPaymentMessage(
+        t.cardUnavailable,
+      );
+      return;
+    }
+
+    if (!hasCurrency) {
+      setPaymentMessage(
+        t.currencyNotConfigured,
+      );
+      return;
+    }
+
+    if (
+      !data.prices?.available
+    ) {
+      setPaymentMessage(
+        t.paymentUnavailable,
+      );
+      return;
+    }
+
     try {
       setProcessing(true);
       setPaymentMessage("");
 
       /*
-       * Cette requête appelle notre moteur de paiement.
+       * IMPORTANT :
        *
-       * Le serveur déterminera lui-même :
-       * - la pharmacie
-       * - le propriétaire
-       * - le plan
+       * Le navigateur n'envoie PAS :
+       *
        * - le prix
        * - la devise
+       * - pharmacy_id
+       * - une date d'expiration
+       * - les jours restants
+       * - les jours bonus
        *
-       * Le navigateur ne doit jamais être considéré comme
-       * une source fiable pour le prix ou le pharmacy_id.
+       * Le serveur récupère lui-même ces informations.
        */
 
       const response =
@@ -630,20 +955,21 @@ export default function SubscriptionPage() {
           "/api/payments/create",
           {
             method: "POST",
+
             headers: {
               "Content-Type":
                 "application/json",
+
               Accept:
                 "application/json",
             },
-            body: JSON.stringify({
-              billingCycle,
-              paymentMethod:
-                paymentMethod ===
-                "mobile_money"
-                  ? "mobile_money"
-                  : "card",
-            }),
+
+            body:
+              JSON.stringify({
+                billingCycle,
+                paymentMethod:
+                  "mobile_money",
+              }),
           },
         );
 
@@ -651,7 +977,8 @@ export default function SubscriptionPage() {
         await response.json();
 
       if (
-        response.status === 401
+        response.status ===
+        401
       ) {
         router.replace(
           "/login?redirect=/abonnement",
@@ -670,13 +997,7 @@ export default function SubscriptionPage() {
       }
 
       /*
-       * Selon le fournisseur, la réponse peut contenir :
-       *
-       * - checkoutUrl
-       * - clientSecret
-       * - providerTransactionId
-       *
-       * Une page de paiement hébergée peut alors être ouverte.
+       * Paiement hébergé par le provider.
        */
 
       if (
@@ -684,13 +1005,17 @@ export default function SubscriptionPage() {
       ) {
         window.location.href =
           result.checkoutUrl;
+
         return;
       }
 
       /*
-       * Pour un Mobile Money nécessitant une confirmation,
-       * nous conserverons la transaction et passerons ensuite
-       * à la vérification.
+       * Pour un Mobile Money nécessitant
+       * une confirmation, la transaction
+       * reste côté serveur.
+       *
+       * L'abonnement ne doit être activé
+       * qu'après confirmation réelle.
        */
 
       setPaymentMessage(
@@ -717,9 +1042,9 @@ export default function SubscriptionPage() {
     }
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // DÉCONNEXION
-  // ------------------------------------------------------------
+  // ============================================================
 
   async function handleLogout() {
     try {
@@ -730,26 +1055,27 @@ export default function SubscriptionPage() {
         },
       );
     } catch {
-      // Le login pourra également nettoyer
-      // la session côté navigateur.
+      // La session pourra également
+      // être nettoyée côté navigateur.
     }
 
-    router.replace("/login");
+    router.replace(
+      "/login",
+    );
   }
 
-  // ------------------------------------------------------------
-  // ÉTAT DE L'ABONNEMENT
-  // ------------------------------------------------------------
-
-  const status =
-    data?.status || "";
+  // ============================================================
+  // ÉTAT ABONNEMENT
+  // ============================================================
 
   const trialActive =
-    data?.trial?.active === true &&
+    data?.trial?.active ===
+      true &&
     remainingMs > 0;
 
   const accessAllowed =
-    data?.access?.allowed === true;
+    data?.access?.allowed ===
+    true;
 
   const isExpired =
     !trialActive &&
@@ -759,9 +1085,9 @@ export default function SubscriptionPage() {
     trialActive &&
     countdown.days <= 3;
 
-  // ------------------------------------------------------------
-  // AFFICHAGE CHARGEMENT
-  // ------------------------------------------------------------
+  // ============================================================
+  // CHARGEMENT
+  // ============================================================
 
   if (loading) {
     return (
@@ -781,11 +1107,14 @@ export default function SubscriptionPage() {
     );
   }
 
-  // ------------------------------------------------------------
+  // ============================================================
   // ERREUR
-  // ------------------------------------------------------------
+  // ============================================================
 
-  if (error || !data) {
+  if (
+    error ||
+    !data
+  ) {
     return (
       <main className="pf-subscription-page">
         <div className="pf-subscription-error">
@@ -794,14 +1123,16 @@ export default function SubscriptionPage() {
           </div>
 
           <h1>
-            {locale === "en"
+            {locale ===
+            "en"
               ? "Unable to load your subscription"
               : "Impossible de charger votre abonnement"}
           </h1>
 
           <p>
             {error ||
-              (locale === "en"
+              (locale ===
+              "en"
                 ? "Please try again."
                 : "Veuillez réessayer.")}
           </p>
@@ -809,9 +1140,12 @@ export default function SubscriptionPage() {
           <button
             type="button"
             className="pf-btn pf-btn-primary"
-            onClick={loadSubscription}
+            onClick={
+              loadSubscription
+            }
           >
-            {locale === "en"
+            {locale ===
+            "en"
               ? "Try again"
               : "Réessayer"}
           </button>
@@ -849,13 +1183,15 @@ export default function SubscriptionPage() {
             className="pf-subscription-language"
             onClick={() =>
               setLocale(
-                locale === "fr"
+                locale ===
+                  "fr"
                   ? "en"
                   : "fr",
               )
             }
           >
-            {locale === "fr"
+            {locale ===
+            "fr"
               ? "EN"
               : "FR"}
           </button>
@@ -863,7 +1199,9 @@ export default function SubscriptionPage() {
           <button
             type="button"
             className="pf-subscription-logout"
-            onClick={handleLogout}
+            onClick={
+              handleLogout
+            }
           >
             {t.logout}
           </button>
@@ -890,18 +1228,22 @@ export default function SubscriptionPage() {
 
           <div className="pf-subscription-pharmacy">
             <span>
-              {data.pharmacy?.name ||
+              {data.pharmacy
+                ?.name ||
                 "PharmaFlow"}
             </span>
 
             <span>
-              {data.pharmacy?.city ||
+              {data.pharmacy
+                ?.city ||
                 "—"}
             </span>
 
             <span>
               {t.currency}:{" "}
-              {currency}
+              {hasCurrency
+                ? currency
+                : t.unavailable}
             </span>
           </div>
         </section>
@@ -956,7 +1298,9 @@ export default function SubscriptionPage() {
               <div className="pf-countdown-grid">
                 <div>
                   <strong>
-                    {countdown.days}
+                    {
+                      countdown.days
+                    }
                   </strong>
 
                   <small>
@@ -971,7 +1315,10 @@ export default function SubscriptionPage() {
                   <strong>
                     {String(
                       countdown.hours,
-                    ).padStart(2, "0")}
+                    ).padStart(
+                      2,
+                      "0",
+                    )}
                   </strong>
 
                   <small>
@@ -986,7 +1333,10 @@ export default function SubscriptionPage() {
                   <strong>
                     {String(
                       countdown.minutes,
-                    ).padStart(2, "0")}
+                    ).padStart(
+                      2,
+                      "0",
+                    )}
                   </strong>
 
                   <small>
@@ -1001,7 +1351,10 @@ export default function SubscriptionPage() {
                   <strong>
                     {String(
                       countdown.seconds,
-                    ).padStart(2, "0")}
+                    ).padStart(
+                      2,
+                      "0",
+                    )}
                   </strong>
 
                   <small>
@@ -1020,7 +1373,8 @@ export default function SubscriptionPage() {
                   {new Date(
                     data.trial.ends_at,
                   ).toLocaleString(
-                    locale === "en"
+                    locale ===
+                      "en"
                       ? "en-US"
                       : "fr-FR",
                   )}
@@ -1041,13 +1395,17 @@ export default function SubscriptionPage() {
                   {new Date(
                     data.expiration.expires_at,
                   ).toLocaleDateString(
-                    locale === "en"
+                    locale ===
+                      "en"
                       ? "en-US"
                       : "fr-FR",
                     {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
+                      year:
+                        "numeric",
+                      month:
+                        "long",
+                      day:
+                        "numeric",
                     },
                   )}
                 </strong>
@@ -1057,11 +1415,14 @@ export default function SubscriptionPage() {
           {trialWarning && (
             <div className="pf-subscription-warning">
               <strong>
-                ⚠️ {t.trialWarning}
+                ⚠️{" "}
+                {t.trialWarning}
               </strong>
 
               <span>
-                {t.trialWarningStrong}
+                {
+                  t.trialWarningStrong
+                }
               </span>
             </div>
           )}
@@ -1069,7 +1430,8 @@ export default function SubscriptionPage() {
           {isExpired && (
             <div className="pf-subscription-blocked">
               <strong>
-                🔒 {t.blockedNotice}
+                🔒{" "}
+                {t.blockedNotice}
               </strong>
             </div>
           )}
@@ -1086,15 +1448,29 @@ export default function SubscriptionPage() {
             </span>
 
             <p>
-              {t.pricingDescription}
+              {
+                t.pricingDescription
+              }
             </p>
           </div>
 
+          {!pricesAvailable && (
+            <div className="pf-payment-message">
+              {hasCurrency
+                ? t.currencyNotConfigured
+                : t.paymentUnavailable}
+            </div>
+          )}
+
           <div className="pf-subscription-plans">
-            {/* MENSUEL */}
+            {/* ==================================================
+                MENSUEL
+            ================================================== */}
+
             <article
               className={`pf-subscription-plan ${
-                billingCycle === "monthly" &&
+                billingCycle ===
+                  "monthly" &&
                 showPaymentMethods
                   ? "is-selected"
                   : ""
@@ -1108,34 +1484,56 @@ export default function SubscriptionPage() {
 
               <div className="pf-plan-price">
                 <strong>
-                  {prices.monthly.label}
+                  {monthlyLabel}
                 </strong>
 
                 <span>
-                  {t.perMonth}
+                  {monthlyAvailable
+                    ? t.perMonth
+                    : ""}
                 </span>
               </div>
 
               <p>
-                {t.monthlyDescription}
+                {
+                  t.monthlyDescription
+                }
               </p>
+
+              <div className="pf-plan-benefit">
+                🎁{" "}
+                {
+                  t.monthlyBonus
+                }
+              </div>
 
               <button
                 type="button"
                 className="pf-btn pf-btn-primary pf-plan-button"
                 onClick={() =>
-                  choosePlan("monthly")
+                  choosePlan(
+                    "monthly",
+                  )
                 }
-                disabled={processing}
+                disabled={
+                  processing ||
+                  !monthlyAvailable
+                }
               >
-                {t.payNow}
+                {monthlyAvailable
+                  ? t.payNow
+                  : t.unavailable}
               </button>
             </article>
 
-            {/* ANNUEL */}
+            {/* ==================================================
+                ANNUEL
+            ================================================== */}
+
             <article
               className={`pf-subscription-plan is-recommended ${
-                billingCycle === "yearly" &&
+                billingCycle ===
+                  "yearly" &&
                 showPaymentMethods
                   ? "is-selected"
                   : ""
@@ -1153,30 +1551,78 @@ export default function SubscriptionPage() {
 
               <div className="pf-plan-price">
                 <strong>
-                  {prices.yearly.label}
+                  {yearlyLabel}
                 </strong>
 
                 <span>
-                  {t.perYear}
+                  {yearlyAvailable
+                    ? t.perYear
+                    : ""}
                 </span>
               </div>
 
               <p>
-                {t.yearlyDescription}
+                {
+                  t.yearlyDescription
+                }
               </p>
+
+              <div className="pf-plan-benefit">
+                🎁{" "}
+                {t.yearlyBonus}
+              </div>
+
+              <div className="pf-plan-benefit">
+                ✨{" "}
+                {t.yearlyTotal}
+              </div>
 
               <button
                 type="button"
                 className="pf-btn pf-btn-primary pf-plan-button"
                 onClick={() =>
-                  choosePlan("yearly")
+                  choosePlan(
+                    "yearly",
+                  )
                 }
-                disabled={processing}
+                disabled={
+                  processing ||
+                  !yearlyAvailable
+                }
               >
-                {t.payNow}
+                {yearlyAvailable
+                  ? t.payNow
+                  : t.unavailable}
               </button>
             </article>
           </div>
+
+          {/* ====================================================
+              PAIEMENT ANTICIPÉ
+          ===================================================== */}
+
+          {accessAllowed && (
+            <div className="pf-advance-payment-notice">
+              <div>
+                <strong>
+                  🎁{" "}
+                  {
+                    t.advancePayment
+                  }
+                </strong>
+
+                <p>
+                  {
+                    t.advancePaymentDescription
+                  }
+                </p>
+              </div>
+
+              <span>
+                +7 jours
+              </span>
+            </div>
+          )}
         </section>
 
         {/* ======================================================
@@ -1187,11 +1633,15 @@ export default function SubscriptionPage() {
           <section className="pf-payment-method-section">
             <div className="pf-subscription-section-title">
               <span>
-                {t.paymentTitle}
+                {
+                  t.paymentTitle
+                }
               </span>
 
               <p>
-                {t.paymentDescription}
+                {
+                  t.paymentDescription
+                }
               </p>
             </div>
 
@@ -1206,12 +1656,14 @@ export default function SubscriptionPage() {
               <strong>
                 {billingCycle ===
                 "monthly"
-                  ? prices.monthly.label
-                  : prices.yearly.label}
+                  ? monthlyLabel
+                  : yearlyLabel}
               </strong>
             </div>
 
             <div className="pf-payment-methods">
+              {/* MOBILE MONEY */}
+
               <button
                 type="button"
                 className={`pf-payment-method ${
@@ -1225,7 +1677,11 @@ export default function SubscriptionPage() {
                     "mobile_money",
                   )
                 }
-                disabled={processing}
+                disabled={
+                  processing ||
+                  !hasCurrency ||
+                  !pricesAvailable
+                }
               >
                 <span className="pf-payment-method-icon">
                   📱
@@ -1233,7 +1689,9 @@ export default function SubscriptionPage() {
 
                 <span className="pf-payment-method-content">
                   <strong>
-                    {t.mobileMoney}
+                    {
+                      t.mobileMoney
+                    }
                   </strong>
 
                   <small>
@@ -1251,20 +1709,13 @@ export default function SubscriptionPage() {
                 </span>
               </button>
 
+              {/* CARTE */}
+
               <button
                 type="button"
-                className={`pf-payment-method ${
-                  paymentMethod ===
-                  "card"
-                    ? "is-selected"
-                    : ""
-                }`}
-                onClick={() =>
-                  setPaymentMethod(
-                    "card",
-                  )
-                }
-                disabled={processing}
+                className="pf-payment-method"
+                disabled
+                aria-disabled="true"
               >
                 <span className="pf-payment-method-icon">
                   💳
@@ -1277,23 +1728,22 @@ export default function SubscriptionPage() {
 
                   <small>
                     {
-                      t.cardDescription
+                      t.cardUnavailable
                     }
                   </small>
                 </span>
 
                 <span className="pf-payment-method-radio">
-                  {paymentMethod ===
-                  "card"
-                    ? "✓"
-                    : ""}
+                  —
                 </span>
               </button>
             </div>
 
             {paymentMessage && (
               <div className="pf-payment-message">
-                {paymentMessage}
+                {
+                  paymentMessage
+                }
               </div>
             )}
 
@@ -1305,14 +1755,18 @@ export default function SubscriptionPage() {
                   setShowPaymentMethods(
                     false,
                   );
+
                   setPaymentMethod(
                     null,
                   );
+
                   setPaymentMessage(
                     "",
                   );
                 }}
-                disabled={processing}
+                disabled={
+                  processing
+                }
               >
                 {t.back}
               </button>
@@ -1320,10 +1774,14 @@ export default function SubscriptionPage() {
               <button
                 type="button"
                 className="pf-btn pf-btn-primary"
-                onClick={startPayment}
+                onClick={
+                  startPayment
+                }
                 disabled={
                   processing ||
-                  !paymentMethod
+                  !paymentMethod ||
+                  paymentMethod ===
+                    "card"
                 }
               >
                 {processing
@@ -1339,12 +1797,20 @@ export default function SubscriptionPage() {
 
               <div>
                 <strong>
-                  {t.securePayment}
+                  {
+                    t.securePayment
+                  }
                 </strong>
 
                 <small>
                   {
                     t.securePaymentDescription
+                  }
+                </small>
+
+                <small>
+                  {
+                    t.bonusSecurity
                   }
                 </small>
               </div>
@@ -1375,7 +1841,9 @@ export default function SubscriptionPage() {
             </span>
 
             <strong>
-              {currency}
+              {hasCurrency
+                ? currency
+                : t.unavailable}
             </strong>
           </div>
 
@@ -1385,7 +1853,8 @@ export default function SubscriptionPage() {
             </span>
 
             <strong>
-              {data.pharmacy?.name ||
+              {data.pharmacy
+                ?.name ||
                 "PharmaFlow"}
             </strong>
           </div>

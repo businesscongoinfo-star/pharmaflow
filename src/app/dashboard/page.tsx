@@ -45,6 +45,23 @@ type Pharmacy = {
   status: string | null;
 };
 
+type Subscription = {
+  id: string;
+  status: string | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  expires_at: string | null;
+  plan_id: string | null;
+};
+
+type SubscriptionInfo = {
+  status: string;
+  daysRemaining: number;
+  endDate: string | null;
+  isTrial: boolean;
+  isPaid: boolean;
+};
+
 type Product = {
   id: string;
   name: string;
@@ -75,7 +92,7 @@ const navigation = [
   {
     key: "products",
     icon: "◈",
-    href: "/products",
+    href: "/produits",
   },
   {
     key: "stock",
@@ -114,7 +131,7 @@ const navigation = [
 ============================================================ */
 
 function getRoleRedirect(
-  role: string | null | undefined
+  role: string | null | undefined,
 ) {
   switch (role) {
     case "owner":
@@ -138,6 +155,134 @@ function getRoleRedirect(
 }
 
 /* ============================================================
+   VÉRIFICATION ABONNEMENT
+============================================================ */
+
+/**
+ * Détermine si l'utilisateur peut actuellement accéder
+ * à l'espace PharmaFlow.
+ *
+ * Règles :
+ * - active : accès si non expiré
+ * - paid : accès si non expiré
+ * - trial / trialing : accès uniquement si l'essai est encore actif
+ * - cancelled : accès uniquement jusqu'à expires_at
+ * - tout autre statut : accès refusé
+ */
+function hasValidSubscription(
+  subscription: Subscription | null,
+): boolean {
+  if (!subscription) {
+    return false;
+  }
+
+  const status = String(
+    subscription.status || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  /* ----------------------------------------------------------
+     STATUTS AUTORISÉS
+  ---------------------------------------------------------- */
+
+  const allowedStatuses = [
+    "active",
+    "paid",
+    "trial",
+    "trialing",
+    "cancelled",
+  ];
+
+  if (!allowedStatuses.includes(status)) {
+    return false;
+  }
+
+  /* ----------------------------------------------------------
+     PÉRIODE D'ESSAI
+  ---------------------------------------------------------- */
+
+  if (
+    status === "trial" ||
+    status === "trialing"
+  ) {
+    /*
+     * Une période d'essai doit obligatoirement
+     * avoir une date de fin valide.
+     */
+    if (!subscription.trial_ends_at) {
+      return false;
+    }
+
+    const trialEndsAt = new Date(
+      subscription.trial_ends_at,
+    ).getTime();
+
+    if (!Number.isFinite(trialEndsAt)) {
+      return false;
+    }
+
+    if (trialEndsAt <= Date.now()) {
+      return false;
+    }
+
+    /*
+     * Si expires_at existe également,
+     * elle doit elle aussi être valide.
+     */
+    if (subscription.expires_at) {
+      const expiresAt = new Date(
+        subscription.expires_at,
+      ).getTime();
+
+      if (!Number.isFinite(expiresAt)) {
+        return false;
+      }
+
+      if (expiresAt <= Date.now()) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /* ----------------------------------------------------------
+     ABONNEMENT PAYÉ / ACTIF / ANNULÉ
+  ---------------------------------------------------------- */
+
+  /*
+   * Pour un abonnement normal, nous exigeons
+   * une date d'expiration valide.
+   *
+   * Cela empêche un abonnement mal configuré
+   * de donner un accès illimité par erreur.
+   */
+  if (!subscription.expires_at) {
+    return false;
+  }
+
+  const expiresAt = new Date(
+    subscription.expires_at,
+  ).getTime();
+
+  if (!Number.isFinite(expiresAt)) {
+    return false;
+  }
+
+  /*
+   * Même si l'abonnement est "cancelled",
+   * le client peut conserver son accès jusqu'à
+   * la fin de la période déjà payée.
+   */
+  if (expiresAt <= Date.now()) {
+    return false;
+  }
+
+  return true;
+}
+
+/* ============================================================
    PAGE DASHBOARD
 ============================================================ */
 
@@ -146,7 +291,7 @@ export default function DashboardPage() {
 
   const supabase = useMemo(
     () => createClient(),
-    []
+    [],
   );
 
   /* ==========================================================
@@ -202,6 +347,9 @@ export default function DashboardPage() {
   const [pharmacy, setPharmacy] =
     useState<Pharmacy | null>(null);
 
+  const [subscription, setSubscription] =
+    useState<Subscription | null>(null);
+
   const [products, setProducts] =
     useState<Product[]>([]);
 
@@ -248,7 +396,7 @@ export default function DashboardPage() {
             !user
           ) {
             router.replace(
-              "/login"
+              "/login",
             );
 
             return;
@@ -271,30 +419,30 @@ export default function DashboardPage() {
                 phone,
                 role,
                 pharmacy_id
-                `
+                `,
               )
               .eq(
                 "id",
-                user.id
+                user.id,
               )
               .maybeSingle();
 
           if (profileError) {
             throw new Error(
-              profileError.message
+              profileError.message,
             );
           }
 
           if (!profileData) {
             throw new Error(
-              "Votre profil utilisateur est introuvable."
+              "Votre profil utilisateur est introuvable.",
             );
           }
 
           const currentRole =
             String(
               profileData.role ||
-                ""
+                "",
             ).toLowerCase();
 
           /* ==================================================
@@ -309,18 +457,18 @@ export default function DashboardPage() {
 
             const destination =
               getRoleRedirect(
-                currentRole
+                currentRole,
               );
 
             router.replace(
-              destination
+              destination,
             );
 
             return;
           }
 
           setProfile(
-            profileData as Profile
+            profileData as Profile,
           );
 
           /* ==================================================
@@ -331,7 +479,7 @@ export default function DashboardPage() {
             !profileData.pharmacy_id
           ) {
             throw new Error(
-              "Votre compte n'est associé à aucune pharmacie."
+              "Votre compte n'est associé à aucune pharmacie.",
             );
           }
 
@@ -356,29 +504,138 @@ export default function DashboardPage() {
                 city,
                 currency_code,
                 status
-                `
+                `,
               )
               .eq(
                 "id",
-                pharmacyId
+                pharmacyId,
               )
               .maybeSingle();
 
           if (pharmacyError) {
             throw new Error(
-              pharmacyError.message
+              pharmacyError.message,
             );
           }
 
           if (!pharmacyData) {
             throw new Error(
-              "La pharmacie associée à votre compte est introuvable."
+              "La pharmacie associée à votre compte est introuvable.",
             );
           }
 
+          const currentPharmacy =
+            pharmacyData as Pharmacy;
+
           setPharmacy(
-            pharmacyData as Pharmacy
+            currentPharmacy,
           );
+
+          /* ==================================================
+             PROTECTION STATUT PHARMACIE
+          ================================================== */
+
+          const pharmacyStatus =
+            String(
+              currentPharmacy.status ||
+                "",
+            )
+              .trim()
+              .toLowerCase();
+
+          /*
+           * Une pharmacie active ou en période d'essai
+           * peut utiliser le Dashboard.
+           */
+          if (
+            pharmacyStatus &&
+            pharmacyStatus !== "active" &&
+            pharmacyStatus !== "trial"
+          ) {
+            setRedirecting(true);
+
+            router.replace(
+              "/paiements?subscription=required",
+            );
+
+            return;
+          }
+
+          /* ==================================================
+             VÉRIFICATION ABONNEMENT
+          ================================================== */
+
+          const {
+            data: subscriptionData,
+            error: subscriptionError,
+          } =
+            await supabase
+              .from("subscriptions")
+              .select(
+                `
+                id,
+                status,
+                trial_started_at,
+                trial_ends_at,
+                expires_at,
+                plan_id
+                `,
+              )
+              .eq(
+                "pharmacy_id",
+                pharmacyId,
+              )
+              .order(
+                "created_at",
+                {
+                  ascending: false,
+                },
+              )
+              .limit(1)
+              .maybeSingle();
+
+          if (
+            subscriptionError
+          ) {
+            throw new Error(
+              subscriptionError.message,
+            );
+          }
+
+          const currentSubscription =
+            subscriptionData as
+              | Subscription
+              | null;
+
+          setSubscription(
+            currentSubscription,
+          );
+
+          /* --------------------------------------------------
+             CONTRÔLE D'ACCÈS
+          -------------------------------------------------- */
+
+          if (
+            !hasValidSubscription(
+              currentSubscription,
+            )
+          ) {
+            setRedirecting(true);
+
+            /*
+             * Nettoyage des données locales avant
+             * de rediriger vers le paiement.
+             */
+            setProducts([]);
+            setSales([]);
+            setTodaySales([]);
+
+            router.replace(
+              "/paiements?subscription=required",
+            );
+
+            return;
+          }
 
           /* ==================================================
              PRODUITS
@@ -398,32 +655,32 @@ export default function DashboardPage() {
                 minimum_stock,
                 selling_price,
                 is_active
-                `
+                `,
               )
               .eq(
                 "pharmacy_id",
-                pharmacyId
+                pharmacyId,
               )
               .eq(
                 "is_active",
-                true
+                true,
               )
               .order(
                 "name",
                 {
                   ascending: true,
-                }
+                },
               );
 
           if (productsError) {
             throw new Error(
-              productsError.message
+              productsError.message,
             );
           }
 
           setProducts(
             (productsData ||
-              []) as Product[]
+              []) as Product[],
           );
 
           /* ==================================================
@@ -443,17 +700,17 @@ export default function DashboardPage() {
                 total,
                 status,
                 created_at
-                `
+                `,
               )
               .eq(
                 "pharmacy_id",
-                pharmacyId
+                pharmacyId,
               )
               .order(
                 "created_at",
                 {
                   ascending: false,
-                }
+                },
               )
               .limit(5);
 
@@ -461,13 +718,13 @@ export default function DashboardPage() {
             recentSalesError
           ) {
             throw new Error(
-              recentSalesError.message
+              recentSalesError.message,
             );
           }
 
           setSales(
             (recentSalesData ||
-              []) as Sale[]
+              []) as Sale[],
           );
 
           /* ==================================================
@@ -481,7 +738,7 @@ export default function DashboardPage() {
             0,
             0,
             0,
-            0
+            0,
           );
 
           const {
@@ -497,47 +754,47 @@ export default function DashboardPage() {
                 total,
                 status,
                 created_at
-                `
+                `,
               )
               .eq(
                 "pharmacy_id",
-                pharmacyId
+                pharmacyId,
               )
               .gte(
                 "created_at",
-                startOfToday.toISOString()
+                startOfToday.toISOString(),
               )
               .order(
                 "created_at",
                 {
                   ascending: false,
-                }
+                },
               );
 
           if (
             todaySalesError
           ) {
             throw new Error(
-              todaySalesError.message
+              todaySalesError.message,
             );
           }
 
           setTodaySales(
             (todaySalesData ||
-              []) as Sale[]
+              []) as Sale[],
           );
         } catch (err) {
           console.error(
             "Dashboard:",
-            err
+            err,
           );
 
           setError(
             err instanceof Error
               ? err.message
               : tDashboard(
-                  "loadError"
-                )
+                  "loadError",
+                ),
           );
         } finally {
           setLoading(false);
@@ -547,9 +804,8 @@ export default function DashboardPage() {
       [
         router,
         supabase,
-        tCommon,
         tDashboard,
-      ]
+      ],
     );
 
   /* ==========================================================
@@ -571,14 +827,14 @@ export default function DashboardPage() {
     products.reduce(
       (
         total,
-        product
+        product,
       ) =>
         total +
         Number(
           product.stock_quantity ||
-            0
+            0,
         ),
-      0
+      0,
     );
 
   const lowStockProducts =
@@ -587,20 +843,20 @@ export default function DashboardPage() {
         const quantity =
           Number(
             product.stock_quantity ||
-              0
+              0,
           );
 
         const minimum =
           Number(
             product.minimum_stock ||
-              0
+              0,
           );
 
         return (
           quantity > 0 &&
           quantity <= minimum
         );
-      }
+      },
     );
 
   const outOfStockProducts =
@@ -608,8 +864,8 @@ export default function DashboardPage() {
       (product) =>
         Number(
           product.stock_quantity ||
-            0
-        ) <= 0
+            0,
+        ) <= 0,
     );
 
   const lowStock =
@@ -628,7 +884,7 @@ export default function DashboardPage() {
         const status =
           String(
             sale.status ||
-              ""
+              "",
           ).toLowerCase();
 
         return (
@@ -637,21 +893,21 @@ export default function DashboardPage() {
           status !==
             "refunded"
         );
-      }
+      },
     );
 
   const totalSalesToday =
     validTodaySales.reduce(
       (
         total,
-        sale
+        sale,
       ) =>
         total +
         Number(
           sale.total ||
-            0
+            0,
         ),
-      0
+      0,
     );
 
   const numberOfSalesToday =
@@ -663,7 +919,7 @@ export default function DashboardPage() {
 
   const locale: SupportedLocale =
     getLocaleFromCountry(
-      pharmacy?.country_code
+      pharmacy?.country_code,
     );
 
   const intlLocale =
@@ -672,11 +928,106 @@ export default function DashboardPage() {
       : "fr-FR";
 
   /* ==========================================================
+     INFORMATIONS ABONNEMENT
+  ========================================================== */
+
+  const subscriptionInfo =
+    useMemo<SubscriptionInfo>(() => {
+      if (!subscription) {
+        return {
+          status: "none",
+          daysRemaining: 0,
+          endDate: null,
+          isTrial: false,
+          isPaid: false,
+        };
+      }
+
+      const status = String(
+        subscription.status || "",
+      )
+        .trim()
+        .toLowerCase();
+
+      const isTrial =
+        status === "trial" ||
+        status === "trialing";
+
+      const isPaid =
+        status === "active" ||
+        status === "paid" ||
+        status === "cancelled";
+
+      const endDate = isTrial
+        ? subscription.trial_ends_at
+        : subscription.expires_at;
+
+      if (!endDate) {
+        return {
+          status,
+          daysRemaining: 0,
+          endDate: null,
+          isTrial,
+          isPaid,
+        };
+      }
+
+      const endTimestamp =
+        new Date(endDate).getTime();
+
+      if (!Number.isFinite(endTimestamp)) {
+        return {
+          status,
+          daysRemaining: 0,
+          endDate,
+          isTrial,
+          isPaid,
+        };
+      }
+
+      const difference =
+        endTimestamp - Date.now();
+
+      const daysRemaining =
+        Math.max(
+          0,
+          Math.ceil(
+            difference /
+              (1000 * 60 * 60 * 24),
+          ),
+        );
+
+      return {
+        status,
+        daysRemaining,
+        endDate,
+        isTrial,
+        isPaid,
+      };
+    }, [subscription]);
+
+  const subscriptionEndDate =
+    subscriptionInfo.endDate
+      ? new Intl.DateTimeFormat(
+          intlLocale,
+          {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          },
+        ).format(
+          new Date(
+            subscriptionInfo.endDate,
+          ),
+        )
+      : "—";
+
+  /* ==========================================================
      FORMAT MONNAIE
   ========================================================== */
 
   function formatMoney(
-    value: number
+    value: number,
   ) {
     const currency =
       pharmacy?.currency_code ||
@@ -687,9 +1038,9 @@ export default function DashboardPage() {
         intlLocale,
         {
           maximumFractionDigits: 0,
-        }
+        },
       ).format(
-        Number(value || 0)
+        Number(value || 0),
       ) +
       ` ${currency}`
     );
@@ -700,7 +1051,7 @@ export default function DashboardPage() {
   ========================================================== */
 
   function formatDate(
-    value: string
+    value: string,
   ) {
     return new Intl.DateTimeFormat(
       intlLocale,
@@ -710,9 +1061,9 @@ export default function DashboardPage() {
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
-      }
+      },
     ).format(
-      new Date(value)
+      new Date(value),
     );
   }
 
@@ -728,9 +1079,9 @@ export default function DashboardPage() {
         day: "numeric",
         month: "long",
         year: "numeric",
-      }
+      },
     ).format(
-      new Date()
+      new Date(),
     );
   }
 
@@ -742,7 +1093,7 @@ export default function DashboardPage() {
     name:
       | string
       | null
-      | undefined
+      | undefined,
   ) {
     if (!name) {
       return "PF";
@@ -778,11 +1129,11 @@ export default function DashboardPage() {
     status:
       | string
       | null
-      | undefined
+      | undefined,
   ) {
     const value =
       String(
-        status || ""
+        status || "",
       ).toLowerCase();
 
     const statuses: Record<
@@ -823,11 +1174,11 @@ export default function DashboardPage() {
     status:
       | string
       | null
-      | undefined
+      | undefined,
   ) {
     const value =
       String(
-        status || ""
+        status || "",
       ).toLowerCase();
 
     if (
@@ -857,7 +1208,7 @@ export default function DashboardPage() {
     await supabase.auth.signOut();
 
     router.replace(
-      "/login"
+      "/login",
     );
   }
 
@@ -886,7 +1237,9 @@ export default function DashboardPage() {
 
           <p>
             {redirecting
-              ? tDashboard("redirecting")
+              ? tDashboard(
+                  "redirecting",
+                )
               : tCommon("loading")}
           </p>
 
@@ -939,7 +1292,7 @@ export default function DashboardPage() {
             className="pf-brand-button"
             onClick={() =>
               router.push(
-                "/dashboard"
+                "/dashboard",
               )
             }
           >
@@ -956,23 +1309,12 @@ export default function DashboardPage() {
 
               <small>
                 {tDashboard(
-                  "pharmacyManagement"
+                  "pharmacyManagement",
                 )}
               </small>
 
             </span>
 
-          </button>
-
-          <button
-            type="button"
-            className="pf-sidebar-close"
-            onClick={() =>
-              setMobileMenu(false)
-            }
-            aria-label={tCommon("close")}
-          >
-            ×
           </button>
 
         </div>
@@ -1019,7 +1361,7 @@ export default function DashboardPage() {
 
           <p className="pf-nav-title">
             {tDashboard(
-              "mainMenu"
+              "mainMenu",
             )}
           </p>
 
@@ -1067,11 +1409,11 @@ export default function DashboardPage() {
                   type="button"
                   onClick={() => {
                     setMobileMenu(
-                      false
+                      false,
                     );
 
                     router.push(
-                      item.href
+                      item.href,
                     );
                   }}
                   className={`pf-nav-item ${
@@ -1097,7 +1439,7 @@ export default function DashboardPage() {
 
                 </button>
               );
-            }
+            },
           )}
 
         </nav>
@@ -1114,13 +1456,13 @@ export default function DashboardPage() {
 
             <strong>
               {tDashboard(
-                "needHelp"
+                "needHelp",
               )}
             </strong>
 
             <span>
               {tDashboard(
-                "supportAvailable"
+                "supportAvailable",
               )}
             </span>
 
@@ -1135,7 +1477,7 @@ export default function DashboardPage() {
           <div className="pf-avatar">
 
             {getInitials(
-              profile?.full_name
+              profile?.full_name,
             )}
 
           </div>
@@ -1183,11 +1525,11 @@ export default function DashboardPage() {
               className="pf-mobile-menu-button"
               onClick={() =>
                 setMobileMenu(
-                  true
+                  true,
                 )
               }
               aria-label={tDashboard(
-                "openMenu"
+                "openMenu",
               )}
             >
               ☰
@@ -1197,20 +1539,20 @@ export default function DashboardPage() {
 
               <span className="pf-header-label">
                 {tNav(
-                  "dashboard"
+                  "dashboard",
                 ).toUpperCase()}
               </span>
 
               <h1>
 
                 {tDashboard(
-                  "hello"
+                  "hello",
                 )}{" "}
 
                 {profile?.full_name
                   ?.split(" ")[0] ||
                   tDashboard(
-                    "you"
+                    "you",
                   )}{" "}
 
                 <span>
@@ -1231,7 +1573,7 @@ export default function DashboardPage() {
               title={tCommon("refresh")}
               onClick={() =>
                 loadDashboard(
-                  true
+                  true,
                 )
               }
             >
@@ -1252,7 +1594,7 @@ export default function DashboardPage() {
               type="button"
               className="pf-header-icon-button pf-notification-button"
               title={tDashboard(
-                "notifications"
+                "notifications",
               )}
             >
 
@@ -1269,7 +1611,7 @@ export default function DashboardPage() {
               <div className="pf-avatar pf-avatar-small">
 
                 {getInitials(
-                  profile?.full_name
+                  profile?.full_name,
                 )}
 
               </div>
@@ -1292,7 +1634,8 @@ export default function DashboardPage() {
           </div>
 
         </header>
-                {/* ====================================================
+
+        {/* ====================================================
             CONTENU DU DASHBOARD
         ==================================================== */}
 
@@ -1313,7 +1656,7 @@ export default function DashboardPage() {
 
                 <strong>
                   {tDashboard(
-                    "loadErrorTitle"
+                    "loadErrorTitle",
                   )}
                 </strong>
 
@@ -1349,14 +1692,14 @@ export default function DashboardPage() {
 
               <h2>
                 {tDashboard(
-                  "overview"
+                  "overview",
                 )}
               </h2>
 
               <p>
 
                 {tDashboard(
-                  "activityOf"
+                  "activityOf",
                 )}{" "}
 
                 <strong>
@@ -1365,7 +1708,7 @@ export default function DashboardPage() {
                 </strong>{" "}
 
                 {tDashboard(
-                  "today"
+                  "today",
                 )}
 
               </p>
@@ -1381,7 +1724,7 @@ export default function DashboardPage() {
                 className="pf-secondary-button"
                 onClick={() =>
                   router.push(
-                    "/products"
+                    "/produits",
                   )
                 }
               >
@@ -1391,7 +1734,7 @@ export default function DashboardPage() {
                 </span>
 
                 {tProducts(
-                  "addProduct"
+                  "addProduct",
                 )}
 
               </button>
@@ -1403,7 +1746,7 @@ export default function DashboardPage() {
                 className="pf-primary-button"
                 onClick={() =>
                   router.push(
-                    "/ventes"
+                    "/ventes",
                   )
                 }
               >
@@ -1413,7 +1756,7 @@ export default function DashboardPage() {
                 </span>
 
                 {tSales(
-                  "newSale"
+                  "newSale",
                 )}
 
               </button>
@@ -1438,7 +1781,7 @@ export default function DashboardPage() {
 
                 <span>
                   {tDashboard(
-                    "pharmacySpace"
+                    "pharmacySpace",
                   )}
                 </span>
 
@@ -1475,7 +1818,7 @@ export default function DashboardPage() {
 
                 <span>
                   {tCommon(
-                    "status"
+                    "status",
                   ).toUpperCase()}
                 </span>
 
@@ -1484,7 +1827,7 @@ export default function DashboardPage() {
                   {pharmacy?.status ===
                   "active"
                     ? tDashboard(
-                        "pharmacyActive"
+                        "pharmacyActive",
                       )
                     : pharmacy?.status ||
                       tCommon("active")}
@@ -1492,6 +1835,102 @@ export default function DashboardPage() {
                 </strong>
 
               </div>
+
+            </div>
+
+          </section>
+
+          {/* ==================================================
+              ABONNEMENT
+          ================================================== */}
+
+          <section
+            className={`pf-subscription-card ${
+              subscriptionInfo.daysRemaining <= 3
+                ? "pf-subscription-warning"
+                : ""
+            }`}
+          >
+
+            <div className="pf-subscription-main">
+
+              <div className="pf-subscription-icon">
+                ⏳
+              </div>
+
+              <div className="pf-subscription-content">
+
+                <span className="pf-subscription-label">
+                  {subscriptionInfo.isTrial
+                    ? "ESSAI GRATUIT"
+                    : "ABONNEMENT"}
+                </span>
+
+                <h3>
+                  {subscriptionInfo.daysRemaining > 0
+                    ? subscriptionInfo.isTrial
+                      ? `Il vous reste ${subscriptionInfo.daysRemaining} jour${
+                          subscriptionInfo.daysRemaining > 1
+                            ? "s"
+                            : ""
+                        } d’essai gratuit`
+                      : `Il vous reste ${subscriptionInfo.daysRemaining} jour${
+                          subscriptionInfo.daysRemaining > 1
+                            ? "s"
+                            : ""
+                        } sur votre abonnement`
+                    : "Votre abonnement a expiré"}
+                </h3>
+
+                <p>
+                  {subscriptionInfo.endDate
+                    ? `Valable jusqu’au ${subscriptionEndDate}`
+                    : "Aucune date d’expiration disponible"}
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="pf-subscription-right">
+
+              <div className="pf-subscription-days">
+
+                <strong>
+                  {subscriptionInfo.daysRemaining}
+                </strong>
+
+                <span>
+                  {subscriptionInfo.daysRemaining > 1
+                    ? "jours restants"
+                    : "jour restant"}
+                </span>
+
+              </div>
+
+              <button
+                type="button"
+                className="pf-subscription-button"
+                onClick={() =>
+                  router.push(
+                    "/abonnement",
+                  )
+                }
+              >
+
+                <span>
+                  💳
+                </span>
+
+                {subscriptionInfo.isTrial
+                  ? "Choisir un abonnement"
+                  : "Payer en avance"}
+
+                <span>
+                  →
+                </span>
+
+              </button>
 
             </div>
 
@@ -1509,17 +1948,17 @@ export default function DashboardPage() {
               icon="◈"
               iconClass="pf-kpi-teal"
               label={tDashboard(
-                "activeProducts"
+                "activeProducts",
               )}
               value={activeProducts.toLocaleString(
-                intlLocale
+                intlLocale,
               )}
               description={tDashboard(
-                "availableReferences"
+                "availableReferences",
               )}
               onClick={() =>
                 router.push(
-                  "/products"
+                  "/produits",
                 )
               }
             />
@@ -1530,17 +1969,17 @@ export default function DashboardPage() {
               icon="▣"
               iconClass="pf-kpi-blue"
               label={tDashboard(
-                "stockUnits"
+                "stockUnits",
               )}
               value={totalStock.toLocaleString(
-                intlLocale
+                intlLocale,
               )}
               description={tDashboard(
-                "totalAvailableQuantity"
+                "totalAvailableQuantity",
               )}
               onClick={() =>
                 router.push(
-                  "/stock"
+                  "/stock",
                 )
               }
             />
@@ -1555,13 +1994,13 @@ export default function DashboardPage() {
                   : "pf-kpi-green"
               }
               label={tDashboard(
-                "stockAlerts"
+                "stockAlerts",
               )}
               value={(
                 lowStock +
                 outOfStock
               ).toLocaleString(
-                intlLocale
+                intlLocale,
               )}
               description={
                 outOfStock > 0
@@ -1570,19 +2009,19 @@ export default function DashboardPage() {
                       {
                         outOfStock,
                         lowStock,
-                      }
+                      },
                     )
                   : lowStock > 0
-                  ? tDashboard(
-                      "productsToWatch",
-                      {
-                        count:
-                          lowStock,
-                      }
-                    )
-                  : tDashboard(
-                      "healthyStock"
-                    )
+                    ? tDashboard(
+                        "productsToWatch",
+                        {
+                          count:
+                            lowStock,
+                        },
+                      )
+                    : tDashboard(
+                        "healthyStock",
+                      )
               }
               warning={
                 lowStock +
@@ -1591,7 +2030,7 @@ export default function DashboardPage() {
               }
               onClick={() =>
                 router.push(
-                  "/stock"
+                  "/stock",
                 )
               }
             />
@@ -1602,22 +2041,22 @@ export default function DashboardPage() {
               icon="₣"
               iconClass="pf-kpi-green"
               label={tDashboard(
-                "todaySales"
+                "todaySales",
               )}
               value={formatMoney(
-                totalSalesToday
+                totalSalesToday,
               )}
               description={tDashboard(
                 "salesToday",
                 {
                   count:
                     numberOfSalesToday,
-                }
+                },
               )}
               success
               onClick={() =>
                 router.push(
-                  "/ventes"
+                  "/ventes",
                 )
               }
             />
@@ -1642,19 +2081,19 @@ export default function DashboardPage() {
 
                   <span className="pf-panel-eyebrow">
                     {tDashboard(
-                      "activity"
+                      "activity",
                     ).toUpperCase()}
                   </span>
 
                   <h3>
                     {tSales(
-                      "recentSales"
+                      "recentSales",
                     )}
                   </h3>
 
                   <p>
                     {tDashboard(
-                      "recentTransactions"
+                      "recentTransactions",
                     )}
                   </p>
 
@@ -1665,13 +2104,13 @@ export default function DashboardPage() {
                   className="pf-link-button"
                   onClick={() =>
                     router.push(
-                      "/ventes"
+                      "/ventes",
                     )
                   }
                 >
 
                   {tDashboard(
-                    "viewAll"
+                    "viewAll",
                   )}
 
                   <span>
@@ -1692,25 +2131,25 @@ export default function DashboardPage() {
 
                       <th>
                         {tSales(
-                          "sale"
+                          "sale",
                         )}
                       </th>
 
                       <th>
                         {tCommon(
-                          "date"
+                          "date",
                         )}
                       </th>
 
                       <th>
                         {tSales(
-                          "total"
+                          "total",
                         )}
                       </th>
 
                       <th>
                         {tCommon(
-                          "status"
+                          "status",
                         )}
                       </th>
 
@@ -1738,13 +2177,13 @@ export default function DashboardPage() {
 
                             <strong>
                               {tSales(
-                                "noSales"
+                                "noSales",
                               )}
                             </strong>
 
                             <span>
                               {tDashboard(
-                                "salesAppearHere"
+                                "salesAppearHere",
                               )}
                             </span>
 
@@ -1786,7 +2225,7 @@ export default function DashboardPage() {
                               <span className="pf-date-value">
 
                                 {formatDate(
-                                  sale.created_at
+                                  sale.created_at,
                                 )}
 
                               </span>
@@ -1800,8 +2239,8 @@ export default function DashboardPage() {
                                 {formatMoney(
                                   Number(
                                     sale.total ||
-                                      0
-                                  )
+                                      0,
+                                  ),
                                 )}
 
                               </strong>
@@ -1812,14 +2251,14 @@ export default function DashboardPage() {
 
                               <span
                                 className={`pf-status-badge ${getStatusClass(
-                                  sale.status
+                                  sale.status,
                                 )}`}
                               >
 
                                 <span />
 
                                 {getStatusLabel(
-                                  sale.status
+                                  sale.status,
                                 )}
 
                               </span>
@@ -1828,7 +2267,7 @@ export default function DashboardPage() {
 
                           </tr>
 
-                        )
+                        ),
                       )
 
                     )}
@@ -1853,19 +2292,19 @@ export default function DashboardPage() {
 
                   <span className="pf-panel-eyebrow">
                     {tDashboard(
-                      "inventory"
+                      "inventory",
                     ).toUpperCase()}
                   </span>
 
                   <h3>
                     {tStock(
-                      "title"
+                      "title",
                     )}
                   </h3>
 
                   <p>
                     {tDashboard(
-                      "productsNeedAttention"
+                      "productsNeedAttention",
                     )}
                   </p>
 
@@ -1876,13 +2315,13 @@ export default function DashboardPage() {
                   className="pf-link-button"
                   onClick={() =>
                     router.push(
-                      "/stock"
+                      "/stock",
                     )
                   }
                 >
 
                   {tNav(
-                    "stock"
+                    "stock",
                   )}
 
                   <span>
@@ -1901,7 +2340,7 @@ export default function DashboardPage() {
 
                   <span>
                     {tDashboard(
-                      "activeProducts"
+                      "activeProducts",
                     )}
                   </span>
 
@@ -1915,7 +2354,7 @@ export default function DashboardPage() {
 
                   <span>
                     {tStock(
-                      "lowStock"
+                      "lowStock",
                     )}
                   </span>
 
@@ -1929,7 +2368,7 @@ export default function DashboardPage() {
 
                   <span>
                     {tStock(
-                      "outOfStock"
+                      "outOfStock",
                     )}
                   </span>
 
@@ -1949,11 +2388,11 @@ export default function DashboardPage() {
                   .filter(
                     (product) =>
                       Number(
-                        product.stock_quantity
+                        product.stock_quantity,
                       ) <=
                       Number(
-                        product.minimum_stock
-                      )
+                        product.minimum_stock,
+                      ),
                   )
                   .slice(0, 5)
                   .map(
@@ -1962,13 +2401,13 @@ export default function DashboardPage() {
                       const quantity =
                         Number(
                           product.stock_quantity ||
-                            0
+                            0,
                         );
 
                       const minimum =
                         Number(
                           product.minimum_stock ||
-                            0
+                            0,
                         );
 
                       const isOut =
@@ -2000,7 +2439,7 @@ export default function DashboardPage() {
                             <span>
 
                               {tStock(
-                                "minimumRequired"
+                                "minimumRequired",
                               )}{" "}
 
                               {minimum}
@@ -2023,7 +2462,7 @@ export default function DashboardPage() {
 
                             <span>
                               {tStock(
-                                "units"
+                                "units",
                               )}
                             </span>
 
@@ -2032,7 +2471,7 @@ export default function DashboardPage() {
                         </div>
 
                       );
-                    }
+                    },
                   )}
 
                 {/* AUCUNE ALERTE */}
@@ -2048,13 +2487,13 @@ export default function DashboardPage() {
 
                       <strong>
                         {tDashboard(
-                          "everythingGood"
+                          "everythingGood",
                         )}
                       </strong>
 
                       <span>
                         {tDashboard(
-                          "noProductNeedsAttention"
+                          "noProductNeedsAttention",
                         )}
                       </span>
 
@@ -2067,7 +2506,8 @@ export default function DashboardPage() {
             </div>
 
           </section>
-                    {/* ==================================================
+
+          {/* ==================================================
               ACTIONS RAPIDES
           ================================================== */}
 
@@ -2079,13 +2519,13 @@ export default function DashboardPage() {
 
                 <span>
                   {tDashboard(
-                    "productivity"
+                    "productivity",
                   ).toUpperCase()}
                 </span>
 
                 <h3>
                   {tDashboard(
-                    "quickActions"
+                    "quickActions",
                   )}
                 </h3>
 
@@ -2098,21 +2538,21 @@ export default function DashboardPage() {
               <QuickAction
                 icon="◈"
                 title={tDashboard(
-                  "manageProducts"
+                  "manageProducts",
                 )}
                 description={tDashboard(
-                  "manageProductsDescription"
+                  "manageProductsDescription",
                 )}
-                href="/products"
+                href="/produits"
               />
 
               <QuickAction
                 icon="▣"
                 title={tDashboard(
-                  "manageStock"
+                  "manageStock",
                 )}
                 description={tDashboard(
-                  "manageStockDescription"
+                  "manageStockDescription",
                 )}
                 href="/stock"
               />
@@ -2120,10 +2560,10 @@ export default function DashboardPage() {
               <QuickAction
                 icon="▤"
                 title={tSales(
-                  "newSale"
+                  "newSale",
                 )}
                 description={tDashboard(
-                  "newSaleDescription"
+                  "newSaleDescription",
                 )}
                 href="/ventes"
                 primary
@@ -2132,10 +2572,10 @@ export default function DashboardPage() {
               <QuickAction
                 icon="◒"
                 title={tReports(
-                  "title"
+                  "title",
                 )}
                 description={tDashboard(
-                  "reportsDescription"
+                  "reportsDescription",
                 )}
                 href="/rapports"
               />
@@ -2162,7 +2602,7 @@ export default function DashboardPage() {
 
               <span>
                 {tDashboard(
-                  "pharmacyManagement"
+                  "pharmacyManagement",
                 )}
               </span>
 
@@ -2209,9 +2649,7 @@ function DashboardStat({
   success?: boolean;
   onClick: () => void;
 }) {
-
   return (
-
     <button
       type="button"
       className={`pf-kpi-card ${
@@ -2273,12 +2711,10 @@ function QuickAction({
   href: string;
   primary?: boolean;
 }) {
-
   const router =
     useRouter();
 
   return (
-
     <button
       type="button"
       className={`pf-quick-card ${

@@ -1,7 +1,6 @@
 import { requireSuperAdmin } from "@/app/lib/super-admin/auth";
 import { createSuperAdminClient } from "@/app/lib/super-admin/admin-client";
 
-
 export const dynamic = "force-dynamic";
 
 type StatCardProps = {
@@ -131,6 +130,7 @@ export default async function SuperAdminDashboardPage() {
     salesResult,
     paymentsResult,
     revenueResult,
+    currenciesResult,
   ] = await Promise.all([
     supabase
       .from("pharmacies")
@@ -175,6 +175,14 @@ export default async function SuperAdminDashboardPage() {
         "in",
         "(cancelled,refunded)",
       ),
+
+    supabase
+      .from("platform_currencies")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("is_active", true),
   ]);
 
   const pharmaciesCount =
@@ -191,6 +199,9 @@ export default async function SuperAdminDashboardPage() {
 
   const paymentsCount =
     paymentsResult.count ?? 0;
+
+  const currenciesCount =
+    currenciesResult.count ?? 0;
 
   let totalRevenue = 0;
 
@@ -257,6 +268,10 @@ export default async function SuperAdminDashboardPage() {
 
         <div className="sa-sidebar-scroll">
 
+          {/* ==================================================
+              VUE GÉNÉRALE
+          ================================================== */}
+
           <div className="sa-nav-title">
             Vue générale
           </div>
@@ -277,6 +292,11 @@ export default async function SuperAdminDashboardPage() {
             </a>
 
           </nav>
+
+
+          {/* ==================================================
+              ÉCOSYSTÈME PHARMAFLOW
+          ================================================== */}
 
           <div className="sa-nav-title">
             Écosystème PharmaFlow
@@ -337,6 +357,12 @@ export default async function SuperAdminDashboardPage() {
             </a>
 
           </nav>
+
+
+          {/* ==================================================
+              OPÉRATIONS
+          ================================================== */}
+
           <div className="sa-nav-title">
             Opérations
           </div>
@@ -388,6 +414,11 @@ export default async function SuperAdminDashboardPage() {
 
           </nav>
 
+
+          {/* ==================================================
+              CONTRÔLE & CONFIGURATION
+          ================================================== */}
+
           <div className="sa-nav-title">
             Contrôle & configuration
           </div>
@@ -404,6 +435,23 @@ export default async function SuperAdminDashboardPage() {
 
               <span>
                 Journal d'audit
+              </span>
+            </a>
+
+            <a
+              href="/super-admin/devises"
+              className="sa-nav-link"
+            >
+              <span className="sa-nav-icon">
+                💱
+              </span>
+
+              <span>
+                Devises internationales
+              </span>
+
+              <span className="sa-nav-count">
+                {currenciesCount}
               </span>
             </a>
 
@@ -448,6 +496,11 @@ export default async function SuperAdminDashboardPage() {
 
           </nav>
 
+
+          {/* ==================================================
+              NAVIGATION
+          ================================================== */}
+
           <div className="sa-nav-title">
             Navigation
           </div>
@@ -471,6 +524,11 @@ export default async function SuperAdminDashboardPage() {
 
         </div>
 
+
+        {/* ==================================================
+            FOOTER SIDEBAR
+        ================================================== */}
+
         <div className="sa-sidebar-footer">
 
           <div className="sa-security-status">
@@ -478,6 +536,7 @@ export default async function SuperAdminDashboardPage() {
             <span className="sa-security-dot" />
 
             <div>
+
               <strong>
                 Plateforme sécurisée
               </strong>
@@ -485,6 +544,7 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Accès Super Admin
               </span>
+
             </div>
 
           </div>
@@ -500,11 +560,16 @@ export default async function SuperAdminDashboardPage() {
 
       <main className="sa-main">
 
+        {/* ====================================================
+            HEADER
+        ==================================================== */}
+
         <header className="sa-header">
 
           <div className="sa-header-left">
 
             <div className="sa-breadcrumb">
+
               <span>
                 PharmaFlow
               </span>
@@ -516,9 +581,11 @@ export default async function SuperAdminDashboardPage() {
               <strong>
                 Super Admin
               </strong>
+
             </div>
 
           </div>
+
 
           <div className="sa-header-right">
 
@@ -561,6 +628,10 @@ export default async function SuperAdminDashboardPage() {
 
         <div className="sa-content">
 
+          {/* ==================================================
+              BIENVENUE
+          ================================================== */}
+
           <section className="sa-welcome">
 
             <div className="sa-welcome-content">
@@ -578,11 +649,13 @@ export default async function SuperAdminDashboardPage() {
               <p>
                 Pilotez l'écosystème PharmaFlow,
                 les pharmacies, les abonnements,
-                les transactions et les opérations
+                les transactions, les devises
+                internationales et les opérations
                 de support depuis un espace centralisé.
               </p>
 
             </div>
+
 
             <div className="sa-welcome-actions">
 
@@ -714,6 +787,8 @@ export default async function SuperAdminDashboardPage() {
             </div>
 
           </section>
+
+
           {/* ==================================================
               ADMINISTRATION DE LA PLATEFORME
           ================================================== */}
@@ -786,6 +861,7 @@ export default async function SuperAdminDashboardPage() {
                 </span>
 
                 <span className="sa-quick-content">
+
                   <strong>
                     Traiter une réclamation
                   </strong>
@@ -793,11 +869,13 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     Vérifier un paiement ou une activation
                   </small>
+
                 </span>
 
                 <span className="sa-quick-arrow">
                   →
                 </span>
+
               </a>
 
 
@@ -810,6 +888,7 @@ export default async function SuperAdminDashboardPage() {
                 </span>
 
                 <span className="sa-quick-content">
+
                   <strong>
                     Vérifier un abonnement
                   </strong>
@@ -817,11 +896,13 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     Contrôler l'état d'un abonnement SaaS
                   </small>
+
                 </span>
 
                 <span className="sa-quick-arrow">
                   →
                 </span>
+
               </a>
 
 
@@ -834,6 +915,7 @@ export default async function SuperAdminDashboardPage() {
                 </span>
 
                 <span className="sa-quick-content">
+
                   <strong>
                     Vérifier une transaction
                   </strong>
@@ -841,11 +923,40 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     Rechercher et contrôler un paiement
                   </small>
+
                 </span>
 
                 <span className="sa-quick-arrow">
                   →
                 </span>
+
+              </a>
+
+
+              <a
+                href="/super-admin/devises"
+                className="sa-quick-action"
+              >
+                <span className="sa-quick-icon">
+                  💱
+                </span>
+
+                <span className="sa-quick-content">
+
+                  <strong>
+                    Gérer les devises
+                  </strong>
+
+                  <small>
+                    Configurer les devises internationales de PharmaFlow
+                  </small>
+
+                </span>
+
+                <span className="sa-quick-arrow">
+                  →
+                </span>
+
               </a>
 
 
@@ -858,6 +969,7 @@ export default async function SuperAdminDashboardPage() {
                 </span>
 
                 <span className="sa-quick-content">
+
                   <strong>
                     Ouvrir le Centre IA
                   </strong>
@@ -865,11 +977,13 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     Analyser les dossiers et recommandations
                   </small>
+
                 </span>
 
                 <span className="sa-quick-arrow">
                   →
                 </span>
+
               </a>
 
             </div>
@@ -987,7 +1101,7 @@ export default async function SuperAdminDashboardPage() {
 
             <SectionHeader
               title="Paiements & intégrations"
-              description="Préparez l'écosystème PharmaFlow pour les services externes et le déploiement international."
+              description="Préparez l'écosystème PharmaFlow pour les services externes, les devises et le déploiement international."
             />
 
             <div className="sa-integration-grid">
@@ -1015,6 +1129,36 @@ export default async function SuperAdminDashboardPage() {
 
                   <span>
                     Configurer →
+                  </span>
+
+                </div>
+
+              </a>
+
+
+              <a
+                href="/super-admin/devises"
+                className="sa-integration-card"
+              >
+
+                <div className="sa-integration-icon">
+                  💱
+                </div>
+
+                <div className="sa-integration-content">
+
+                  <h3>
+                    Devises internationales
+                  </h3>
+
+                  <p>
+                    Gérez les devises disponibles,
+                    leur statut et les paramètres
+                    indicatifs utilisés par PharmaFlow.
+                  </p>
+
+                  <span>
+                    Gérer les devises →
                   </span>
 
                 </div>
@@ -1084,6 +1228,8 @@ export default async function SuperAdminDashboardPage() {
             </div>
 
           </section>
+
+
           {/* ==================================================
               DÉPLOIEMENT INTERNATIONAL
           ================================================== */}
@@ -1119,47 +1265,87 @@ export default async function SuperAdminDashboardPage() {
 
               </div>
 
+
               <div className="sa-international-items">
 
-                <div className="sa-international-item">
+                <a
+                  href="/super-admin/site"
+                  className="sa-international-item"
+                  style={{
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
                   <span>🌐</span>
+
                   <strong>
                     Multilingue
                   </strong>
+
                   <small>
                     FR / EN
                   </small>
-                </div>
+                </a>
 
-                <div className="sa-international-item">
+
+                <a
+                  href="/super-admin/devises"
+                  className="sa-international-item"
+                  style={{
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
                   <span>💱</span>
+
                   <strong>
                     Multi-devises
                   </strong>
-                  <small>
-                    Selon le pays
-                  </small>
-                </div>
 
-                <div className="sa-international-item">
+                  <small>
+                    {currenciesCount} actives
+                  </small>
+                </a>
+
+
+                <a
+                  href="/super-admin/integrations"
+                  className="sa-international-item"
+                  style={{
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
                   <span>💳</span>
+
                   <strong>
                     Paiements
                   </strong>
+
                   <small>
                     APIs & agrégateurs
                   </small>
-                </div>
+                </a>
 
-                <div className="sa-international-item">
+
+                <a
+                  href="/super-admin/parametres"
+                  className="sa-international-item"
+                  style={{
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
                   <span>🔐</span>
+
                   <strong>
                     Sécurité
                   </strong>
+
                   <small>
                     Contrôle plateforme
                   </small>
-                </div>
+                </a>
 
               </div>
 
@@ -1291,7 +1477,14 @@ export default async function SuperAdminDashboardPage() {
               </div>
 
 
-              <div className="sa-control-card">
+              <a
+                href="/super-admin/devises"
+                className="sa-control-card"
+                style={{
+                  textDecoration: "none",
+                  color: "inherit",
+                }}
+              >
 
                 <span className="sa-control-number">
                   06
@@ -1310,7 +1503,7 @@ export default async function SuperAdminDashboardPage() {
                   intégrations internationales.
                 </p>
 
-              </div>
+              </a>
 
             </div>
 
@@ -1343,10 +1536,14 @@ export default async function SuperAdminDashboardPage() {
 
             </div>
 
+
             <div className="sa-footer-center">
-              © {new Date().getFullYear()} PharmaFlow.
+
+              ©️ {new Date().getFullYear()} PharmaFlow.
               Tous droits réservés.
+
             </div>
+
 
             <div className="sa-footer-status">
 

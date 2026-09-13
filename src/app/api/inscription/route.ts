@@ -14,6 +14,12 @@ type SubscriptionPlan = {
   is_active: boolean;
 };
 
+/**
+ * ============================================================
+ * NORMALISATION
+ * ============================================================
+ */
+
 function normalizeText(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -37,6 +43,12 @@ function normalizeLanguage(
 ): Locale {
   return value === "en" ? "en" : "fr";
 }
+
+/**
+ * ============================================================
+ * DEVISE SELON LE PAYS
+ * ============================================================
+ */
 
 function getCurrencyForCountry(
   countryCode: string,
@@ -90,6 +102,12 @@ function getCurrencyForCountry(
   return currencies[countryCode] ?? "USD";
 }
 
+/**
+ * ============================================================
+ * RÉPONSE D'ERREUR
+ * ============================================================
+ */
+
 function errorResponse(
   message: string,
   status = 400,
@@ -105,10 +123,16 @@ function errorResponse(
   );
 }
 
+/**
+ * ============================================================
+ * INSCRIPTION
+ * ============================================================
+ */
+
 export async function POST(
   request: NextRequest,
 ) {
-  /*
+  /**
    * ==========================================================
    * 1. LECTURE DES DONNÉES
    * ==========================================================
@@ -134,50 +158,58 @@ export async function POST(
     );
   }
 
-  /*
+  /**
    * ==========================================================
    * 2. RÉCUPÉRATION DES CHAMPS
    * ==========================================================
    */
 
-  const pharmacyName = normalizeText(
-    body.pharmacyName,
-  );
+  const pharmacyName =
+    normalizeText(
+      body.pharmacyName,
+    );
 
-  const address = normalizeText(
-    body.address,
-  );
+  const address =
+    normalizeText(
+      body.address,
+    );
 
   const countryCode =
     normalizeCountryCode(
       body.countryCode,
     );
 
-  const city = normalizeText(
-    body.city,
-  );
+  const city =
+    normalizeText(
+      body.city,
+    );
 
-  const fullName = normalizeText(
-    body.fullName,
-  );
+  const fullName =
+    normalizeText(
+      body.fullName,
+    );
 
-  const phone = normalizeText(
-    body.phone,
-  );
+  const phone =
+    normalizeText(
+      body.phone,
+    );
 
-  const email = normalizeEmail(
-    body.email,
-  );
+  const email =
+    normalizeEmail(
+      body.email,
+    );
 
-  const password = String(
-    body.password ?? "",
-  );
+  const password =
+    String(
+      body.password ?? "",
+    );
 
-  const language = normalizeLanguage(
-    body.language,
-  );
+  const language =
+    normalizeLanguage(
+      body.language,
+    );
 
-  /*
+  /**
    * ==========================================================
    * 3. VALIDATION DES CHAMPS
    * ==========================================================
@@ -217,7 +249,7 @@ export async function POST(
     );
   }
 
-  /*
+  /**
    * ==========================================================
    * 4. DEVISE DE LA PHARMACIE
    * ==========================================================
@@ -228,12 +260,13 @@ export async function POST(
       countryCode,
     );
 
-  /*
+  /**
    * ==========================================================
    * 5. CLIENT ADMIN SUPABASE
    * ==========================================================
    *
-   * Ce client reste exclusivement côté serveur.
+   * Le client Admin Supabase est utilisé uniquement côté
+   * serveur.
    */
 
   let supabaseAdmin;
@@ -253,13 +286,10 @@ export async function POST(
     );
   }
 
-  /*
+  /**
    * ==========================================================
    * 6. CRÉATION DU COMPTE AUTH
    * ==========================================================
-   *
-   * Nous laissons Supabase gérer les éventuels doublons
-   * d'adresse e-mail.
    */
 
   const {
@@ -273,19 +303,23 @@ export async function POST(
 
         /*
          * Le compte peut se connecter immédiatement.
-         * La vérification e-mail pourra être ajoutée plus tard
-         * si nous décidons de l'activer.
          */
         email_confirm: true,
 
         user_metadata: {
-          full_name: fullName,
+          full_name:
+            fullName,
+
           phone,
+
           pharmacy_name:
             pharmacyName,
+
           country_code:
             countryCode,
+
           city,
+
           language,
         },
       },
@@ -324,14 +358,14 @@ export async function POST(
   let profileCreated =
     false;
 
-  /*
+  /**
    * ==========================================================
-   * 7. CRÉATION DE LA PHARMACIE + PROFIL + TRIAL
+   * 7. CRÉATION PHARMACIE + PROFIL + TRIAL
    * ==========================================================
    */
 
   try {
-    /*
+    /**
      * ========================================================
      * 7.1 CRÉATION DE LA PHARMACIE
      * ========================================================
@@ -342,9 +376,12 @@ export async function POST(
       error: pharmacyError,
     } =
       await supabaseAdmin
-        .from("pharmacies")
+        .from(
+          "pharmacies",
+        )
         .insert({
-          name: pharmacyName,
+          name:
+            pharmacyName,
 
           address,
 
@@ -384,22 +421,23 @@ export async function POST(
     pharmacyId =
       pharmacyData.id;
 
-    /*
+    /**
      * ========================================================
      * 7.2 CRÉATION DU PROFIL
      * ========================================================
-     *
-     * profiles.language = langue personnelle du compte.
      */
 
     const {
       error: profileError,
     } =
       await supabaseAdmin
-        .from("profiles")
+        .from(
+          "profiles",
+        )
         .upsert(
           {
-            id: userId,
+            id:
+              userId,
 
             full_name:
               fullName,
@@ -434,26 +472,20 @@ export async function POST(
     profileCreated =
       true;
 
-    /*
+    /**
      * ========================================================
-     * 7.3 RECHERCHE DU FORFAIT GRATUIT
+     * 7.3 RECHERCHE DU PLAN TRIAL
      * ========================================================
      *
-     * IMPORTANT :
+     * Structure réelle de subscription_plans :
      *
-     * Ta vraie table subscription_plans utilise :
-     *
+     * id
      * name
      * code
      * duration_days
      * price
      * currency_code
      * is_active
-     *
-     * Il n'y a PAS :
-     *
-     * plan_name
-     * plan_code
      */
 
     const {
@@ -501,17 +533,12 @@ export async function POST(
     const trialPlan =
       trialPlanData as SubscriptionPlan;
 
-    /*
+    /**
      * ========================================================
-     * 7.4 VÉRIFICATION DE LA DURÉE
+     * 7.4 VÉRIFICATION DU TRIAL
      * ========================================================
      *
-     * La base doit normalement contenir :
-     *
-     * duration_days = 7
-     *
-     * Si la valeur est incorrecte, nous refusons de créer
-     * l'essai plutôt que d'accorder une mauvaise durée.
+     * PharmaFlow doit fournir exactement 7 jours gratuits.
      */
 
     const trialDurationDays =
@@ -523,7 +550,7 @@ export async function POST(
       !Number.isFinite(
         trialDurationDays,
       ) ||
-      trialDurationDays <= 0
+      trialDurationDays !== 7
     ) {
       console.error(
         "REGISTER INVALID TRIAL DURATION:",
@@ -535,10 +562,16 @@ export async function POST(
       );
     }
 
-    /*
+    /**
      * ========================================================
-     * 7.5 CALCUL DES DATES
+     * 7.5 CALCUL DES DATES DU TRIAL
      * ========================================================
+     *
+     * Début :
+     *   maintenant
+     *
+     * Fin :
+     *   maintenant + 7 jours
      */
 
     const trialStartedAt =
@@ -547,29 +580,29 @@ export async function POST(
     const trialEndsAt =
       new Date(
         trialStartedAt.getTime() +
-          trialDurationDays *
+          7 *
             24 *
             60 *
             60 *
             1000,
       );
 
-    /*
+    /**
      * ========================================================
      * 7.6 CRÉATION DE L'ABONNEMENT TRIAL
      * ========================================================
      *
-     * status:
+     * status :
      *   trial
      *
-     * trial_started_at:
+     * trial_started_at :
      *   maintenant
      *
-     * trial_ends_at:
+     * trial_ends_at :
      *   maintenant + 7 jours
      *
-     * expires_at:
-     *   même date que trial_ends_at
+     * expires_at :
+     *   fin du trial
      */
 
     const {
@@ -629,7 +662,7 @@ export async function POST(
     subscriptionId =
       subscriptionData.id;
 
-    /*
+    /**
      * ========================================================
      * 7.7 RÉPONSE DE SUCCÈS
      * ========================================================
@@ -637,13 +670,15 @@ export async function POST(
 
     return NextResponse.json(
       {
-        success: true,
+        success:
+          true,
 
         message:
-          "Votre pharmacie a été créée avec succès. Votre essai gratuit est actif.",
+          "Votre pharmacie a été créée avec succès. Votre essai gratuit de 7 jours est actif.",
 
         user: {
-          id: userId,
+          id:
+            userId,
 
           email,
 
@@ -656,7 +691,8 @@ export async function POST(
         },
 
         pharmacy: {
-          id: pharmacyId,
+          id:
+            pharmacyId,
 
           name:
             pharmacyName,
@@ -687,7 +723,7 @@ export async function POST(
             trialPlan.name,
 
           duration_days:
-            trialDurationDays,
+            7,
 
           trial_started_at:
             trialStartedAt.toISOString(),
@@ -704,7 +740,7 @@ export async function POST(
       },
     );
   } catch (error) {
-    /*
+    /**
      * ==========================================================
      * 8. NETTOYAGE EN CAS D'ÉCHEC
      * ==========================================================
@@ -715,8 +751,10 @@ export async function POST(
       error,
     );
 
-    /*
-     * Suppression de l'abonnement si créé.
+    /**
+     * ----------------------------------------------------------
+     * 8.1 SUPPRESSION DE L'ABONNEMENT
+     * ----------------------------------------------------------
      */
 
     if (subscriptionId) {
@@ -744,8 +782,10 @@ export async function POST(
       }
     }
 
-    /*
-     * Suppression du profil si créé.
+    /**
+     * ----------------------------------------------------------
+     * 8.2 SUPPRESSION DU PROFIL
+     * ----------------------------------------------------------
      */
 
     if (profileCreated) {
@@ -754,7 +794,9 @@ export async function POST(
           deleteProfileError,
       } =
         await supabaseAdmin
-          .from("profiles")
+          .from(
+            "profiles",
+          )
           .delete()
           .eq(
             "id",
@@ -771,8 +813,10 @@ export async function POST(
       }
     }
 
-    /*
-     * Suppression de la pharmacie si créée.
+    /**
+     * ----------------------------------------------------------
+     * 8.3 SUPPRESSION DE LA PHARMACIE
+     * ----------------------------------------------------------
      */
 
     if (pharmacyId) {
@@ -781,7 +825,9 @@ export async function POST(
           deletePharmacyError,
       } =
         await supabaseAdmin
-          .from("pharmacies")
+          .from(
+            "pharmacies",
+          )
           .delete()
           .eq(
             "id",
@@ -798,8 +844,10 @@ export async function POST(
       }
     }
 
-    /*
-     * Suppression du compte Auth.
+    /**
+     * ----------------------------------------------------------
+     * 8.4 SUPPRESSION DU COMPTE AUTH
+     * ----------------------------------------------------------
      */
 
     const {
@@ -817,11 +865,12 @@ export async function POST(
       );
     }
 
-    /*
-     * Message générique côté navigateur.
+    /**
+     * ----------------------------------------------------------
+     * 8.5 MESSAGE UTILISATEUR
+     * ----------------------------------------------------------
      *
-     * Les détails techniques restent dans le terminal
-     * du serveur et ne sont pas exposés à l'utilisateur.
+     * Les détails techniques restent côté serveur.
      */
 
     return errorResponse(

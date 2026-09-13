@@ -24,12 +24,51 @@ const ALLOWED_BILLING_CYCLES: BillingCycle[] = [
   "yearly",
 ];
 
-const CURRENCY_ALIASES: Record<string, string> = {
-  XAF: "XAF",
-  CDF: "CDF",
-  USD: "USD",
-};
+/**
+ * =========================================================
+ * DEVISES
+ * =========================================================
+ *
+ * PharmaFlow ne limite plus les devises à XAF / CDF / USD.
+ *
+ * La devise est validée selon le format ISO 4217 :
+ * exactement 3 lettres, par exemple :
+ *
+ * USD, EUR, GBP, CDF, XAF, NGN, GHS, KES, ZAR,
+ * TZS, UGX, RWF, ZMW, MAD, DZD, etc.
+ *
+ * La devise réellement disponible dépend ensuite :
+ * - du prix configuré dans subscription_plan_prices ;
+ * - du fournisseur de paiement disponible.
+ */
+function normalizeCurrency(
+  value: unknown,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
 
+  const normalized = value
+    .trim()
+    .toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+/**
+ * =========================================================
+ * FOURNISSEURS DE PAIEMENT
+ * =========================================================
+ *
+ * L'ordre reste prioritaire pour les pays déjà configurés.
+ *
+ * Les autres pays peuvent utiliser un fournisseur configuré
+ * dans la table payment_providers.
+ */
 const COUNTRY_PROVIDER_PRIORITY: Record<
   string,
   PaymentProviderCode[]
@@ -87,22 +126,6 @@ function normalizePaymentMethod(
   }
 
   return null;
-}
-
-function normalizeCurrency(
-  value: unknown,
-): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const normalized = value
-    .trim()
-    .toUpperCase();
-
-  return (
-    CURRENCY_ALIASES[normalized] ?? null
-  );
 }
 
 function normalizePhone(
@@ -281,13 +304,14 @@ export async function POST(
     const {
       data: pharmacy,
       error: pharmacyError,
-    } = await supabase
-      .from("pharmacies")
-      .select(
-        "id, name, address, country_code, city, currency_code, owner_id, status",
-      )
-      .eq("id", pharmacyId)
-      .maybeSingle();
+    } =
+      await supabase
+        .from("pharmacies")
+        .select(
+          "id, name, address, country_code, city, currency_code, owner_id, status",
+        )
+        .eq("id", pharmacyId)
+        .maybeSingle();
 
     if (pharmacyError) {
       console.error(
@@ -341,6 +365,14 @@ export async function POST(
     // =========================================================
     // 6. DÉTERMINER LA DEVISE
     // =========================================================
+    //
+    // IMPORTANT :
+    // Nous ne faisons plus de liste XAF/CDF/USD.
+    //
+    // La pharmacie peut utiliser toute devise ISO 4217
+    // correctement configurée dans sa fiche et dans
+    // subscription_plan_prices.
+    // =========================================================
 
     const currency =
       normalizeCurrency(
@@ -349,8 +381,12 @@ export async function POST(
 
     if (!currency) {
       return jsonError(
-        "La devise de votre pharmacie n'est pas encore configurée.",
+        "La devise de votre pharmacie n'est pas correctement configurée. Utilisez une devise ISO 4217 à 3 lettres.",
         400,
+        {
+          code:
+            "INVALID_PHARMACY_CURRENCY",
+        },
       );
     }
 
@@ -374,6 +410,14 @@ export async function POST(
     // =========================================================
     // 8. RÉCUPÉRER LE PLAN
     // =========================================================
+    //
+    // La structure réelle utilise :
+    //
+    // subscription_plans.code
+    // subscription_plans.name
+    //
+    // et non plan_code / plan_name.
+    // =========================================================
 
     const planCode =
       billingCycle;
@@ -384,10 +428,10 @@ export async function POST(
     } = await supabase
       .from("subscription_plans")
       .select(
-        "id, plan_name, plan_code, duration_days, currency_code, price, is_active",
+        "id, code, name, description, duration_days, is_active",
       )
       .eq(
-        "plan_code",
+        "code",
         planCode,
       )
       .eq(
@@ -417,6 +461,19 @@ export async function POST(
 
     // =========================================================
     // 9. RÉCUPÉRER LE PRIX
+    // =========================================================
+    //
+    // Le prix dépend maintenant entièrement de la devise
+    // configurée dans subscription_plan_prices.
+    //
+    // Exemple :
+    // monthly + USD
+    // monthly + EUR
+    // monthly + XAF
+    // monthly + CDF
+    // etc.
+    //
+    // Aucun montant n'est codé en dur ici.
     // =========================================================
 
     const {
@@ -463,6 +520,8 @@ export async function POST(
         {
           code:
             "SUBSCRIPTION_PRICE_NOT_CONFIGURED",
+          currency,
+          billingCycle,
         },
       );
     }
@@ -477,6 +536,10 @@ export async function POST(
       return jsonError(
         "Le prix de l'abonnement configuré est invalide.",
         500,
+        {
+          code:
+            "INVALID_SUBSCRIPTION_PRICE",
+        },
       );
     }
 
@@ -543,25 +606,6 @@ export async function POST(
       );
     }
 
-    const providerPriority =
-      COUNTRY_PROVIDER_PRIORITY[
-        countryCode
-      ] ?? [];
-
-    if (
-      providerPriority.length ===
-      0
-    ) {
-      return jsonError(
-        `Aucun fournisseur Mobile Money n'est configuré pour le pays ${countryCode}.`,
-        400,
-        {
-          code:
-            "NO_PAYMENT_PROVIDER_FOR_COUNTRY",
-        },
-      );
-    }
-
     // =========================================================
     // 12. FOURNISSEURS ACTIVÉS
     // =========================================================
@@ -593,6 +637,28 @@ export async function POST(
         500,
       );
     }
+
+    // =========================================================
+    // 13. SÉLECTION DU FOURNISSEUR
+    // =========================================================
+    //
+    // Pour CG/CD, nous conservons l'ordre existant.
+    //
+    // Pour les autres pays, PharmaFlow recherche parmi les
+    // fournisseurs activés celui qui :
+    //
+    // - accepte le pays ;
+    // - accepte Mobile Money ;
+    // - est configuré dans payment_providers.
+    //
+    // Cela permet d'étendre progressivement PharmaFlow à
+    // d'autres pays sans modifier ce fichier à chaque fois.
+    // =========================================================
+
+    const providerPriority =
+      COUNTRY_PROVIDER_PRIORITY[
+        countryCode
+      ] ?? [];
 
     const compatibleProviders =
       (providers ?? []).filter(
@@ -640,11 +706,15 @@ export async function POST(
             );
 
           return (
-            providerPriority.includes(
-              providerCode,
-            ) &&
             countrySupported &&
-            mobileMoneySupported
+            mobileMoneySupported &&
+            (
+              providerPriority.length ===
+                0 ||
+              providerPriority.includes(
+                providerCode,
+              )
+            )
           );
         },
       );
@@ -654,38 +724,53 @@ export async function POST(
       0
     ) {
       return jsonError(
-        "Aucun fournisseur Mobile Money activé n'est disponible pour votre pays.",
+        `Aucun fournisseur Mobile Money activé n'est disponible pour le pays ${countryCode}.`,
         400,
         {
           code:
             "NO_ENABLED_MOBILE_MONEY_PROVIDER",
+          countryCode,
+          currency,
         },
       );
     }
 
     // =========================================================
-    // 13. SÉLECTION DU FOURNISSEUR
+    // 14. CHOISIR LE FOURNISSEUR
     // =========================================================
 
-    const selectedProvider =
-      providerPriority
-        .map((code) =>
-          compatibleProviders.find(
-            (provider) =>
-              String(
-                provider.code,
-              )
-                .trim()
-                .toLowerCase() ===
-              code,
-          ),
-        )
-        .find(Boolean);
+    let selectedProvider;
+
+    if (
+      providerPriority.length > 0
+    ) {
+      selectedProvider =
+        providerPriority
+          .map((code) =>
+            compatibleProviders.find(
+              (provider) =>
+                String(
+                  provider.code,
+                )
+                  .trim()
+                  .toLowerCase() ===
+                code,
+            ),
+          )
+          .find(Boolean);
+    } else {
+      selectedProvider =
+        compatibleProviders[0];
+    }
 
     if (!selectedProvider) {
       return jsonError(
         "Impossible de sélectionner un fournisseur de paiement.",
         400,
+        {
+          code:
+            "PAYMENT_PROVIDER_SELECTION_ERROR",
+        },
       );
     }
 
@@ -697,7 +782,7 @@ export async function POST(
         .toLowerCase() as PaymentProviderCode;
 
     // =========================================================
-    // 14. NUMÉRO MOBILE MONEY
+    // 15. NUMÉRO MOBILE MONEY
     // =========================================================
 
     const customerPhone =
@@ -714,8 +799,9 @@ export async function POST(
         },
       );
     }
+
     // =========================================================
-    // 15. INFORMATIONS CLIENT
+    // 16. INFORMATIONS CLIENT
     // =========================================================
 
     const customerName =
@@ -739,38 +825,54 @@ export async function POST(
         : "";
 
     // =========================================================
-    // 16. RÉFÉRENCE UNIQUE
+    // 17. RÉFÉRENCE UNIQUE
     // =========================================================
 
     const merchantReference =
       generateMerchantReference();
 
     // =========================================================
-    // 17. MÉTADONNÉES
+    // 18. MÉTADONNÉES
     // =========================================================
 
     const metadata = {
       billing_cycle:
         billingCycle,
+
       plan_id:
         plan.id,
+
       plan_code:
-        plan.plan_code,
+        plan.code,
+
       pharmacy_id:
         pharmacyId,
+
       created_by:
         user.id,
+
       payment_method_type:
         "mobile_money",
+
       provider_code:
         providerCode,
+
       country_code:
         countryCode,
+
       currency,
+
+      // Informations utiles pour le suivi
+      // international des paiements.
+      reference_currency:
+        currency,
+
+      reference_amount:
+        amount,
     };
 
     // =========================================================
-    // 18. CRÉER LA TRANSACTION LOCALE
+    // 19. CRÉER LA TRANSACTION LOCALE
     // =========================================================
 
     const {
@@ -784,27 +886,39 @@ export async function POST(
         .insert({
           pharmacy_id:
             pharmacyId,
+
           subscription_id:
             subscription.id,
+
           provider_id:
             selectedProvider.id,
+
           provider:
             providerCode,
+
           merchant_reference:
             merchantReference,
+
           amount,
+
           currency,
+
           payment_method:
             "mobile_money",
+
           status:
             "created",
+
           customer_name:
             customerName ||
             null,
+
           customer_email:
             email || null,
+
           customer_phone:
             customerPhone,
+
           metadata,
         })
         .select(
@@ -828,7 +942,7 @@ export async function POST(
     }
 
     // =========================================================
-    // 19. APPELER LE MOTEUR DE PAIEMENT
+    // 20. APPELER LE MOTEUR DE PAIEMENT
     // =========================================================
 
     const paymentMethodType:
@@ -840,37 +954,48 @@ export async function POST(
         providerCode,
         {
           pharmacyId,
+
           subscriptionId:
             subscription.id,
+
           merchantReference,
+
           amount,
+
           currency,
+
           paymentMethodType,
+
           paymentMethod:
             "mobile_money",
+
           customer: {
             firstName,
+
             lastName,
+
             name:
               customerName,
+
             email:
               email ||
               undefined,
+
             phone:
               customerPhone,
+
             countryCode,
           },
+
           description:
             `Abonnement PharmaFlow ${billingCycle}`,
+
           metadata,
         },
       );
 
     // =========================================================
-    // 20. LE FOURNISSEUR A REFUSÉ LE PAIEMENT
-    //
-    // IMPORTANT :
-    // CreatePaymentResult ne contient PAS de propriété "error".
+    // 21. LE FOURNISSEUR A REFUSÉ LE PAIEMENT
     // =========================================================
 
     if (
@@ -888,16 +1013,21 @@ export async function POST(
         .update({
           status:
             "failed",
+
           provider_transaction_id:
             paymentResult.providerTransactionId ??
             null,
+
           checkout_url:
             paymentResult.checkoutUrl ??
             null,
+
           failure_reason:
             failureReason,
+
           metadata: {
             ...metadata,
+
             provider_response:
               paymentResult.metadata ??
               null,
@@ -919,11 +1049,15 @@ export async function POST(
           code:
             paymentResult.errorCode ??
             "PAYMENT_PROVIDER_ERROR",
+
           paymentTransactionId:
             paymentTransaction.id,
+
           merchantReference,
+
           provider:
             providerCode,
+
           status:
             paymentResult.status,
         },
@@ -931,7 +1065,7 @@ export async function POST(
     }
 
     // =========================================================
-    // 21. STATUT LOCAL
+    // 22. STATUT LOCAL
     // =========================================================
 
     const localStatus =
@@ -950,7 +1084,7 @@ export async function POST(
               : "pending";
 
     // =========================================================
-    // 22. PRÉPARER LA MISE À JOUR
+    // 23. PRÉPARER LA MISE À JOUR
     // =========================================================
 
     const updatePayload:
@@ -960,14 +1094,18 @@ export async function POST(
       > = {
       status:
         localStatus,
+
       provider_transaction_id:
         paymentResult.providerTransactionId ??
         null,
+
       checkout_url:
         paymentResult.checkoutUrl ??
         null,
+
       metadata: {
         ...metadata,
+
         provider_response:
           paymentResult.metadata ??
           null,
@@ -996,7 +1134,7 @@ export async function POST(
     }
 
     // =========================================================
-    // 23. METTRE À JOUR LA TRANSACTION
+    // 24. METTRE À JOUR LA TRANSACTION
     // =========================================================
 
     const {
@@ -1038,15 +1176,17 @@ export async function POST(
         {
           code:
             "PAYMENT_TRANSACTION_UPDATE_ERROR",
+
           paymentTransactionId:
             paymentTransaction.id,
+
           merchantReference,
         },
       );
     }
 
     // =========================================================
-    // 24. ACTIVATION DE L'ABONNEMENT
+    // 25. ACTIVATION DE L'ABONNEMENT
     //
     // L'abonnement n'est PAS activé ici simplement parce que
     // la création du paiement a répondu "successful".
@@ -1057,37 +1197,55 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+
       message:
         paymentResult.message ??
         "Paiement créé avec succès.",
+
       payment: {
         id:
           updatedTransaction.id,
+
         merchantReference:
           updatedTransaction.merchant_reference,
+
         provider:
           updatedTransaction.provider,
+
         providerTransactionId:
           updatedTransaction.provider_transaction_id,
+
         amount:
           updatedTransaction.amount,
+
         currency:
           updatedTransaction.currency,
+
         paymentMethod:
           updatedTransaction.payment_method,
+
         status:
           updatedTransaction.status,
+
         checkoutUrl:
           updatedTransaction.checkout_url,
       },
+
       subscription: {
         id:
           subscription.id,
+
         planId:
           plan.id,
+
         planCode:
-          plan.plan_code,
+          plan.code,
+
         billingCycle,
+
+        currency,
+
+        amount,
       },
     });
   } catch (error) {
@@ -1099,6 +1257,7 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
+
         message:
           "Une erreur inattendue est survenue lors de la création du paiement.",
       },

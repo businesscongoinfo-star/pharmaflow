@@ -447,73 +447,71 @@ export async function POST(
     let parsedCurrency:
       | string
       | null = null;
+let parsedPaymentMethod:
+  | string
+  | null = null;
 
-    let parsedPaymentMethod:
-      | string
-      | null = null;
+let parsedFailureReason:
+  | string
+  | null = null;
 
-    let parsedFailureReason:
-      | string
-      | null = null;
+try {
+  if (
+    typeof mokoAfrikaAdapter.parseWebhook ===
+    "function"
+  ) {
+    const parsed =
+      mokoAfrikaAdapter.parseWebhook(
+        body,
+        request.headers,
+      );
 
-    try {
-      if (
-        typeof mokoAfrikaAdapter.parseWebhook ===
-        "function"
-      ) {
-        const parsed =
-          mokoAfrikaAdapter.parseWebhook(
-            body,
-              request.headers,
-            ),
-          );
+    if (parsed) {
+      parsedStatus =
+        normalizePaymentStatus(
+          parsed.status,
+        );
 
-        if (parsed) {
-          parsedStatus =
-            normalizePaymentStatus(
-              parsed.status,
-            );
+      parsedMerchantReference =
+        normalizeString(
+          parsed.merchantReference,
+        );
 
-          parsedMerchantReference =
-            normalizeString(
-              parsed.merchantReference,
-            );
+      parsedProviderTransactionId =
+        normalizeString(
+          parsed.providerTransactionId,
+        );
 
-          parsedProviderTransactionId =
-            normalizeString(
-              parsed.providerTransactionId,
-            );
+      parsedAmount =
+        normalizeAmount(
+          parsed.amount,
+        );
 
-          parsedAmount =
-            normalizeAmount(
-              parsed.amount,
-            );
+      parsedCurrency =
+        normalizeCurrency(
+          parsed.currency,
+        );
 
-          parsedCurrency =
-            normalizeCurrency(
-              parsed.currency,
-            );
+      parsedPaymentMethod =
+        normalizeString(
+          parsed.paymentMethod,
+        );
 
-          parsedPaymentMethod =
-            normalizeString(
-              parsed.paymentMethod,
-            );
-
-          parsedFailureReason =
-            normalizeString(
-              parsed.failureReason,
-            );
-        }
-      }
-    } catch {
-      /*
-       * Le format du webhook peut varier selon
-       * la version du compte fournisseur.
-       *
-       * Nous continuons avec l'extraction générique
-       * ci-dessus.
-       */
+      parsedFailureReason =
+        normalizeString(
+          parsed.failureReason,
+        );
     }
+  }
+} catch {
+  /*
+   * Le format du webhook peut varier selon
+   * la version du compte fournisseur.
+   *
+   * Nous continuons avec l'extraction générique
+   * ci-dessus.
+   */
+}
 
     const finalMerchantReference =
       parsedMerchantReference ??
