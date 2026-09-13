@@ -25,11 +25,10 @@ type RequestBody = {
   phone?: string;
 };
 
-const ALLOWED_BILLING_CYCLES: BillingCycle[] =
-  [
-    "monthly",
-    "yearly",
-  ];
+const ALLOWED_BILLING_CYCLES: BillingCycle[] = [
+  "monthly",
+  "yearly",
+];
 
 /**
  * =========================================================
@@ -70,11 +69,25 @@ function normalizeCurrency(
  *
  * La priorité reste spécifique au pays.
  *
- * Le fournisseur est ensuite filtré selon :
+ * Pour chaque pays, le fournisseur doit également être
+ * compatible avec le moyen de paiement demandé.
  *
- * - pays
- * - moyen de paiement
- * - activation dans payment_providers
+ * Exemple :
+ *
+ * CG + mobile_money
+ * → Yabetoo
+ * → GoFreshPay
+ * → Moko Afrika
+ *
+ * CG + card
+ * → Moko Afrika si activé et compatible
+ *
+ * CD + mobile_money
+ * → GoFreshPay
+ * → Moko Afrika
+ *
+ * CD + card
+ * → Moko Afrika si activé et compatible
  */
 
 const COUNTRY_PROVIDER_PRIORITY: Record<
@@ -95,7 +108,7 @@ const COUNTRY_PROVIDER_PRIORITY: Record<
 
 /**
  * =========================================================
- * NORMALISATION
+ * NORMALISATION FORMULE
  * =========================================================
  */
 
@@ -124,6 +137,12 @@ function normalizeBillingCycle(
 
   return normalized as BillingCycle;
 }
+
+/**
+ * =========================================================
+ * NORMALISATION MOYEN DE PAIEMENT
+ * =========================================================
+ */
 
 function normalizePaymentMethod(
   value: unknown,
@@ -160,6 +179,12 @@ function normalizePaymentMethod(
   return null;
 }
 
+/**
+ * =========================================================
+ * NORMALISATION TÉLÉPHONE
+ * =========================================================
+ */
+
 function normalizePhone(
   value: unknown,
 ): string | null {
@@ -179,6 +204,12 @@ function normalizePhone(
 
   return phone;
 }
+
+/**
+ * =========================================================
+ * SÉPARATION NOM / PRÉNOM
+ * =========================================================
+ */
 
 function splitName(
   fullName:
@@ -224,6 +255,12 @@ function splitName(
         .join(" "),
   };
 }
+
+/**
+ * =========================================================
+ * ERREUR JSON
+ * =========================================================
+ */
 
 function jsonError(
   message: string,
@@ -282,7 +319,7 @@ export async function POST(
     }
 
     // =======================================================
-    // 2. REQUÊTE
+    // 2. LIRE LA REQUÊTE
     // =======================================================
 
     let body: RequestBody;
@@ -432,14 +469,13 @@ export async function POST(
         .trim()
         .toLowerCase();
 
-    const blockedPharmacyStatuses =
-      [
-        "inactive",
-        "disabled",
-        "blocked",
-        "suspended",
-        "closed",
-      ];
+    const blockedPharmacyStatuses = [
+      "inactive",
+      "disabled",
+      "blocked",
+      "suspended",
+      "closed",
+    ];
 
     if (
       blockedPharmacyStatuses.includes(
@@ -473,7 +509,27 @@ export async function POST(
     }
 
     // =======================================================
-    // 7. PLAN
+    // 7. RÉCUPÉRER LE PLAN
+    // =======================================================
+    //
+    // IMPORTANT :
+    //
+    // subscription_plans NE contient PAS de colonne
+    // "description".
+    //
+    // Structure utilisée :
+    //
+    // id
+    // code
+    // name
+    // duration_days
+    // is_active
+    // created_at
+    // updated_at
+    //
+    // C'est la correction du problème :
+    //
+    // "Impossible de récupérer le plan d'abonnement."
     // =======================================================
 
     const planCode =
@@ -489,7 +545,7 @@ export async function POST(
           "subscription_plans",
         )
         .select(
-          "id, code, name, description, duration_days, is_active",
+          "id, code, name, duration_days, is_active",
         )
         .eq(
           "code",
@@ -512,6 +568,10 @@ export async function POST(
       return jsonError(
         "Impossible de récupérer le plan d'abonnement.",
         500,
+        {
+          code:
+            "SUBSCRIPTION_PLAN_QUERY_ERROR",
+        },
       );
     }
 
@@ -519,11 +579,16 @@ export async function POST(
       return jsonError(
         "Le plan d'abonnement sélectionné n'est pas disponible.",
         404,
+        {
+          code:
+            "SUBSCRIPTION_PLAN_NOT_FOUND",
+          billingCycle,
+        },
       );
     }
 
     // =======================================================
-    // 8. PRIX
+    // 8. RÉCUPÉRER LE PRIX
     // =======================================================
 
     const {
@@ -563,6 +628,10 @@ export async function POST(
       return jsonError(
         "Impossible de récupérer le prix de l'abonnement.",
         500,
+        {
+          code:
+            "SUBSCRIPTION_PRICE_QUERY_ERROR",
+        },
       );
     }
 
@@ -643,6 +712,10 @@ export async function POST(
       return jsonError(
         "Impossible de récupérer votre abonnement.",
         500,
+        {
+          code:
+            "SUBSCRIPTION_QUERY_ERROR",
+        },
       );
     }
 
@@ -650,6 +723,10 @@ export async function POST(
       return jsonError(
         "Aucun abonnement n'est associé à cette pharmacie.",
         400,
+        {
+          code:
+            "SUBSCRIPTION_NOT_FOUND",
+        },
       );
     }
 
@@ -669,6 +746,10 @@ export async function POST(
       return jsonError(
         "Le pays de votre pharmacie n'est pas configuré.",
         400,
+        {
+          code:
+            "COUNTRY_NOT_CONFIGURED",
+        },
       );
     }
 
@@ -704,21 +785,29 @@ export async function POST(
       return jsonError(
         "Impossible de récupérer les fournisseurs de paiement.",
         500,
+        {
+          code:
+            "PAYMENT_PROVIDERS_QUERY_ERROR",
+        },
       );
     }
 
     // =======================================================
-    // 12. SÉLECTION FOURNISSEUR
+    // 12. SÉLECTION DU FOURNISSEUR
     // =======================================================
     //
-    // On sélectionne maintenant selon le MOYEN réellement
-    // demandé :
+    // Le fournisseur est sélectionné selon :
     //
-    // mobile_money
-    // OU
-    // card
+    // 1. pays
+    // 2. moyen de paiement
+    // 3. fournisseur activé
+    // 4. priorité pays
     //
-    // Cela permet à Moko Afrika de recevoir le bon flux.
+    // Donc :
+    //
+    // mobile_money ≠ card
+    //
+    // Le backend envoie réellement le moyen choisi.
     // =======================================================
 
     const requestedProviderMethod =
@@ -784,16 +873,17 @@ export async function POST(
               requestedProviderMethod,
             );
 
+          const prioritySupported =
+            providerPriority.length ===
+              0 ||
+            providerPriority.includes(
+              providerCode,
+            );
+
           return (
             countrySupported &&
             methodSupported &&
-            (
-              providerPriority.length ===
-                0 ||
-              providerPriority.includes(
-                providerCode,
-              )
-            )
+            prioritySupported
           );
         },
       );
@@ -847,7 +937,8 @@ export async function POST(
                   provider,
                 ) =>
                   String(
-                    provider.code,
+                    provider.code ??
+                      "",
                   )
                     .trim()
                     .toLowerCase() ===
@@ -877,7 +968,8 @@ export async function POST(
 
     const providerCode =
       String(
-        selectedProvider.code,
+        selectedProvider.code ??
+          "",
       )
         .trim()
         .toLowerCase() as PaymentProviderCode;
@@ -886,11 +978,11 @@ export async function POST(
     // 14. COMPATIBILITÉ CARTE MOKO AFRIKA
     // =======================================================
     //
-    // Le Hosted Checkout carte Moko utilisé par PharmaFlow
-    // accepte USD ou CDF.
+    // Le Hosted Checkout Card Moko Afrika utilisé ici
+    // accepte actuellement USD et CDF.
     //
-    // Nous ne transformons PAS silencieusement une autre
-    // devise en USD/CDF.
+    // Nous ne convertissons jamais silencieusement
+    // XAF/EUR/etc. en USD ou CDF.
     // =======================================================
 
     if (
@@ -906,7 +998,7 @@ export async function POST(
       )
     ) {
       return jsonError(
-        `Le paiement par carte Moko Afrika n'est actuellement disponible que pour USD ou CDF. La devise configurée pour cette pharmacie est ${currency}.`,
+        `Le paiement par carte Moko Afrika est actuellement disponible pour USD ou CDF. La devise de cette pharmacie est ${currency}.`,
         400,
         {
           code:
@@ -927,7 +1019,7 @@ export async function POST(
     }
 
     // =======================================================
-    // 15. CLIENT
+    // 15. INFORMATIONS CLIENT
     // =======================================================
 
     const customerPhone =
@@ -937,17 +1029,6 @@ export async function POST(
       normalizePhone(
         profile.phone,
       );
-
-    if (!customerPhone) {
-      return jsonError(
-        "Aucun numéro de téléphone n'est associé à votre compte. Veuillez renseigner votre numéro de téléphone.",
-        400,
-        {
-          code:
-            "CUSTOMER_PHONE_REQUIRED",
-        },
-      );
-    }
 
     const customerName =
       String(
@@ -972,7 +1053,26 @@ export async function POST(
         : "";
 
     // =======================================================
-    // 16. EMAIL OBLIGATOIRE POUR CARTE
+    // 16. TÉLÉPHONE OBLIGATOIRE MOBILE MONEY
+    // =======================================================
+
+    if (
+      paymentMethod ===
+        "mobile_money" &&
+      !customerPhone
+    ) {
+      return jsonError(
+        "Aucun numéro de téléphone n'est associé à votre compte. Veuillez renseigner votre numéro Mobile Money.",
+        400,
+        {
+          code:
+            "CUSTOMER_PHONE_REQUIRED",
+        },
+      );
+    }
+
+    // =======================================================
+    // 17. EMAIL OBLIGATOIRE POUR CARTE
     // =======================================================
 
     if (
@@ -991,17 +1091,7 @@ export async function POST(
     }
 
     // =======================================================
-    // 17. ADRESSE CLIENT / PHARMACIE
-    // =======================================================
-    //
-    // Moko Card demande notamment :
-    //
-    // bill_to_address_line1
-    // bill_to_address_city
-    // bill_to_address_country
-    //
-    // Ces informations sont envoyées via metadata afin que
-    // l'adapter Moko puisse les utiliser.
+    // 18. ADRESSE DE FACTURATION
     // =======================================================
 
     const addressLine1 =
@@ -1047,14 +1137,14 @@ export async function POST(
     }
 
     // =======================================================
-    // 18. RÉFÉRENCE UNIQUE
+    // 19. RÉFÉRENCE UNIQUE
     // =======================================================
 
     const merchantReference =
       generateMerchantReference();
 
     // =======================================================
-    // 19. TYPE DE PAIEMENT
+    // 20. TYPE DE PAIEMENT
     // =======================================================
 
     const paymentMethodType:
@@ -1065,7 +1155,7 @@ export async function POST(
         : "mobile_money";
 
     // =======================================================
-    // 20. MÉTADONNÉES
+    // 21. MÉTADONNÉES
     // =======================================================
 
     const metadata: Record<
@@ -1105,7 +1195,7 @@ export async function POST(
         amount,
 
       // -------------------------------------------------------
-      // Informations client
+      // Client
       // -------------------------------------------------------
 
       customer_name:
@@ -1117,10 +1207,11 @@ export async function POST(
         null,
 
       customer_phone:
-        customerPhone,
+        customerPhone ||
+        null,
 
       // -------------------------------------------------------
-      // Informations de facturation
+      // Facturation
       // -------------------------------------------------------
 
       addressLine1:
@@ -1134,7 +1225,7 @@ export async function POST(
       countryCode,
 
       // -------------------------------------------------------
-      // Compatibilité avec l'adapter Moko Card
+      // Compatibilité Moko Afrika Card
       // -------------------------------------------------------
 
       bill_to_forename:
@@ -1150,7 +1241,8 @@ export async function POST(
         null,
 
       bill_to_phone:
-        customerPhone,
+        customerPhone ||
+        null,
 
       bill_to_address_line1:
         addressLine1 ||
@@ -1164,7 +1256,7 @@ export async function POST(
         countryCode,
 
       // -------------------------------------------------------
-      // Valeurs serveur
+      // Suivi serveur
       // -------------------------------------------------------
 
       server_created_at:
@@ -1172,7 +1264,7 @@ export async function POST(
     };
 
     // =======================================================
-    // 21. TRANSACTION LOCALE
+    // 22. CRÉER LA TRANSACTION LOCALE
     // =======================================================
 
     const {
@@ -1220,7 +1312,8 @@ export async function POST(
             null,
 
           customer_phone:
-            customerPhone,
+            customerPhone ||
+            null,
 
           metadata,
         })
@@ -1241,11 +1334,15 @@ export async function POST(
       return jsonError(
         "Impossible de créer la transaction de paiement.",
         500,
+        {
+          code:
+            "PAYMENT_TRANSACTION_CREATE_ERROR",
+        },
       );
     }
 
     // =======================================================
-    // 22. APPEL DU MOTEUR
+    // 23. APPEL DU MOTEUR DE PAIEMENT
     // =======================================================
 
     let paymentResult;
@@ -1283,7 +1380,8 @@ export async function POST(
                 undefined,
 
               phone:
-                customerPhone,
+                customerPhone ||
+                undefined,
 
               countryCode,
             },
@@ -1294,7 +1392,9 @@ export async function POST(
             metadata,
           },
         );
-    } catch (providerError) {
+    } catch (
+      providerError
+    ) {
       console.error(
         "Erreur appel fournisseur paiement:",
         providerError,
@@ -1352,7 +1452,7 @@ export async function POST(
     }
 
     // =======================================================
-    // 23. FOURNISSEUR REFUSE
+    // 24. FOURNISSEUR REFUSE
     // =======================================================
 
     if (
@@ -1422,7 +1522,7 @@ export async function POST(
     }
 
     // =======================================================
-    // 24. STATUT LOCAL
+    // 25. STATUT LOCAL
     // =======================================================
 
     const localStatus =
@@ -1441,7 +1541,7 @@ export async function POST(
               : "pending";
 
     // =======================================================
-    // 25. MISE À JOUR TRANSACTION
+    // 26. MISE À JOUR TRANSACTION
     // =======================================================
 
     const updatePayload:
@@ -1541,30 +1641,31 @@ export async function POST(
     }
 
     // =======================================================
-    // 26. RÉPONSE
+    // 27. RÉPONSE
     // =======================================================
     //
     // IMPORTANT :
     //
-    // Nous n'activons PAS l'abonnement ici.
+    // L'abonnement n'est PAS activé ici.
     //
-    // Pour une carte Moko :
+    // Flux :
     //
-    // create
+    // CREATE
     //   ↓
-    // checkoutUrl
+    // Moko Afrika
     //   ↓
-    // paiement
+    // Checkout / Mobile Money
     //   ↓
-    // callback Moko
+    // Paiement réel
     //   ↓
-    // vérification
+    // Webhook / Verify
     //   ↓
-    // activation abonnement
+    // Vérification montant + devise + transaction
+    //   ↓
+    // Activation abonnement
     //
-    // La documentation Moko précise que le callback serveur
-    // est la source de vérité et que la redirection navigateur
-    // ne suffit pas à confirmer le paiement. 
+    // Cela évite d'activer un abonnement simplement parce
+    // que la création de paiement a réussi.
     // =======================================================
 
     return NextResponse.json({
@@ -1620,7 +1721,9 @@ export async function POST(
         amount,
       },
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "Erreur inattendue API création paiement:",
       error,
