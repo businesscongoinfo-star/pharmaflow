@@ -1,10 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/* ============================================================
-   REDIRECTION PAR RÔLE
-============================================================ */
-
 function getRoleHome(role: string) {
   switch (role) {
     case "owner":
@@ -27,67 +23,70 @@ function getRoleHome(role: string) {
   }
 }
 
-/* ============================================================
-   AUTORISATIONS DES MODULES
-============================================================ */
+function isAllowed(pathname: string, role: string) {
+  /*
+   * ---------------------------------------------------------
+   * SUPER ADMIN / AGENT
+   * ---------------------------------------------------------
+   *
+   * Ces espaces ne dépendent pas de pharmacy_id.
+   * Leur autorisation réelle est vérifiée dans leurs propres
+   * fonctions requireSuperAdmin / requireSuperAdminApi.
+   */
+  if (pathname.startsWith("/super-admin")) {
+    return true;
+  }
 
-function isAllowed(
-  pathname: string,
-  role: string,
-) {
-  if (
-    pathname.startsWith("/dashboard")
-  ) {
+  if (pathname.startsWith("/agent")) {
+    return true;
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * ESPACES PAR RÔLE
+   * ---------------------------------------------------------
+   */
+
+  if (pathname.startsWith("/dashboard")) {
     return role === "owner";
   }
 
-  if (
-    pathname.startsWith("/admin")
-  ) {
-    return (
-      role === "owner" ||
-      role === "admin"
-    );
+  if (pathname.startsWith("/admin")) {
+    return role === "owner" || role === "admin";
   }
 
-  if (
-    pathname.startsWith("/pharmacien")
-  ) {
-    return (
-      role === "owner" ||
-      role === "pharmacist"
-    );
+  if (pathname.startsWith("/pharmacien")) {
+    return role === "owner" || role === "pharmacist";
   }
 
-  if (
-    pathname.startsWith("/caisse")
-  ) {
-    return (
-      role === "owner" ||
-      role === "cashier"
-    );
+  if (pathname.startsWith("/caisse")) {
+    return role === "owner" || role === "cashier";
   }
 
-  if (
-    pathname.startsWith("/employe")
-  ) {
-    return (
-      role === "owner" ||
-      role === "employee"
-    );
+  if (pathname.startsWith("/employe")) {
+    return role === "owner" || role === "employee";
   }
+
+  /*
+   * ---------------------------------------------------------
+   * MODULES PHARMACIE
+   * ---------------------------------------------------------
+   */
 
   const pharmacyModules = [
     "/produits",
     "/stock",
     "/ventes",
     "/utilisateurs",
+    "/rapports",
+    "/paiements",
+    "/parametres",
+    "/abonnement",
   ];
 
   if (
-    pharmacyModules.some(
-      (path) =>
-        pathname.startsWith(path),
+    pharmacyModules.some((path) =>
+      pathname.startsWith(path),
     )
   ) {
     return (
@@ -101,233 +100,129 @@ function isAllowed(
   return true;
 }
 
-/* ============================================================
-   ROUTES PUBLIQUES
-============================================================ */
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request,
+  });
 
-function isPublicRoute(
-  pathname: string,
-) {
-  return (
-    pathname === "/" ||
-    pathname.startsWith("/support") ||
-    pathname.startsWith("/confidentialite") ||
-    pathname.startsWith("/conditions")
-  );
-}
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
 
-/* ============================================================
-   ROUTES D'AUTHENTIFICATION
-============================================================ */
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(
+            ({ name, value, options }) => {
+              request.cookies.set(name, value);
 
-function isAuthRoute(
-  pathname: string,
-) {
-  return (
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/register") ||
-    pathname.startsWith(
-      "/forgot-password",
-    )
-  );
-}
+              response = NextResponse.next({
+                request,
+              });
 
-/* ============================================================
-   API QUI DOIVENT ÊTRE LAISSÉES PASSER
-============================================================ */
-
-/*
- * IMPORTANT :
- *
- * Ces routes font leur propre vérification côté serveur.
- *
- * Si le middleware les intercepte avant leur Route Handler,
- * il peut provoquer une redirection /login au lieu de retourner
- * le JSON attendu par le frontend.
- */
-
-function isPublicApiRoute(
-  pathname: string,
-) {
-  const publicApiRoutes = [
-    "/api/auth/platform-access",
-    "/api/auth/inscription",
-
-    "/api/subscription/status",
-
-    "/api/support/ai",
-    "/api/support/tickets",
-  ];
-
-  return publicApiRoutes.some(
-    (route) =>
-      pathname === route ||
-      pathname.startsWith(
-        `${route}/`,
-      ),
-  );
-}
-
-/* ============================================================
-   MIDDLEWARE
-============================================================ */
-
-export async function middleware(
-  request: NextRequest,
-) {
-  const pathname =
-    request.nextUrl.pathname;
-
-  /*
-   * ==========================================================
-   * 1. API PUBLIQUES / AUTO-AUTHENTIFIÉES
-   * ==========================================================
-   *
-   * On laisse directement les Route Handlers traiter
-   * leur propre authentification.
-   *
-   * Cela est particulièrement important pour :
-   *
-   * /api/auth/platform-access
-   * /api/subscription/status
-   * /api/auth/inscription
-   * /api/support/*
-   */
-
-  if (
-    isPublicApiRoute(pathname)
-  ) {
-    return NextResponse.next();
-  }
-
-  /*
-   * ==========================================================
-   * 2. CLIENT SUPABASE SSR
-   * ==========================================================
-   */
-
-  let response =
-    NextResponse.next({
-      request,
-    });
-
-  const supabase =
-    createServerClient(
-      process.env
-        .NEXT_PUBLIC_SUPABASE_URL!,
-      process.env
-        .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-
-          setAll(
-            cookiesToSet,
-          ) {
-            cookiesToSet.forEach(
-              ({
+              response.cookies.set(
                 name,
                 value,
                 options,
-              }) => {
-                request.cookies.set(
-                  name,
-                  value,
-                );
-
-                response =
-                  NextResponse.next(
-                    {
-                      request,
-                    },
-                  );
-
-                response.cookies.set(
-                  name,
-                  value,
-                  options,
-                );
-              },
-            );
-          },
+              );
+            },
+          );
         },
       },
-    );
+    },
+  );
+
+  const pathname = request.nextUrl.pathname;
 
   /*
-   * ==========================================================
-   * 3. UTILISATEUR COURANT
-   * ==========================================================
+   * ---------------------------------------------------------
+   * ROUTES PUBLIQUES
+   * ---------------------------------------------------------
+   */
+
+  const isPublicRoute =
+    pathname === "/" ||
+    pathname.startsWith("/support") ||
+    pathname.startsWith("/confidentialite") ||
+    pathname.startsWith("/conditions");
+
+  /*
+   * ---------------------------------------------------------
+   * API PUBLIQUES / AUTO-AUTHENTIFIANTES
+   * ---------------------------------------------------------
    *
-   * getUser() vérifie réellement l'utilisateur auprès
-   * de Supabase Auth.
+   * Ces routes doivent atteindre leur Route Handler
+   * directement et retourner leur propre JSON.
+   */
+
+  const isPublicApi =
+    pathname.startsWith("/api/auth/platform-access") ||
+    pathname.startsWith("/api/auth/inscription") ||
+    pathname.startsWith("/api/subscription/status") ||
+    pathname.startsWith("/api/support/ai") ||
+    pathname.startsWith("/api/support/tickets");
+
+  if (isPublicApi) {
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store",
+    );
+
+    return response;
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * RÉCUPÉRATION DE LA SESSION
+   * ---------------------------------------------------------
    */
 
   const {
-    data: {
-      user,
-    },
-  } =
-    await supabase.auth.getUser();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   /*
-   * ==========================================================
-   * 4. VISITEUR NON CONNECTÉ
-   * ==========================================================
+   * ---------------------------------------------------------
+   * UTILISATEUR NON CONNECTÉ
+   * ---------------------------------------------------------
    */
 
   if (!user) {
-    /*
-     * Pages publiques accessibles sans connexion.
-     */
-
-    if (
-      isPublicRoute(pathname) ||
-      isAuthRoute(pathname)
-    ) {
-      response.headers.set(
-        "Cache-Control",
-        "private, no-store",
-      );
-
+    if (isPublicRoute) {
       return response;
     }
 
-    /*
-     * Toute autre page nécessite une connexion.
-     */
+    const loginUrl = request.nextUrl.clone();
 
-    const loginUrl =
-      request.nextUrl.clone();
-
-    loginUrl.pathname =
-      "/login";
-
+    loginUrl.pathname = "/login";
     loginUrl.searchParams.set(
       "redirect",
       pathname,
     );
 
-    return NextResponse.redirect(
-      loginUrl,
-    );
+    return NextResponse.redirect(loginUrl);
   }
 
   /*
-   * ==========================================================
-   * 5. UTILISATEUR DÉJÀ CONNECTÉ
-   * ==========================================================
+   * ---------------------------------------------------------
+   * ESPACES PLATEFORME
+   * ---------------------------------------------------------
    *
-   * Les pages publiques restent accessibles.
+   * IMPORTANT :
    *
-   * Les pages d'authentification redirigent vers l'espace
-   * correspondant au rôle.
+   * Un Super Admin n'a pas besoin de pharmacy_id.
+   * On laisse donc la page Super Admin effectuer sa propre
+   * vérification via requireSuperAdmin().
+   *
+   * Même principe pour les agents plateforme.
    */
 
   if (
-    isPublicRoute(pathname)
+    pathname.startsWith("/super-admin") ||
+    pathname.startsWith("/agent")
   ) {
     response.headers.set(
       "Cache-Control",
@@ -338,84 +233,75 @@ export async function middleware(
   }
 
   /*
-   * ==========================================================
-   * 6. PROFIL
-   * ==========================================================
+   * ---------------------------------------------------------
+   * ROUTES LOGIN / REGISTER / FORGOT PASSWORD
+   * ---------------------------------------------------------
+   */
+
+  const isAuthRoute =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password");
+
+  if (isAuthRoute) {
+    const {
+      data: profile,
+    } = await supabase
+      .from("profiles")
+      .select("role, pharmacy_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    /*
+     * Si aucun profil pharmacie n'existe, on laisse
+     * le parcours plateforme gérer le Super Admin / Agent.
+     */
+    if (!profile) {
+      return response;
+    }
+
+    return NextResponse.redirect(
+      new URL(
+        getRoleHome(profile.role),
+        request.url,
+      ),
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * PROFIL PHARMACIE
+   * ---------------------------------------------------------
    */
 
   const {
     data: profile,
-    error: profileError,
-  } =
-    await supabase
-      .from("profiles")
-      .select(
-        "role, pharmacy_id",
-      )
-      .eq(
-        "id",
-        user.id,
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("profiles")
+    .select("role, pharmacy_id")
+    .eq("id", user.id)
+    .maybeSingle();
 
   /*
-   * ==========================================================
-   * 7. PROFIL INTROUVABLE
-   * ==========================================================
+   * Pas de profil :
+   * on renvoie vers login.
    */
-
-  if (
-    profileError ||
-    !profile
-  ) {
-    console.error(
-      "MIDDLEWARE PROFILE ERROR:",
-      profileError,
-    );
-
+  if (!profile) {
     await supabase.auth.signOut();
 
     return NextResponse.redirect(
-      new URL(
-        "/login",
-        request.url,
-      ),
+      new URL("/login", request.url),
     );
   }
 
   /*
-   * ==========================================================
-   * 8. ROUTES LOGIN / REGISTER / FORGOT PASSWORD
-   * ==========================================================
+   * ---------------------------------------------------------
+   * PHARMACY_ID OBLIGATOIRE UNIQUEMENT POUR LES COMPTES
+   * PHARMACIE
+   * ---------------------------------------------------------
    */
 
-  if (
-    isAuthRoute(pathname)
-  ) {
-    return NextResponse.redirect(
-      new URL(
-        getRoleHome(
-          profile.role,
-        ),
-        request.url,
-      ),
-    );
-  }
-
-  /*
-   * ==========================================================
-   * 9. PHARMACY OBLIGATOIRE
-   * ==========================================================
-   *
-   * Les comptes pharmacie doivent avoir un pharmacy_id.
-   *
-   * Les comptes plateforme sont traités par leurs propres
-   * APIs et espaces.
-   */
-
-  if (
-    !profile.pharmacy_id
-  ) {
+  if (!profile.pharmacy_id) {
     return NextResponse.redirect(
       new URL(
         "/login?error=no_pharmacy",
@@ -425,36 +311,29 @@ export async function middleware(
   }
 
   /*
-   * ==========================================================
-   * 10. AUTORISATION DU MODULE
-   * ==========================================================
+   * ---------------------------------------------------------
+   * AUTORISATION PAR RÔLE
+   * ---------------------------------------------------------
    */
-
-  const role =
-    String(
-      profile.role ?? "",
-    )
-      .trim()
-      .toLowerCase();
 
   if (
     !isAllowed(
       pathname,
-      role,
+      profile.role,
     )
   ) {
     return NextResponse.redirect(
       new URL(
-        getRoleHome(role),
+        getRoleHome(profile.role),
         request.url,
       ),
     );
   }
 
   /*
-   * ==========================================================
-   * 11. PAS DE CACHE POUR LES ROUTES AUTHENTIFIÉES
-   * ==========================================================
+   * ---------------------------------------------------------
+   * CACHE
+   * ---------------------------------------------------------
    */
 
   response.headers.set(
@@ -464,10 +343,6 @@ export async function middleware(
 
   return response;
 }
-
-/* ============================================================
-   MATCHER
-============================================================ */
 
 export const config = {
   matcher: [
