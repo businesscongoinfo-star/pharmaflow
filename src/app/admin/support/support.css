@@ -1,0 +1,736 @@
+.admin-support-page {
+  min-height: 100vh;
+  background: #f4f7f6;
+  color: #17211f;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.admin-support-container {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.admin-support-header {
+  background: #ffffff;
+  border: 1px solid #e1e8e5;
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 30px rgba(22, 55, 44, 0.06);
+}
+
+.admin-support-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.admin-support-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-support-icon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 14px;
+  background: #0f766e;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 23px;
+  font-weight: 800;
+}
+
+.admin-support-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.admin-support-subtitle {
+  margin: 5px 0 0;
+  color: #65736f;
+  font-size: 14px;
+}
+
+.admin-support-refresh {
+  border: 1px solid #d8e2de;
+  background: #ffffff;
+  color: #155e57;
+  border-radius: 11px;
+  padding: 11px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.admin-support-refresh:hover:not(:disabled) {
+  background: #f1f8f6;
+  border-color: #b9d5cd;
+}
+
+.admin-support-refresh:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.admin-support-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-support-statistics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.admin-support-stat {
+  border: 1px solid #e4ebe8;
+  border-radius: 14px;
+  padding: 15px;
+  background: #fbfcfc;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-support-stat-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 11px;
+  background: #e7f5f0;
+  color: #0f766e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.admin-support-stat-label {
+  font-size: 12px;
+  color: #71807b;
+}
+
+.admin-support-stat-value {
+  font-size: 21px;
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+.admin-support-alert {
+  padding: 13px 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.admin-support-alert-error {
+  background: #fff1f1;
+  border: 1px solid #f2caca;
+  color: #a32727;
+}
+
+.admin-support-alert-success {
+  background: #effaf6;
+  border: 1px solid #c8eadf;
+  color: #146b58;
+}
+
+.admin-support-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.admin-support-tickets {
+  background: #ffffff;
+  border: 1px solid #e1e8e5;
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 650px;
+  box-shadow: 0 8px 30px rgba(22, 55, 44, 0.05);
+}
+
+.admin-support-filters {
+  padding: 18px;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.admin-support-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-support-input,
+.admin-support-select,
+.admin-support-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dce5e1;
+  background: #ffffff;
+  color: #1e2a27;
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 14px;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admin-support-input:focus,
+.admin-support-select:focus,
+.admin-support-textarea:focus {
+  border-color: #70aaa0;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);
+}
+
+.admin-support-filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.admin-support-ticket-list {
+  max-height: calc(100vh - 360px);
+  min-height: 560px;
+  overflow-y: auto;
+}
+
+.admin-support-ticket {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid #edf1ef;
+  background: #ffffff;
+  padding: 16px;
+  cursor: pointer;
+  display: block;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admin-support-ticket:hover {
+  background: #f8fbfa;
+}
+
+.admin-support-ticket-selected {
+  background: #eef8f5;
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+
+.admin-support-ticket-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-support-ticket-number {
+  font-size: 12px;
+  color: #64736e;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.admin-support-ticket-name {
+  font-weight: 800;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-support-ticket-subject {
+  color: #64736e;
+  font-size: 13px;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-support-ticket-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+  font-size: 12px;
+  color: #71807b;
+}
+
+.admin-support-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.admin-support-badge-open {
+  background: #e5f7f0;
+  color: #126b58;
+}
+
+.admin-support-badge-pending {
+  background: #fff5dc;
+  color: #93630b;
+}
+
+.admin-support-badge-closed {
+  background: #edf0ef;
+  color: #596662;
+}
+
+.admin-support-badge-default {
+  background: #f1f4f3;
+  color: #5d6a66;
+}
+
+.admin-support-conversation {
+  background: #ffffff;
+  border: 1px solid #e1e8e5;
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 650px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 30px rgba(22, 55, 44, 0.05);
+}
+
+.admin-support-conversation-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.admin-support-conversation-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.admin-support-conversation-ticket-number {
+  color: #64736e;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+
+.admin-support-conversation-name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.admin-support-conversation-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.admin-support-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.admin-support-button {
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 12px;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.admin-support-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-support-button-secondary {
+  border: 1px solid #d8e2de;
+  background: #ffffff;
+  color: #3e514b;
+}
+
+.admin-support-button-secondary:hover:not(:disabled) {
+  background: #f5f8f7;
+}
+
+.admin-support-button-primary {
+  border: 1px solid #0f766e;
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.admin-support-button-primary:hover:not(:disabled) {
+  background: #0b625b;
+}
+
+.admin-support-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #f0f3f2;
+  font-size: 13px;
+  color: #64736e;
+}
+
+.admin-support-contact a {
+  color: #0f766e;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.admin-support-contact a:hover {
+  text-decoration: underline;
+}
+
+.admin-support-messages {
+  flex: 1;
+  min-height: 420px;
+  max-height: calc(100vh - 470px);
+  overflow-y: auto;
+  padding: 22px;
+  background: #f8faf9;
+}
+
+.admin-support-message-row {
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.admin-support-message-row-agent {
+  justify-content: flex-end;
+}
+
+.admin-support-message-row-customer {
+  justify-content: flex-start;
+}
+
+.admin-support-message {
+  max-width: 78%;
+  border: 1px solid #e2e9e6;
+  background: #ffffff;
+  border-radius: 16px 16px 16px 4px;
+  padding: 13px 15px;
+  box-shadow: 0 2px 8px rgba(20, 55, 45, 0.04);
+}
+
+.admin-support-message-agent {
+  background: #dff4ed;
+  border-color: #c4e7dc;
+  border-radius: 16px 16px 4px 16px;
+}
+
+.admin-support-message-sender {
+  font-size: 11px;
+  font-weight: 800;
+  color: #53635e;
+  margin-bottom: 6px;
+}
+
+.admin-support-message-agent
+  .admin-support-message-sender {
+  color: #146b58;
+}
+
+.admin-support-message-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #25312e;
+}
+
+.admin-support-message-date {
+  font-size: 10px;
+  color: #71807b;
+  margin-top: 8px;
+}
+
+.admin-support-message-agent
+  .admin-support-message-date {
+  text-align: right;
+}
+
+.admin-support-reply {
+  border-top: 1px solid #e7edeb;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.admin-support-textarea {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.5;
+}
+
+.admin-support-reply-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-support-character-count {
+  font-size: 12px;
+  color: #71807b;
+}
+
+.admin-support-empty {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 30px;
+  color: #65736f;
+}
+
+.admin-support-empty-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 15px;
+  background: #eef5f2;
+  color: #0f766e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.admin-support-empty-title {
+  color: #293633;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.admin-support-empty-text {
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+/* =========================================================
+   TABLETTE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .admin-support-layout {
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  }
+
+  .admin-support-statistics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-support-ticket-list {
+    max-height: 650px;
+  }
+
+  .admin-support-messages {
+    max-height: 600px;
+  }
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 800px) {
+  .admin-support-page {
+    padding: 12px;
+  }
+
+  .admin-support-header {
+    padding: 17px;
+    border-radius: 16px;
+  }
+
+  .admin-support-title {
+    font-size: 22px;
+  }
+
+  .admin-support-subtitle {
+    font-size: 13px;
+  }
+
+  .admin-support-icon {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 12px;
+  }
+
+  .admin-support-statistics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .admin-support-stat {
+    padding: 12px;
+  }
+
+  .admin-support-stat-icon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .admin-support-stat-value {
+    font-size: 18px;
+  }
+
+  .admin-support-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .admin-support-tickets,
+  .admin-support-conversation {
+    min-height: 0;
+    border-radius: 16px;
+  }
+
+  .admin-support-ticket-list {
+    min-height: 0;
+    max-height: 480px;
+  }
+
+  .admin-support-conversation {
+    min-height: 600px;
+  }
+
+  .admin-support-conversation-header {
+    padding: 16px;
+  }
+
+  .admin-support-conversation-name {
+    font-size: 18px;
+  }
+
+  .admin-support-messages {
+    min-height: 360px;
+    max-height: 560px;
+    padding: 14px;
+  }
+
+  .admin-support-message {
+    max-width: 90%;
+  }
+
+  .admin-support-reply {
+    padding: 13px;
+  }
+
+  .admin-support-actions {
+    width: 100%;
+  }
+
+  .admin-support-button {
+    flex: 1;
+    min-width: 100px;
+  }
+}
+
+/* =========================================================
+   PETITS TÉLÉPHONES
+   ========================================================= */
+
+@media (max-width: 480px) {
+  .admin-support-page {
+    padding: 8px;
+  }
+
+  .admin-support-header {
+    padding: 14px;
+  }
+
+  .admin-support-title-group {
+    align-items: flex-start;
+  }
+
+  .admin-support-title {
+    font-size: 20px;
+  }
+
+  .admin-support-refresh {
+    width: 100%;
+  }
+
+  .admin-support-statistics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-support-filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-support-ticket {
+    padding: 13px;
+  }
+
+  .admin-support-ticket-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-support-conversation-header-top {
+    gap: 12px;
+  }
+
+  .admin-support-contact {
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .admin-support-message {
+    max-width: 94%;
+  }
+
+  .admin-support-reply-bottom {
+    align-items: stretch;
+  }
+
+  .admin-support-reply-bottom
+    .admin-support-button-primary {
+    width: 100%;
+  }
+}
