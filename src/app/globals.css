@@ -42507,3 +42507,178 @@ img {
     padding-left: 65px;
   }
 }
+/* ============================================================
+   PHARMAFLOW — FIX MENU MOBILE
+   Correction définitive de la sidebar mobile
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  /* ----------------------------------------------------------
+     BOUTON MENU
+  ---------------------------------------------------------- */
+
+  .pf-mobile-menu-button {
+    display: flex !important;
+    position: relative !important;
+    z-index: 100003 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* ----------------------------------------------------------
+     OVERLAY
+  ---------------------------------------------------------- */
+
+  .pf-mobile-overlay {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: rgba(15, 23, 42, 0.48) !important;
+
+    z-index: 100000 !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    cursor: pointer !important;
+  }
+
+  /* ----------------------------------------------------------
+     SIDEBAR — ÉTAT FERMÉ
+  ---------------------------------------------------------- */
+
+  .pf-sidebar {
+    display: flex !important;
+
+    position: fixed !important;
+
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+
+    width: min(86vw, 340px) !important;
+    max-width: 340px !important;
+    height: 100dvh !important;
+
+    margin: 0 !important;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    z-index: 100002 !important;
+
+    transform: translateX(-110%) !important;
+
+    transition:
+      transform 0.25s ease-in-out !important;
+
+    pointer-events: none !important;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ----------------------------------------------------------
+     SIDEBAR — ÉTAT OUVERT
+  ---------------------------------------------------------- */
+
+  .pf-sidebar.pf-sidebar-mobile-open {
+    display: flex !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    transform: translateX(0) !important;
+
+    z-index: 100002 !important;
+
+    pointer-events: auto !important;
+  }
+
+  /* ----------------------------------------------------------
+     TOUT LE CONTENU DE LA SIDEBAR
+  ---------------------------------------------------------- */
+
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-brand,
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-pharmacy,
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-nav,
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-support,
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-user {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* ----------------------------------------------------------
+     NAVIGATION
+  ---------------------------------------------------------- */
+
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-nav {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-nav-item {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    width: 100% !important;
+
+    min-height: 50px !important;
+
+    pointer-events: auto !important;
+
+    position: relative !important;
+    z-index: 100004 !important;
+  }
+
+  /* ----------------------------------------------------------
+     SUPPORT
+  ---------------------------------------------------------- */
+
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-support {
+    display: flex !important;
+  }
+
+  /* ----------------------------------------------------------
+     UTILISATEUR
+  ---------------------------------------------------------- */
+
+  .pf-sidebar.pf-sidebar-mobile-open
+  .pf-sidebar-user {
+    display: flex !important;
+  }
+
+  /* ----------------------------------------------------------
+     EMPÊCHER LE CONTENU D'ÊTRE AU-DESSUS DU MENU
+  ---------------------------------------------------------- */
+
+  .pf-app-main {
+    position: relative;
+    z-index: 1 !important;
+  }
+
+  .pf-app-header {
+    position: relative;
+    z-index: 2 !important;
+  }
+
+}
