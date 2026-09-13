@@ -390,6 +390,7 @@ export const PHARMAFLOW_ROLES = {
     homeRoute: "/employe",
   },
 } as const;
+
 /* =========================================================
    DONNÉES MÉTIER CONFIRMÉES
    ========================================================= */
@@ -709,7 +710,6 @@ pharmacy and application settings according to user permissions.
   },
 } as const;
 
-
 /* =========================================================
    NAVIGATION CONFIRMÉE
    ========================================================= */
@@ -780,7 +780,6 @@ export const PHARMAFLOW_NAVIGATION = [
   },
 ] as const;
 
-
 /* =========================================================
    ACCÈS PAR RÔLE — INFORMATIONS CONFIRMÉES
    ========================================================= */
@@ -849,7 +848,6 @@ The Employee is redirected to the employee area.
   },
 } as const;
 
-
 /* =========================================================
    INFORMATIONS D'AUTHENTIFICATION CONFIRMÉES
    ========================================================= */
@@ -903,7 +901,6 @@ The AI must not invent a product-import procedure
 when a user has just created an account.
   `.trim(),
 } as const;
-
 
 /* =========================================================
    RÈGLES ANTI-HALLUCINATION
@@ -1007,6 +1004,7 @@ ABSOLUTE RULES FOR THE PHARMAFLOW ASSISTANT:
 15. Accuracy is more important than answering every question.
   `.trim(),
 } as const;
+
 /* =========================================================
    CONSTRUCTION DU CONTEXTE POUR L'IA
    ========================================================= */
@@ -1123,7 +1121,6 @@ FIN DE LA BASE DE CONNAISSANCES
   `.trim();
 }
 
-
 /* =========================================================
    CATÉGORIES DU SUPPORT
    ========================================================= */
@@ -1134,7 +1131,6 @@ export type PharmaFlowSupportCategory =
   | "technical"
   | "complaint"
   | "commercial";
-
 
 export const PHARMAFLOW_SUPPORT_CATEGORIES = {
   general: {
@@ -1162,7 +1158,6 @@ export const PHARMAFLOW_SUPPORT_CATEGORIES = {
     en: "Commercial question",
   },
 } as const;
-
 
 /* =========================================================
    INSTRUCTIONS DE RÉPONSE
@@ -1485,7 +1480,6 @@ the current version of PharmaFlow.
   `.trim();
 }
 
-
 /* =========================================================
    VALIDATION DE LA CATÉGORIE
    ========================================================= */
@@ -1512,7 +1506,6 @@ export function normalizeSupportCategory(
   }
 }
 
-
 /* =========================================================
    VALIDATION DE LA LANGUE
    ========================================================= */
@@ -1522,7 +1515,6 @@ export function normalizePharmaFlowLocale(
 ): PharmaFlowLocale {
   return locale === "en" ? "en" : "fr";
 }
-
 
 /* =========================================================
    PROTECTION DU CONTEXTE
@@ -1545,35 +1537,28 @@ export function sanitizeSupportHistory(
     return [];
   }
 
-return history.map(
-  (
-    item
-  ): {
-    role: "user" | "assistant";
-    content: string;
-  } => ({
-    role:
-      item.role === "assistant"
-        ? "assistant"
-        : "user",
-    content:
-      item.content
-        .trim()
-        .slice(0, 4000),
-  }),
-);
-    .map((item) => ({
-      role:
-        item.role === "assistant"
-          ? "assistant"
-          : "user",
+  return history
+    .map(
+      (
+        item
+      ): {
+        role: "user" | "assistant";
+        content: string;
+      } => ({
+        role:
+          item.role === "assistant"
+            ? "assistant"
+            : "user",
 
-      content: item.content.trim().slice(0, 4000),
-    }))
+        content:
+          typeof item.content === "string"
+            ? item.content.trim().slice(0, 4000)
+            : "",
+      })
+    )
     .filter((item) => item.content.length > 0)
     .slice(-12);
 }
-
 
 /* =========================================================
    PROTECTION DU MESSAGE UTILISATEUR
@@ -1590,7 +1575,6 @@ export function sanitizeSupportMessage(
     .trim()
     .slice(0, 6000);
 }
-
 
 /* =========================================================
    CONSTRUCTION FINALE DU PROMPT
