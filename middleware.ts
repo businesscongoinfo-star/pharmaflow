@@ -7,6 +7,11 @@ import {
   type NextRequest,
 } from "next/server";
 
+
+/* =========================================================
+   REDIRECTION SELON LE RÔLE
+   ========================================================= */
+
 function getRoleHome(
   role: string
 ) {
@@ -31,6 +36,11 @@ function getRoleHome(
   }
 }
 
+
+/* =========================================================
+   PERMISSIONS PAR MODULE
+   ========================================================= */
+
 function isAllowed(
   pathname: string,
   role: string
@@ -47,6 +57,7 @@ function isAllowed(
     return role === "owner";
   }
 
+
   /* ================================================
      ADMINISTRATION
      ================================================ */
@@ -59,6 +70,7 @@ function isAllowed(
       role === "admin"
     );
   }
+
 
   /* ================================================
      PHARMACIEN
@@ -75,6 +87,7 @@ function isAllowed(
     );
   }
 
+
   /* ================================================
      CAISSE
      ================================================ */
@@ -87,6 +100,7 @@ function isAllowed(
       role === "cashier"
     );
   }
+
 
   /* ================================================
      EMPLOYÉ
@@ -101,15 +115,21 @@ function isAllowed(
     );
   }
 
+
   /* ================================================
      MODULES PHARMACIE EXISTANTS
      ================================================ */
 
   const pharmacyModules = [
     "/products",
+    "/produits",
     "/stock",
     "/ventes",
     "/utilisateurs",
+    "/rapports",
+    "/paiements",
+    "/parametres",
+    "/abonnement",
   ];
 
   if (
@@ -126,8 +146,89 @@ function isAllowed(
     );
   }
 
+
+  /* ================================================
+     PAR DÉFAUT
+     ================================================ */
+
   return true;
 }
+
+
+/* =========================================================
+   ROUTES PUBLIQUES ACCESSIBLES À TOUT LE MONDE
+   ========================================================= */
+
+function isPublicRoute(
+  pathname: string
+) {
+  return (
+    pathname === "/" ||
+
+    pathname.startsWith(
+      "/support"
+    ) ||
+
+    pathname.startsWith(
+      "/confidentialite"
+    ) ||
+
+    pathname.startsWith(
+      "/conditions"
+    ) ||
+
+    pathname.startsWith(
+      "/securite"
+    )
+  );
+}
+
+
+/* =========================================================
+   ROUTES D'AUTHENTIFICATION
+   =========================================================
+   Ces pages sont accessibles sans connexion,
+   MAIS un utilisateur déjà connecté doit être
+   redirigé vers son espace.
+   ========================================================= */
+
+function isAuthRoute(
+  pathname: string
+) {
+  return (
+    pathname.startsWith(
+      "/login"
+    ) ||
+
+    pathname.startsWith(
+      "/register"
+    ) ||
+
+    pathname.startsWith(
+      "/forgot-password"
+    )
+  );
+}
+
+
+/* =========================================================
+   API PUBLIQUES DU CENTRE D'ASSISTANCE
+   ========================================================= */
+
+function isPublicApiRoute(
+  pathname: string
+) {
+  return (
+    pathname.startsWith(
+      "/api/support"
+    )
+  );
+}
+
+
+/* =========================================================
+   MIDDLEWARE
+   ========================================================= */
 
 export async function middleware(
   request: NextRequest
@@ -136,6 +237,11 @@ export async function middleware(
     NextResponse.next({
       request,
     });
+
+
+  /* ================================================
+     SUPABASE SERVER CLIENT
+     ================================================ */
 
   const supabase =
     createServerClient(
@@ -180,6 +286,57 @@ export async function middleware(
       }
     );
 
+
+  /* ================================================
+     URL ACTUELLE
+     ================================================ */
+
+  const pathname =
+    request.nextUrl.pathname;
+
+
+  /* ================================================
+     ROUTES PUBLIQUES
+     ================================================ */
+
+  const publicRoute =
+    isPublicRoute(
+      pathname
+    );
+
+
+  const authRoute =
+    isAuthRoute(
+      pathname
+    );
+
+
+  const publicApiRoute =
+    isPublicApiRoute(
+      pathname
+    );
+
+
+  /* =================================================
+     API SUPPORT PUBLIQUE
+     =================================================
+     
+     L'IA et les tickets du Centre d'assistance
+     doivent pouvoir fonctionner même lorsqu'un
+     visiteur n'est pas connecté.
+     ================================================= */
+
+  if (
+    publicApiRoute
+  ) {
+    return response;
+  }
+
+
+  /* ================================================
+     RÉCUPÉRER L'UTILISATEUR
+     ================================================ */
+
   const {
     data: {
       user,
@@ -187,35 +344,50 @@ export async function middleware(
   } =
     await supabase.auth.getUser();
 
-  const pathname =
-    request.nextUrl.pathname;
 
-  const isPublicRoute =
-    pathname === "/" ||
-    pathname.startsWith(
-      "/login"
-    ) ||
-    pathname.startsWith(
-      "/register"
-    ) ||
-    pathname.startsWith(
-      "/forgot-password"
-    );
-
-  /* ================================================
-     PAS CONNECTÉ
-     ================================================ */
+  /* =================================================
+     VISITEUR NON CONNECTÉ
+     ================================================= */
 
   if (!user) {
-    if (isPublicRoute) {
+
+    /* -----------------------------------------------
+       Page publique
+       ----------------------------------------------- */
+
+    if (
+      publicRoute
+    ) {
       return response;
     }
+
+
+    /* -----------------------------------------------
+       Page d'authentification
+       ----------------------------------------------- */
+
+    if (
+      authRoute
+    ) {
+      return response;
+    }
+
+
+    /* -----------------------------------------------
+       Page privée
+       ----------------------------------------------- */
 
     const loginUrl =
       request.nextUrl.clone();
 
-    loginUrl.pathname = "/login";
+    loginUrl.pathname =
+      "/login";
 
+    /*
+     * On conserve le chemin demandé
+     * pour permettre une redirection
+     * après connexion.
+     */
     loginUrl.searchParams.set(
       "redirect",
       pathname
@@ -226,14 +398,40 @@ export async function middleware(
     );
   }
 
-  /* ================================================
+
+  /* =================================================
      UTILISATEUR DÉJÀ CONNECTÉ
-     ================================================ */
+     ================================================= */
+
+  /* -----------------------------------------------
+     Les routes publiques restent accessibles
+     même connecté.
+     
+     Exemple :
+     /support
+     /confidentialite
+     /conditions
+     ----------------------------------------------- */
 
   if (
-    isPublicRoute &&
-    pathname !== "/"
+    publicRoute
   ) {
+    return response;
+  }
+
+
+  /* =================================================
+     LOGIN / REGISTER / FORGOT PASSWORD
+     =================================================
+     
+     Un utilisateur déjà connecté ne doit pas
+     rester sur ces pages.
+     ================================================= */
+
+  if (
+    authRoute
+  ) {
+
     const {
       data: profile,
     } =
@@ -242,21 +440,29 @@ export async function middleware(
         .select(
           "role, pharmacy_id"
         )
-        .eq("id", user.id)
+        .eq(
+          "id",
+          user.id
+        )
         .maybeSingle();
 
+
+    /* -----------------------------------------------
+       Profil introuvable
+       ----------------------------------------------- */
+
     if (!profile) {
+
       await supabase.auth.signOut();
 
-      const loginUrl =
-        request.nextUrl.clone();
-
-      loginUrl.pathname = "/login";
-
       return NextResponse.redirect(
-        loginUrl
+        new URL(
+          "/login",
+          request.url
+        )
       );
     }
+
 
     return NextResponse.redirect(
       new URL(
@@ -268,9 +474,10 @@ export async function middleware(
     );
   }
 
-  /* ================================================
-     RÉCUPÉRER LE RÔLE
-     ================================================ */
+
+  /* =================================================
+     RÉCUPÉRER LE PROFIL
+     ================================================= */
 
   const {
     data: profile,
@@ -280,10 +487,19 @@ export async function middleware(
       .select(
         "role, pharmacy_id"
       )
-      .eq("id", user.id)
+      .eq(
+        "id",
+        user.id
+      )
       .maybeSingle();
 
+
+  /* =================================================
+     PROFIL INTROUVABLE
+     ================================================= */
+
   if (!profile) {
+
     await supabase.auth.signOut();
 
     return NextResponse.redirect(
@@ -294,11 +510,14 @@ export async function middleware(
     );
   }
 
-  /* ================================================
-     VÉRIFICATION PHARMACIE
-     ================================================ */
 
-  if (!profile.pharmacy_id) {
+  /* =================================================
+     VÉRIFICATION PHARMACIE
+     ================================================= */
+
+  if (
+    !profile.pharmacy_id
+  ) {
     return NextResponse.redirect(
       new URL(
         "/login?error=no_pharmacy",
@@ -307,9 +526,10 @@ export async function middleware(
     );
   }
 
-  /* ================================================
+
+  /* =================================================
      VÉRIFICATION DU RÔLE
-     ================================================ */
+     ================================================= */
 
   if (
     !isAllowed(
@@ -327,8 +547,18 @@ export async function middleware(
     );
   }
 
+
+  /* =================================================
+     AUTORISÉ
+     ================================================= */
+
   return response;
 }
+
+
+/* =========================================================
+   MATCHER
+   ========================================================= */
 
 export const config = {
   matcher: [

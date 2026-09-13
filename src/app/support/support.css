@@ -2180,3 +2180,501 @@
     scroll-behavior: auto !important;
   }
 }
+/* =========================================================
+   PHARMAFLOW SUPPORT
+   AMÉLIORATIONS RESPONSIVE ET CONVERSATION HUMAINE
+   ========================================================= */
+
+
+/* =========================================================
+   SÉCURITÉ GÉNÉRALE
+   ========================================================= */
+
+.pf-support-page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.pf-support-page *,
+.pf-support-page *::before,
+.pf-support-page *::after {
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   CHAT
+   ========================================================= */
+
+.pf-support-chat-card {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.pf-support-chat-active {
+  width: 100%;
+  max-width: 100%;
+}
+
+
+/* =========================================================
+   HEADER DU CHAT
+   ========================================================= */
+
+.pf-support-chat-header {
+  position: relative;
+  z-index: 2;
+}
+
+.pf-support-chat-header > div:nth-child(2) {
+  min-width: 0;
+}
+
+.pf-support-chat-header strong,
+.pf-support-chat-header span {
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   MESSAGES
+   ========================================================= */
+
+.pf-support-messages {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+
+  scroll-behavior: smooth;
+
+  scrollbar-width: thin;
+}
+
+.pf-support-message {
+  max-width: 100%;
+}
+
+.pf-support-message-bubble {
+  max-width: min(78%, 680px);
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  white-space: normal;
+}
+
+
+/* =========================================================
+   FORMULAIRE CHAT
+   ========================================================= */
+
+.pf-support-chat-form {
+  width: 100%;
+  max-width: 100%;
+}
+
+.pf-support-chat-form textarea {
+  min-width: 0;
+  width: 100%;
+
+  resize: vertical;
+
+  overflow-wrap: anywhere;
+}
+
+.pf-support-chat-form button {
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   FORMULAIRE CONSEILLER
+   ========================================================= */
+
+.pf-support-human-form-fields {
+  width: 100%;
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.pf-support-human-form-fields input,
+.pf-support-human-form-fields textarea {
+  width: 100%;
+  max-width: 100%;
+
+  box-sizing: border-box;
+}
+
+.pf-support-human-form-fields textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+
+/* =========================================================
+   BOUTONS
+   ========================================================= */
+
+.pf-support-primary-button,
+.pf-support-outline-button,
+.pf-support-ticket-button {
+  min-height: 46px;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.pf-support-primary-button:hover,
+.pf-support-outline-button:hover,
+.pf-support-ticket-button:hover {
+  transform: translateY(-1px);
+}
+
+.pf-support-primary-button:disabled,
+.pf-support-outline-button:disabled,
+.pf-support-ticket-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+
+/* =========================================================
+   CATÉGORIES
+   ========================================================= */
+
+.pf-support-category-grid {
+  width: 100%;
+}
+
+.pf-support-category-card {
+  position: relative;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  cursor: pointer;
+}
+
+.pf-support-category-card strong,
+.pf-support-category-card p {
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   CARTE CONSEILLER
+   ========================================================= */
+
+.pf-support-human-card {
+  position: relative;
+  z-index: 1;
+
+  width: 100%;
+  max-width: 100%;
+}
+
+.pf-support-human-card > div:nth-child(2) {
+  min-width: 0;
+}
+
+.pf-support-human-card span,
+.pf-support-human-card p {
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   SIDEBAR CONTACT
+   ========================================================= */
+
+.pf-support-contact-card {
+  width: 100%;
+  max-width: 100%;
+}
+
+.pf-support-contact-list {
+  width: 100%;
+}
+
+.pf-support-contact-list button {
+  width: 100%;
+  min-width: 0;
+
+  cursor: pointer;
+}
+
+.pf-support-contact-list button > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.pf-support-contact-list strong,
+.pf-support-contact-list small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+
+/* =========================================================
+   EXTRA CONTACTS
+   ========================================================= */
+
+.pf-support-extra-contacts {
+  width: 100%;
+}
+
+.pf-support-extra-contacts button {
+  width: 100%;
+  min-width: 0;
+}
+
+.pf-support-extra-contacts strong,
+.pf-support-extra-contacts small {
+  overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .pf-support-header-inner {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pf-support-header-actions {
+    flex-shrink: 0;
+  }
+
+  .pf-support-main {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pf-support-layout {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pf-support-primary {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pf-support-chat-card {
+    border-radius: 18px;
+  }
+
+  .pf-support-chat-header {
+    padding: 16px;
+  }
+
+  .pf-support-chat-start {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .pf-support-start-actions {
+    width: 100%;
+  }
+
+  .pf-support-start-actions button {
+    width: 100%;
+  }
+
+  .pf-support-messages {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .pf-support-message-bubble {
+    max-width: 84%;
+  }
+
+  .pf-support-chat-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+
+    padding: 12px;
+  }
+
+  .pf-support-chat-form textarea {
+    min-height: 48px;
+  }
+
+  .pf-support-chat-form button {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+  }
+
+  .pf-support-human-form-fields {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .pf-support-human-form-fields input,
+  .pf-support-human-form-fields textarea {
+    font-size: 16px;
+  }
+
+  .pf-support-human-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .pf-support-human-card .pf-support-outline-button {
+    width: 100%;
+  }
+
+  .pf-support-category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pf-support-sidebar {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+
+/* =========================================================
+   PETITS IPHONE
+   ========================================================= */
+
+@media (max-width: 430px) {
+
+  .pf-support-header-inner {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .pf-support-brand {
+    min-width: 0;
+  }
+
+  .pf-support-brand > span:last-child {
+    white-space: nowrap;
+  }
+
+  .pf-support-login {
+    white-space: nowrap;
+  }
+
+  .pf-support-language {
+    flex-shrink: 0;
+  }
+
+  .pf-support-chat-header {
+    gap: 10px;
+  }
+
+  .pf-support-ai-avatar {
+    flex-shrink: 0;
+  }
+
+  .pf-support-chat-header strong {
+    font-size: 14px;
+  }
+
+  .pf-support-chat-header span {
+    font-size: 12px;
+  }
+
+  .pf-support-message-bubble {
+    max-width: 88%;
+  }
+
+  .pf-support-primary-button,
+  .pf-support-outline-button,
+  .pf-support-ticket-button {
+    width: 100%;
+  }
+}
+
+
+/* =========================================================
+   TRÈS PETITS ÉCRANS
+   ========================================================= */
+
+@media (max-width: 360px) {
+
+  .pf-support-header-actions {
+    gap: 6px;
+  }
+
+  .pf-support-login {
+    font-size: 12px;
+  }
+
+  .pf-support-language button {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .pf-support-message-bubble {
+    max-width: 92%;
+  }
+
+  .pf-support-chat-form {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .pf-support-chat-form button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+}
+
+
+/* =========================================================
+   ACCESSIBILITÉ / FOCUS
+   ========================================================= */
+
+.pf-support-page button:focus-visible,
+.pf-support-page a:focus-visible,
+.pf-support-page input:focus-visible,
+.pf-support-page textarea:focus-visible {
+  outline: 3px solid rgba(16, 185, 129, 0.35);
+  outline-offset: 2px;
+}
+
+
+/* =========================================================
+   ANIMATION LÉGÈRE DES NOUVEAUX MESSAGES
+   ========================================================= */
+
+.pf-support-message {
+  animation: pfSupportMessageIn 0.22s ease-out;
+}
+
+@keyframes pfSupportMessageIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

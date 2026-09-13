@@ -1,5 +1,4 @@
-import { createHash } from "crypto";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import {
   supabaseAdmin,
@@ -7,12 +6,18 @@ import {
 
 export const runtime = "nodejs";
 
+
+/* =========================================================
+   TYPES
+   ========================================================= */
+
 type Category =
   | "general"
   | "payment"
   | "technical"
   | "complaint"
   | "commercial";
+
 
 type CreateTicketBody = {
   action?: "create" | "message";
@@ -29,6 +34,11 @@ type CreateTicketBody = {
   message?: string;
 };
 
+
+/* =========================================================
+   OUTILS
+   ========================================================= */
+
 function clean(
   value: unknown,
   maxLength: number,
@@ -43,6 +53,7 @@ function clean(
     .slice(0, maxLength);
 }
 
+
 function hashToken(
   token: string,
 ) {
@@ -50,6 +61,7 @@ function hashToken(
     .update(token)
     .digest("hex");
 }
+
 
 function validEmail(
   email: string,
@@ -62,6 +74,7 @@ function validEmail(
     email,
   );
 }
+
 
 function createAccessToken() {
   return (
@@ -76,19 +89,59 @@ function createAccessToken() {
   );
 }
 
+
+function isValidCategory(
+  value: unknown,
+): value is Category {
+  return (
+    value === "general" ||
+    value === "payment" ||
+    value === "technical" ||
+    value === "complaint" ||
+    value === "commercial"
+  );
+}
+
+
 function categoryToPriority(
   category: Category,
 ) {
-  if (category === "payment") {
-    return "high";
-  }
-
-  if (category === "complaint") {
+  if (
+    category === "payment" ||
+    category === "complaint"
+  ) {
     return "high";
   }
 
   return "normal";
 }
+
+
+function categoryToSubject(
+  category: Category,
+) {
+  switch (category) {
+    case "payment":
+      return "Problème de paiement";
+
+    case "technical":
+      return "Assistance technique";
+
+    case "complaint":
+      return "Réclamation";
+
+    case "commercial":
+      return "Demande commerciale";
+
+    default:
+      return "Demande générale";
+  }
+}
+
+
+/* =========================================================
+   POST
+   ========================================================= */
 
 export async function POST(
   request: Request,
@@ -100,26 +153,57 @@ export async function POST(
     const action =
       body.action || "create";
 
+
+    /* =====================================================
+       MESSAGE DANS UN TICKET EXISTANT
+       ===================================================== */
+
     if (action === "message") {
       return await addCustomerMessage(
         body,
       );
     }
 
+
+    /* =====================================================
+       CRÉATION D'UN NOUVEAU TICKET
+       ===================================================== */
+
     const name =
-      clean(body.name, 120);
+      clean(
+        body.name,
+        120,
+      );
 
     const email =
-      clean(body.email, 180);
+      clean(
+        body.email,
+        180,
+      );
 
     const phone =
-      clean(body.phone, 50);
+      clean(
+        body.phone,
+        50,
+      );
 
     const category =
-      body.category || "general";
+      isValidCategory(
+        body.category,
+      )
+        ? body.category
+        : "general";
 
     const message =
-      clean(body.message, 5000);
+      clean(
+        body.message,
+        5000,
+      );
+
+
+    /* =====================================================
+       VALIDATION NOM
+       ===================================================== */
 
     if (!name) {
       return Response.json(
@@ -133,6 +217,11 @@ export async function POST(
       );
     }
 
+
+    /* =====================================================
+       VALIDATION CONTACT
+       ===================================================== */
+
     if (!email && !phone) {
       return Response.json(
         {
@@ -144,6 +233,11 @@ export async function POST(
         },
       );
     }
+
+
+    /* =====================================================
+       VALIDATION EMAIL
+       ===================================================== */
 
     if (!validEmail(email)) {
       return Response.json(
@@ -157,6 +251,11 @@ export async function POST(
       );
     }
 
+
+    /* =====================================================
+       VALIDATION MESSAGE
+       ===================================================== */
+
     if (!message) {
       return Response.json(
         {
@@ -169,29 +268,45 @@ export async function POST(
       );
     }
 
+
+    /* =====================================================
+       TOKEN PRIVÉ DU VISITEUR
+       ===================================================== */
+
     const accessToken =
       createAccessToken();
 
     const tokenHash =
-      hashToken(accessToken);
+      hashToken(
+        accessToken,
+      );
+
+
+    /* =====================================================
+       INFORMATIONS DU TICKET
+       ===================================================== */
 
     const subject =
-      category === "payment"
-        ? "Problème de paiement"
-        : category === "technical"
-          ? "Assistance technique"
-          : category ===
-              "complaint"
-            ? "Réclamation"
-            : category ===
-                "commercial"
-              ? "Demande commerciale"
-              : "Demande générale";
+      categoryToSubject(
+        category,
+      );
+
+    const priority =
+      categoryToPriority(
+        category,
+      );
+
+    const now =
+      new Date().toISOString();
+
+
+    /* =====================================================
+       CRÉER LE TICKET
+       ===================================================== */
 
     const {
       data: ticket,
-      error:
-        ticketError,
+      error: ticketError,
     } =
       await supabaseAdmin
         .from(
@@ -200,24 +315,33 @@ export async function POST(
         .insert({
           customer_name:
             name,
+
           customer_email:
             email || null,
+
           customer_phone:
             phone || null,
+
           category,
+
           subject,
-          status: "open",
-          priority:
-            categoryToPriority(
-              category,
-            ),
+
+          status:
+            "open",
+
+          priority,
+
           visitor_token_hash:
             tokenHash,
+
+          last_message_at:
+            now,
         })
         .select(
-          "id,ticket_number,status,category,created_at",
+          "id,ticket_number,status,category,created_at,last_message_at",
         )
         .single();
+
 
     if (
       ticketError ||
@@ -239,9 +363,13 @@ export async function POST(
       );
     }
 
+
+    /* =====================================================
+       PREMIER MESSAGE CLIENT
+       ===================================================== */
+
     const {
-      error:
-        messageError,
+      error: messageError,
     } =
       await supabaseAdmin
         .from(
@@ -250,12 +378,26 @@ export async function POST(
         .insert({
           ticket_id:
             ticket.id,
+
           sender_type:
             "customer",
+
           message,
         });
 
+
+    /* =====================================================
+       SI LE MESSAGE ÉCHOUE
+       ===================================================== */
+
     if (messageError) {
+
+      /*
+       * On supprime le ticket incomplet
+       * afin de ne pas laisser une demande
+       * vide dans le système.
+       */
+
       await supabaseAdmin
         .from(
           "support_tickets",
@@ -265,6 +407,7 @@ export async function POST(
           "id",
           ticket.id,
         );
+
 
       console.error(
         "SUPPORT FIRST MESSAGE:",
@@ -282,22 +425,40 @@ export async function POST(
       );
     }
 
+
+    /* =====================================================
+       RÉPONSE
+       ===================================================== */
+
     return Response.json({
-      success: true,
+      success:
+        true,
+
       ticket: {
-        id: ticket.id,
+        id:
+          ticket.id,
+
         ticketNumber:
           ticket.ticket_number,
+
         status:
           ticket.status,
+
         category:
           ticket.category,
+
         createdAt:
           ticket.created_at,
+
+        lastMessageAt:
+          ticket.last_message_at,
       },
+
       accessToken,
     });
+
   } catch (error) {
+
     console.error(
       "SUPPORT CREATE ERROR:",
       error,
@@ -314,6 +475,11 @@ export async function POST(
     );
   }
 }
+
+
+/* =========================================================
+   AJOUTER UN MESSAGE CLIENT
+   ========================================================= */
 
 async function addCustomerMessage(
   body: CreateTicketBody,
@@ -336,6 +502,11 @@ async function addCustomerMessage(
       5000,
     );
 
+
+  /* =====================================================
+     VALIDATION SESSION
+     ===================================================== */
+
   if (
     !ticketId ||
     !accessToken
@@ -351,6 +522,11 @@ async function addCustomerMessage(
     );
   }
 
+
+  /* =====================================================
+     VALIDATION MESSAGE
+     ===================================================== */
+
   if (!message) {
     return Response.json(
       {
@@ -363,13 +539,20 @@ async function addCustomerMessage(
     );
   }
 
+
+  /* =====================================================
+     VÉRIFICATION DU TOKEN
+     ===================================================== */
+
   const tokenHash =
-    hashToken(accessToken);
+    hashToken(
+      accessToken,
+    );
+
 
   const {
     data: ticket,
-    error:
-      ticketError,
+    error: ticketError,
   } =
     await supabaseAdmin
       .from(
@@ -388,6 +571,7 @@ async function addCustomerMessage(
       )
       .maybeSingle();
 
+
   if (
     ticketError ||
     !ticket
@@ -402,6 +586,11 @@ async function addCustomerMessage(
       },
     );
   }
+
+
+  /* =====================================================
+     TICKET FERMÉ
+     ===================================================== */
 
   if (
     ticket.status ===
@@ -418,10 +607,14 @@ async function addCustomerMessage(
     );
   }
 
+
+  /* =====================================================
+     CRÉER LE MESSAGE
+     ===================================================== */
+
   const {
     data: createdMessage,
-    error:
-      messageError,
+    error: messageError,
   } =
     await supabaseAdmin
       .from(
@@ -430,14 +623,17 @@ async function addCustomerMessage(
       .insert({
         ticket_id:
           ticket.id,
+
         sender_type:
           "customer",
+
         message,
       })
       .select(
         "id,sender_type,message,created_at",
       )
       .single();
+
 
   if (
     messageError ||
@@ -459,42 +655,78 @@ async function addCustomerMessage(
     );
   }
 
-  await supabaseAdmin
-    .from(
-      "support_tickets",
-    )
-    .update({
-      status:
-        "open",
-      last_message_at:
-        new Date().toISOString(),
-    })
-    .eq(
-      "id",
-      ticket.id,
+
+  /* =====================================================
+     ROUVRIR LE TICKET
+     ===================================================== */
+
+  const {
+    error: updateError,
+  } =
+    await supabaseAdmin
+      .from(
+        "support_tickets",
+      )
+      .update({
+        status:
+          "open",
+
+        last_message_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        ticket.id,
+      );
+
+
+  if (updateError) {
+    console.error(
+      "SUPPORT TICKET UPDATE:",
+      updateError,
     );
+  }
+
+
+  /* =====================================================
+     RÉPONSE
+     ===================================================== */
 
   return Response.json({
-    success: true,
+    success:
+      true,
+
     message: {
       id:
         createdMessage.id,
+
       sender:
         "user",
+
       text:
         createdMessage.message,
+
       createdAt:
         createdMessage.created_at,
     },
   });
 }
 
+
+/* =========================================================
+   GET — RÉCUPÉRER LA CONVERSATION
+   ========================================================= */
+
 export async function GET(
   request: Request,
 ) {
   try {
+
     const url =
-      new URL(request.url);
+      new URL(
+        request.url,
+      );
+
 
     const ticketId =
       clean(
@@ -504,6 +736,7 @@ export async function GET(
         80,
       );
 
+
     const accessToken =
       clean(
         url.searchParams.get(
@@ -511,6 +744,11 @@ export async function GET(
         ),
         200,
       );
+
+
+    /* =====================================================
+       VALIDATION SESSION
+       ===================================================== */
 
     if (
       !ticketId ||
@@ -527,13 +765,20 @@ export async function GET(
       );
     }
 
+
     const tokenHash =
-      hashToken(accessToken);
+      hashToken(
+        accessToken,
+      );
+
+
+    /* =====================================================
+       RÉCUPÉRER LE TICKET
+       ===================================================== */
 
     const {
       data: ticket,
-      error:
-        ticketError,
+      error: ticketError,
     } =
       await supabaseAdmin
         .from(
@@ -552,6 +797,7 @@ export async function GET(
         )
         .maybeSingle();
 
+
     if (
       ticketError ||
       !ticket
@@ -567,10 +813,14 @@ export async function GET(
       );
     }
 
+
+    /* =====================================================
+       RÉCUPÉRER LES MESSAGES
+       ===================================================== */
+
     const {
       data: messages,
-      error:
-        messagesError,
+      error: messagesError,
     } =
       await supabaseAdmin
         .from(
@@ -586,11 +836,18 @@ export async function GET(
         .order(
           "created_at",
           {
-            ascending: true,
+            ascending:
+              true,
           },
         );
 
+
     if (messagesError) {
+      console.error(
+        "SUPPORT GET MESSAGES:",
+        messagesError,
+      );
+
       return Response.json(
         {
           error:
@@ -602,30 +859,53 @@ export async function GET(
       );
     }
 
+
+    /* =====================================================
+       FORMATAGE DES MESSAGES
+       ===================================================== */
+
+    const formattedMessages =
+      (
+        messages || []
+      ).map(
+        (item) => ({
+          id:
+            item.id,
+
+          sender:
+            item.sender_type ===
+            "customer"
+              ? "user"
+              : item.sender_type ===
+                  "agent"
+                ? "agent"
+                : "ai",
+
+          text:
+            item.message,
+
+          createdAt:
+            item.created_at,
+        }),
+      );
+
+
+    /* =====================================================
+       RÉPONSE
+       ===================================================== */
+
     return Response.json({
-      success: true,
+      success:
+        true,
+
       ticket,
+
       messages:
-        messages?.map(
-          (item) => ({
-            id:
-              item.id,
-            sender:
-              item.sender_type ===
-              "customer"
-                ? "user"
-                : item.sender_type ===
-                    "agent"
-                  ? "agent"
-                  : "ai",
-            text:
-              item.message,
-            createdAt:
-              item.created_at,
-          }),
-        ) || [],
+        formattedMessages,
     });
+
   } catch (error) {
+
     console.error(
       "SUPPORT GET ERROR:",
       error,

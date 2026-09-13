@@ -12,6 +12,10 @@ import "./support.css";
 
 type Locale = "fr" | "en";
 
+type BillingCycle =
+  | "monthly"
+  | "yearly";
+
 type SupportCategory =
   | "general"
   | "payment"
@@ -38,6 +42,30 @@ type TicketInfo = {
   category: SupportCategory;
 };
 
+
+/* =========================================================
+   CONTACTS PHARMAFLOW AFRICA
+   ========================================================= */
+
+const CONTACT = {
+  email:
+    "pharmaflowafrica@gmail.com",
+
+  phone:
+    "+242044177909",
+
+  phoneDisplay:
+    "+242 04 417 79 09",
+
+  whatsapp:
+    "https://wa.me/242044177909",
+};
+
+
+/* =========================================================
+   TEXTES
+   ========================================================= */
+
 const TEXT = {
   fr: {
     brand: "PharmaFlow",
@@ -48,7 +76,8 @@ const TEXT = {
     subtitle:
       "Une équipe et un assistant intelligent sont à votre disposition pour vous aider rapidement.",
 
-    online: "Assistance disponible",
+    online:
+      "Assistance disponible",
 
     aiBadge:
       "Assistant IA PharmaFlow",
@@ -118,11 +147,14 @@ const TEXT = {
     sales:
       "Commercial",
 
-    phone: "Téléphone",
+    phone:
+      "Téléphone",
 
-    whatsapp: "WhatsApp",
+    whatsapp:
+      "WhatsApp",
 
-    email: "E-mail",
+    email:
+      "E-mail",
 
     unavailable:
       "Coordonnée à configurer",
@@ -145,7 +177,8 @@ const TEXT = {
     ticketDescription:
       "Si vous avez ouvert une demande depuis cet appareil, vous pouvez reprendre la conversation.",
 
-    login: "Se connecter",
+    login:
+      "Se connecter",
 
     createAccount:
       "Créer un compte",
@@ -183,7 +216,8 @@ const TEXT = {
     footer:
       "PharmaFlow — Gestion professionnelle des pharmacies.",
 
-    language: "Langue",
+    language:
+      "Langue",
 
     humanTitle:
       "Parler directement à un conseiller",
@@ -191,7 +225,8 @@ const TEXT = {
     humanSubtitle:
       "Aucune connexion n'est nécessaire. Laissez vos coordonnées et votre message afin que notre équipe puisse vous répondre.",
 
-    name: "Votre nom",
+    name:
+      "Votre nom",
 
     emailField:
       "Votre e-mail",
@@ -252,7 +287,10 @@ const TEXT = {
 
     reopenTicket:
       "Reprendre ma conversation",
-ticketClosed: "This request is closed.",
+
+    ticketClosed:
+      "Cette demande est clôturée.",
+
     aiUnavailable:
       "L'assistant IA est momentanément indisponible. Vous pouvez ouvrir une demande auprès d'un conseiller.",
 
@@ -269,7 +307,8 @@ ticketClosed: "This request is closed.",
     subtitle:
       "Our team and intelligent assistant are available to help you quickly.",
 
-    online: "Support available",
+    online:
+      "Support available",
 
     aiBadge:
       "PharmaFlow AI Assistant",
@@ -285,7 +324,8 @@ ticketClosed: "This request is closed.",
 
     send: "Send",
 
-    thinking: "Analyzing...",
+    thinking:
+      "Analyzing...",
 
     startChat:
       "Start a conversation",
@@ -335,13 +375,17 @@ ticketClosed: "This request is closed.",
     complaints:
       "Complaints",
 
-    sales: "Sales",
+    sales:
+      "Sales",
 
-    phone: "Phone",
+    phone:
+      "Phone",
 
-    whatsapp: "WhatsApp",
+    whatsapp:
+      "WhatsApp",
 
-    email: "Email",
+    email:
+      "Email",
 
     unavailable:
       "Contact to be configured",
@@ -364,7 +408,8 @@ ticketClosed: "This request is closed.",
     ticketDescription:
       "If you opened a request on this device, you can continue the conversation.",
 
-    login: "Log in",
+    login:
+      "Log in",
 
     createAccount:
       "Create an account",
@@ -402,7 +447,8 @@ ticketClosed: "This request is closed.",
     footer:
       "PharmaFlow — Professional pharmacy management.",
 
-    language: "Language",
+    language:
+      "Language",
 
     humanTitle:
       "Talk directly to a support agent",
@@ -410,7 +456,8 @@ ticketClosed: "This request is closed.",
     humanSubtitle:
       "No login is required. Leave your contact details and message so our team can reply.",
 
-    name: "Your name",
+    name:
+      "Your name",
 
     emailField:
       "Your email",
@@ -471,7 +518,10 @@ ticketClosed: "This request is closed.",
 
     reopenTicket:
       "Continue my conversation",
-ticketClosed: "This request is closed.",
+
+    ticketClosed:
+      "This request is closed.",
+
     aiUnavailable:
       "The AI assistant is temporarily unavailable. You can open a request with a support agent.",
 
@@ -480,16 +530,24 @@ ticketClosed: "This request is closed.",
   },
 } as const;
 
+
+/* =========================================================
+   LOCALE
+   ========================================================= */
+
 function getInitialLocale(): Locale {
   if (typeof window === "undefined") {
     return "fr";
   }
 
-  const cookie = document.cookie
-    .split("; ")
-    .find((item) =>
-      item.startsWith("pf_locale="),
-    );
+  const cookie =
+    document.cookie
+      .split("; ")
+      .find((item) =>
+        item.startsWith(
+          "pf_locale=",
+        ),
+      );
 
   const cookieValue =
     cookie?.split("=")[1];
@@ -508,12 +566,18 @@ function getInitialLocale(): Locale {
     : "fr";
 }
 
+
 function saveLocale(
   locale: Locale,
 ) {
   document.cookie =
     `pf_locale=${locale}; path=/; max-age=31536000; samesite=lax`;
 }
+
+
+/* =========================================================
+   MESSAGE
+   ========================================================= */
 
 function createMessage(
   sender: ChatSender,
@@ -533,6 +597,11 @@ function createMessage(
       new Date().toISOString(),
   };
 }
+
+
+/* =========================================================
+   SUPPORT PAGE
+   ========================================================= */
 
 export default function SupportPage() {
   const [locale, setLocale] =
@@ -593,487 +662,10 @@ export default function SupportPage() {
 
   const t = TEXT[locale];
 
-  useEffect(() => {
-    const detected =
-      getInitialLocale();
 
-    setLocale(detected);
-    saveLocale(detected);
-
-    const savedTicket =
-      window.localStorage.getItem(
-        "pf_support_ticket",
-      );
-
-    if (!savedTicket) {
-      return;
-    }
-
-    try {
-      const parsed =
-        JSON.parse(savedTicket);
-
-      if (
-        parsed?.ticket?.id &&
-        parsed?.accessToken
-      ) {
-        setTicket(
-          parsed.ticket,
-        );
-
-        setAccessToken(
-          parsed.accessToken,
-        );
-      }
-    } catch {
-      window.localStorage.removeItem(
-        "pf_support_ticket",
-      );
-    }
-  }, []);
-
-  const categoryCards = useMemo(
-    () => [
-      {
-        key: "general" as const,
-        icon: "💬",
-        title: t.general,
-        description:
-          t.aiDescription,
-      },
-
-      {
-        key: "technical" as const,
-        icon: "🛠️",
-        title:
-          t.technicalShort,
-        description:
-          t.technicalDescription,
-      },
-
-      {
-        key: "payment" as const,
-        icon: "💳",
-        title:
-          t.paymentShort,
-        description:
-          t.paymentDescription,
-      },
-
-      {
-        key: "complaint" as const,
-        icon: "🚨",
-        title:
-          t.complaintShort,
-        description:
-          t.complaintDescription,
-      },
-
-      {
-        key: "commercial" as const,
-        icon: "🤝",
-        title:
-          t.commercialShort,
-        description:
-          t.commercialDescription,
-      },
-    ],
-    [t],
-  );
-
-  function changeLocale(
-    nextLocale: Locale,
-  ) {
-    setLocale(nextLocale);
-    saveLocale(nextLocale);
-  }
-
-  function startAIChat(
-    category: SupportCategory = "general",
-  ) {
-    setHumanMode(false);
-
-    setSelectedCategory(
-      category,
-    );
-
-    setChatStarted(true);
-
-    if (messages.length === 0) {
-      let welcome =
-        t.welcome;
-
-      if (
-        category === "payment"
-      ) {
-        welcome +=
-          `\n\n${t.paymentHint}`;
-      }
-
-      if (
-        category === "complaint"
-      ) {
-        welcome +=
-          `\n\n${t.complaintHint}`;
-      }
-
-      setMessages([
-        createMessage(
-          "ai",
-          welcome,
-        ),
-      ]);
-    }
-
-    scrollToChat();
-  }
-
-  function openHumanSupport(
-    category: SupportCategory = selectedCategory,
-  ) {
-    setHumanMode(true);
-
-    setSelectedCategory(
-      category,
-    );
-
-    setChatStarted(true);
-
-    setTicketError("");
-    setTicketCreated(false);
-
-    if (
-      ticket?.id &&
-      accessToken
-    ) {
-      loadTicket();
-    }
-
-    scrollToChat();
-  }
-
-  function scrollToChat() {
-    setTimeout(() => {
-      document
-        .getElementById(
-          "support-chat",
-        )
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    }, 80);
-  }
-
-  async function sendAIMessage(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    const cleanMessage =
-      message.trim();
-
-    if (
-      !cleanMessage ||
-      isThinking
-    ) {
-      return;
-    }
-
-    const userMessage =
-      createMessage(
-        "user",
-        cleanMessage,
-      );
-
-    const previousMessages =
-      messages;
-
-    setMessages((current) => [
-      ...current,
-      userMessage,
-    ]);
-
-    setMessage("");
-    setIsThinking(true);
-
-    try {
-      const response =
-        await fetch(
-          "/api/support/ai",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Accept:
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              locale,
-
-              category:
-                selectedCategory,
-
-              message:
-                cleanMessage,
-
-              history:
-                previousMessages,
-            }),
-          },
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data?.answer
-      ) {
-        throw new Error(
-          data?.error ||
-            "AI error",
-        );
-      }
-
-      setMessages((current) => [
-        ...current,
-
-        createMessage(
-          "ai",
-          data.answer,
-        ),
-      ]);
-    } catch (error) {
-      console.error(
-        "SUPPORT AI:",
-        error,
-      );
-
-      setMessages((current) => [
-        ...current,
-
-        createMessage(
-          "ai",
-          t.aiUnavailable,
-        ),
-      ]);
-    } finally {
-      setIsThinking(false);
-    }
-  }
-  async function createHumanTicket(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    setTicketError("");
-
-    const name =
-      customerName.trim();
-
-    const email =
-      customerEmail.trim();
-
-    const phone =
-      customerPhone.trim();
-
-    const firstMessage =
-      message.trim();
-
-    if (!name) {
-      setTicketError(
-        t.requiredName,
-      );
-      return;
-    }
-
-    if (!email && !phone) {
-      setTicketError(
-        t.requiredContact,
-      );
-      return;
-    }
-
-    if (!firstMessage) {
-      setTicketError(
-        t.requiredMessage,
-      );
-      return;
-    }
-
-    setTicketLoading(true);
-
-    try {
-      const response =
-        await fetch(
-          "/api/support/tickets",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Accept:
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              action: "create",
-
-              name,
-
-              email,
-
-              phone,
-
-              category:
-                selectedCategory,
-
-              message:
-                firstMessage,
-            }),
-          },
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data?.ticket ||
-        !data?.accessToken
-      ) {
-        throw new Error(
-          data?.error ||
-            "Ticket error",
-        );
-      }
-
-      const createdTicket =
-        data.ticket as TicketInfo;
-
-      const token =
-        data.accessToken as string;
-
-      setTicket(
-        createdTicket,
-      );
-
-      setAccessToken(token);
-
-      setTicketCreated(true);
-
-      setMessage("");
-
-      window.localStorage.setItem(
-        "pf_support_ticket",
-        JSON.stringify({
-          ticket:
-            createdTicket,
-
-          accessToken:
-            token,
-        }),
-      );
-    } catch (error) {
-      console.error(
-        "SUPPORT TICKET:",
-        error,
-      );
-
-      setTicketError(
-        t.ticketError,
-      );
-    } finally {
-      setTicketLoading(false);
-    }
-  }
-
-  async function sendHumanMessage(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    const cleanMessage =
-      message.trim();
-
-    if (
-      !cleanMessage ||
-      ticketLoading ||
-      !ticket
-    ) {
-      return;
-    }
-
-    setTicketLoading(true);
-    setTicketError("");
-
-    try {
-      const response =
-        await fetch(
-          "/api/support/tickets",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Accept:
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              action: "message",
-
-              ticketId:
-                ticket.id,
-
-              accessToken,
-
-              message:
-                cleanMessage,
-            }),
-          },
-        );
-
-      const data =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data?.success
-      ) {
-        throw new Error(
-          data?.error ||
-            "Message error",
-        );
-      }
-
-      setMessage("");
-
-      await loadTicket();
-    } catch (error) {
-      console.error(
-        "SUPPORT HUMAN MESSAGE:",
-        error,
-      );
-
-      setTicketError(
-        error instanceof Error
-          ? error.message
-          : t.ticketError,
-      );
-    } finally {
-      setTicketLoading(false);
-    }
-  }
+  /* =======================================================
+     CHARGER UNE DEMANDE EXISTANTE
+     ======================================================= */
 
   async function loadTicket() {
     if (
@@ -1113,9 +705,7 @@ export default function SupportPage() {
         );
       }
 
-      if (
-        !data?.ticket
-      ) {
+      if (!data?.ticket) {
         throw new Error(
           "Ticket not found",
         );
@@ -1174,45 +764,899 @@ export default function SupportPage() {
     }
   }
 
-  function resumeTicket() {
-    setHumanMode(true);
 
-    setChatStarted(true);
+  /* =======================================================
+     INITIALISATION
+     ======================================================= */
 
-    setTicketCreated(false);
+  useEffect(() => {
+    const detected =
+      getInitialLocale();
 
-    loadTicket();
+    setLocale(detected);
+    saveLocale(detected);
+
+    const savedTicket =
+      window.localStorage.getItem(
+        "pf_support_ticket",
+      );
+
+    if (savedTicket) {
+      try {
+        const parsed =
+          JSON.parse(
+            savedTicket,
+          );
+
+        if (
+          parsed?.ticket?.id &&
+          parsed?.accessToken
+        ) {
+          setTicket(
+            parsed.ticket,
+          );
+
+          setAccessToken(
+            parsed.accessToken,
+          );
+        }
+      } catch {
+        window.localStorage.removeItem(
+          "pf_support_ticket",
+        );
+      }
+    }
+
+
+    /* =====================================================
+       NAVIGATION DIRECTE DEPUIS LA PAGE D'ACCUEIL
+
+       /support
+       /support?mode=ai
+       /support?mode=human
+       /support?category=payment
+       /support?category=complaint
+       /support?category=commercial
+       /support?category=technical
+       ===================================================== */
+
+    const params =
+      new URLSearchParams(
+        window.location.search,
+      );
+
+    const mode =
+      params.get("mode");
+
+    const categoryParam =
+      params.get("category");
+
+    const validCategories: SupportCategory[] =
+      [
+        "general",
+        "payment",
+        "technical",
+        "complaint",
+        "commercial",
+      ];
+
+    const category =
+      validCategories.includes(
+        categoryParam as SupportCategory,
+      )
+        ? (categoryParam as SupportCategory)
+        : "general";
+
+
+    if (
+      mode === "human"
+    ) {
+      setSelectedCategory(
+        category,
+      );
+
+      setHumanMode(true);
+      setChatStarted(true);
+
+      window.setTimeout(() => {
+        document
+          .getElementById(
+            "support-chat",
+          )
+          ?.scrollIntoView({
+            behavior:
+              "smooth",
+            block:
+              "start",
+          });
+      }, 150);
+    } else if (
+      mode === "ai" ||
+      categoryParam
+    ) {
+      setSelectedCategory(
+        category,
+      );
+
+      setChatStarted(true);
+      setHumanMode(false);
+
+      let welcome =
+        TEXT[detected].welcome;
+
+      if (
+        category === "payment"
+      ) {
+        welcome +=
+          `\n\n${TEXT[detected].paymentHint}`;
+      }
+
+      if (
+        category === "complaint"
+      ) {
+        welcome +=
+          `\n\n${TEXT[detected].complaintHint}`;
+      }
+
+      setMessages([
+        createMessage(
+          "ai",
+          welcome,
+        ),
+      ]);
+
+      window.setTimeout(() => {
+        document
+          .getElementById(
+            "support-chat",
+          )
+          ?.scrollIntoView({
+            behavior:
+              "smooth",
+            block:
+              "start",
+          });
+      }, 150);
+    }
+  }, []);
+
+
+  /* =======================================================
+     SUIVI AUTOMATIQUE DES CONSEILLERS
+     ======================================================= */
+
+  useEffect(() => {
+    if (
+      !humanMode ||
+      !ticket?.id ||
+      !accessToken ||
+      ticket.status ===
+        "closed"
+    ) {
+      return;
+    }
+
+    /*
+     * Recharge régulièrement la conversation.
+     * Le conseiller peut donc répondre depuis
+     * l'espace administrateur et le client voit
+     * automatiquement sa réponse ici.
+     */
+    const interval =
+      window.setInterval(() => {
+        loadTicket();
+      }, 5000);
+
+    return () => {
+      window.clearInterval(
+        interval,
+      );
+    };
+  }, [
+    humanMode,
+    ticket?.id,
+    ticket?.status,
+    accessToken,
+  ]);
+
+
+  /* =======================================================
+     CATEGORIES
+     ======================================================= */
+
+  const categoryCards =
+    useMemo(
+      () => [
+        {
+          key:
+            "general" as const,
+
+          icon:
+            "💬",
+
+          title:
+            t.general,
+
+          description:
+            t.aiDescription,
+        },
+
+        {
+          key:
+            "technical" as const,
+
+          icon:
+            "🛠️",
+
+          title:
+            t.technicalShort,
+
+          description:
+            t.technicalDescription,
+        },
+
+        {
+          key:
+            "payment" as const,
+
+          icon:
+            "💳",
+
+          title:
+            t.paymentShort,
+
+          description:
+            t.paymentDescription,
+        },
+
+        {
+          key:
+            "complaint" as const,
+
+          icon:
+            "🚨",
+
+          title:
+            t.complaintShort,
+
+          description:
+            t.complaintDescription,
+        },
+
+        {
+          key:
+            "commercial" as const,
+
+          icon:
+            "🤝",
+
+          title:
+            t.commercialShort,
+
+          description:
+            t.commercialDescription,
+        },
+      ],
+      [t],
+    );
+
+
+  /* =======================================================
+     CHANGEMENT DE LANGUE
+     ======================================================= */
+
+  function changeLocale(
+    nextLocale: Locale,
+  ) {
+    setLocale(
+      nextLocale,
+    );
+
+    saveLocale(
+      nextLocale,
+    );
+  }
+
+
+  /* =======================================================
+     ASSISTANT IA
+     ======================================================= */
+
+  function startAIChat(
+    category: SupportCategory =
+      "general",
+  ) {
+    setHumanMode(
+      false,
+    );
+
+    setSelectedCategory(
+      category,
+    );
+
+    setChatStarted(
+      true,
+    );
+
+    /*
+     * Si on change de catégorie alors qu'une
+     * conversation existe déjà, on conserve
+     * la conversation actuelle.
+     */
+    if (
+      messages.length === 0
+    ) {
+      let welcome =
+        t.welcome;
+
+      if (
+        category ===
+        "payment"
+      ) {
+        welcome +=
+          `\n\n${t.paymentHint}`;
+      }
+
+      if (
+        category ===
+        "complaint"
+      ) {
+        welcome +=
+          `\n\n${t.complaintHint}`;
+      }
+
+      setMessages([
+        createMessage(
+          "ai",
+          welcome,
+        ),
+      ]);
+    }
 
     scrollToChat();
   }
 
-  function backToAI() {
-    setHumanMode(false);
 
-    setTicketCreated(false);
+  /* =======================================================
+     ASSISTANCE HUMAINE
+     ======================================================= */
+
+  function openHumanSupport(
+    category: SupportCategory =
+      selectedCategory,
+  ) {
+    setHumanMode(
+      true,
+    );
+
+    setSelectedCategory(
+      category,
+    );
+
+    setChatStarted(
+      true,
+    );
+
+    setTicketError(
+      "",
+    );
+
+    setTicketCreated(
+      false,
+    );
+
+    /*
+     * Si une demande existe déjà sur cet appareil,
+     * on la recharge immédiatement.
+     */
+    if (
+      ticket?.id &&
+      accessToken
+    ) {
+      window.setTimeout(() => {
+        loadTicket();
+      }, 0);
+    }
+
+    scrollToChat();
+  }
+
+
+  /* =======================================================
+     SCROLL VERS LE CHAT
+     ======================================================= */
+
+  function scrollToChat() {
+    window.setTimeout(() => {
+      document
+        .getElementById(
+          "support-chat",
+        )
+        ?.scrollIntoView({
+          behavior:
+            "smooth",
+
+          block:
+            "start",
+        });
+    }, 80);
+  }
+
+
+  /* =======================================================
+     ENVOYER MESSAGE IA
+     ======================================================= */
+
+  async function sendAIMessage(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    const cleanMessage =
+      message.trim();
+
+    if (
+      !cleanMessage ||
+      isThinking
+    ) {
+      return;
+    }
+
+    const userMessage =
+      createMessage(
+        "user",
+        cleanMessage,
+      );
+
+    const previousMessages =
+      messages;
+
+    setMessages(
+      (current) => [
+        ...current,
+        userMessage,
+      ],
+    );
+
+    setMessage(
+      "",
+    );
+
+    setIsThinking(
+      true,
+    );
+
+    try {
+      const response =
+        await fetch(
+          "/api/support/ai",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Accept:
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                locale,
+
+                category:
+                  selectedCategory,
+
+                message:
+                  cleanMessage,
+
+                history:
+                  previousMessages,
+              }),
+          },
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data?.answer
+      ) {
+        throw new Error(
+          data?.error ||
+            "AI error",
+        );
+      }
+
+      setMessages(
+        (current) => [
+          ...current,
+
+          createMessage(
+            "ai",
+            data.answer,
+          ),
+        ],
+      );
+    } catch (error) {
+      console.error(
+        "SUPPORT AI:",
+        error,
+      );
+
+      setMessages(
+        (current) => [
+          ...current,
+
+          createMessage(
+            "ai",
+            t.aiUnavailable,
+          ),
+        ],
+      );
+    } finally {
+      setIsThinking(
+        false,
+      );
+    }
+  }
+
+
+  /* =======================================================
+     CRÉER TICKET HUMAIN
+     ======================================================= */
+
+  async function createHumanTicket(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    setTicketError(
+      "",
+    );
+
+    const name =
+      customerName.trim();
+
+    const email =
+      customerEmail.trim();
+
+    const phone =
+      customerPhone.trim();
+
+    const firstMessage =
+      message.trim();
+
+    if (!name) {
+      setTicketError(
+        t.requiredName,
+      );
+
+      return;
+    }
+
+    if (
+      !email &&
+      !phone
+    ) {
+      setTicketError(
+        t.requiredContact,
+      );
+
+      return;
+    }
+
+    if (!firstMessage) {
+      setTicketError(
+        t.requiredMessage,
+      );
+
+      return;
+    }
+
+    setTicketLoading(
+      true,
+    );
+
+    try {
+      const response =
+        await fetch(
+          "/api/support/tickets",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Accept:
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                action:
+                  "create",
+
+                name,
+
+                email,
+
+                phone,
+
+                category:
+                  selectedCategory,
+
+                message:
+                  firstMessage,
+              }),
+          },
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data?.ticket ||
+        !data?.accessToken
+      ) {
+        throw new Error(
+          data?.error ||
+            "Ticket error",
+        );
+      }
+
+      const createdTicket =
+        data.ticket as TicketInfo;
+
+      const token =
+        data.accessToken as string;
+
+      setTicket(
+        createdTicket,
+      );
+
+      setAccessToken(
+        token,
+      );
+
+      setTicketCreated(
+        true,
+      );
+
+      setMessage(
+        "",
+      );
+
+      /*
+       * Sauvegarde locale permettant au client
+       * de reprendre sa conversation plus tard.
+       */
+      window.localStorage.setItem(
+        "pf_support_ticket",
+        JSON.stringify({
+          ticket:
+            createdTicket,
+
+          accessToken:
+            token,
+        }),
+      );
+    } catch (error) {
+      console.error(
+        "SUPPORT TICKET:",
+        error,
+      );
+
+      setTicketError(
+        error instanceof Error
+          ? error.message
+          : t.ticketError,
+      );
+    } finally {
+      setTicketLoading(
+        false,
+      );
+    }
+  }
+
+
+  /* =======================================================
+     ENVOYER MESSAGE AU CONSEILLER
+     ======================================================= */
+
+  async function sendHumanMessage(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    const cleanMessage =
+      message.trim();
+
+    if (
+      !cleanMessage ||
+      ticketLoading ||
+      !ticket
+    ) {
+      return;
+    }
+
+    if (
+      ticket.status ===
+      "closed"
+    ) {
+      setTicketError(
+        t.ticketClosed,
+      );
+
+      return;
+    }
+
+    setTicketLoading(
+      true,
+    );
+
+    setTicketError(
+      "",
+    );
+
+    try {
+      const response =
+        await fetch(
+          "/api/support/tickets",
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Accept:
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                action:
+                  "message",
+
+                ticketId:
+                  ticket.id,
+
+                accessToken,
+
+                message:
+                  cleanMessage,
+              }),
+          },
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data?.success
+      ) {
+        throw new Error(
+          data?.error ||
+            "Message error",
+        );
+      }
+
+      setMessage(
+        "",
+      );
+
+      /*
+       * Recharge immédiatement après l'envoi.
+       */
+      await loadTicket();
+    } catch (error) {
+      console.error(
+        "SUPPORT HUMAN MESSAGE:",
+        error,
+      );
+
+      setTicketError(
+        error instanceof Error
+          ? error.message
+          : t.ticketError,
+      );
+    } finally {
+      setTicketLoading(
+        false,
+      );
+    }
+  }
+
+
+  /* =======================================================
+     REPRENDRE UNE CONVERSATION
+     ======================================================= */
+
+  function resumeTicket() {
+    setHumanMode(
+      true,
+    );
+
+    setChatStarted(
+      true,
+    );
+
+    setTicketCreated(
+      false,
+    );
+
+    window.setTimeout(() => {
+      loadTicket();
+    }, 0);
+
+    scrollToChat();
+  }
+
+
+  /* =======================================================
+     RETOUR IA
+     ======================================================= */
+
+  function backToAI() {
+    setHumanMode(
+      false,
+    );
+
+    setTicketCreated(
+      false,
+    );
 
     startAIChat(
       selectedCategory,
     );
   }
 
+
+  /* =======================================================
+     CONTACT EMAIL
+     ======================================================= */
+
   function handleEmail() {
     window.location.href =
-      "mailto:support@your-domain.com";
+      `mailto:${CONTACT.email}`;
   }
+
+
+  /* =======================================================
+     CONTACT WHATSAPP
+     ======================================================= */
 
   function handleWhatsApp() {
     window.open(
-      "https://wa.me/00000000000",
+      CONTACT.whatsapp,
       "_blank",
       "noopener,noreferrer",
     );
   }
 
+
+  /* =======================================================
+     CONTACT TÉLÉPHONE
+     ======================================================= */
+
   function handlePhone() {
     window.location.href =
-      "tel:+00000000000";
+      `tel:${CONTACT.phone}`;
   }
+
+
+  /* =======================================================
+     AFFICHAGE MESSAGE
+     ======================================================= */
 
   function renderMessageText(
     item: ChatMessage,
@@ -1220,14 +1664,19 @@ export default function SupportPage() {
     return item.text
       .split("\n")
       .map(
-        (line, index, lines) => (
+        (
+          line,
+          index,
+          lines,
+        ) => (
           <span
             key={`${item.id}-${index}`}
           >
             {line}
 
             {index <
-              lines.length - 1 && (
+              lines.length -
+                1 && (
               <br />
             )}
           </span>
@@ -1235,10 +1684,22 @@ export default function SupportPage() {
       );
   }
 
+
+  /* =======================================================
+     RENDER
+     ======================================================= */
+
   return (
     <main className="pf-support-page">
+
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
+
       <header className="pf-support-header">
+
         <div className="pf-support-header-inner">
+
           <Link
             href="/"
             className="pf-support-brand"
@@ -1253,16 +1714,19 @@ export default function SupportPage() {
           </Link>
 
           <div className="pf-support-header-actions">
+
             <div
               className="pf-support-language"
               aria-label={
                 t.language
               }
             >
+
               <button
                 type="button"
                 className={
-                  locale === "fr"
+                  locale ===
+                  "fr"
                     ? "active"
                     : ""
                 }
@@ -1278,7 +1742,8 @@ export default function SupportPage() {
               <button
                 type="button"
                 className={
-                  locale === "en"
+                  locale ===
+                  "en"
                     ? "active"
                     : ""
                 }
@@ -1290,6 +1755,7 @@ export default function SupportPage() {
               >
                 EN
               </button>
+
             </div>
 
             <Link
@@ -1298,12 +1764,20 @@ export default function SupportPage() {
             >
               {t.login}
             </Link>
+
           </div>
         </div>
       </header>
 
+
+      {/* =====================================================
+          HERO
+      ====================================================== */}
+
       <section className="pf-support-hero">
+
         <div className="pf-support-hero-content">
+
           <Link
             href="/"
             className="pf-support-back"
@@ -1312,9 +1786,11 @@ export default function SupportPage() {
           </Link>
 
           <div className="pf-support-status">
+
             <span />
 
             {t.online}
+
           </div>
 
           <h1>
@@ -1324,17 +1800,33 @@ export default function SupportPage() {
           <p>
             {t.subtitle}
           </p>
+
         </div>
+
       </section>
 
+
+      {/* =====================================================
+          MAIN
+      ====================================================== */}
+
       <section className="pf-support-main">
+
         <div className="pf-support-layout">
+
           <div className="pf-support-primary">
+
+            {/* =================================================
+                CHAT
+            ================================================== */}
+
             <div
               id="support-chat"
               className="pf-support-chat-card"
             >
+
               <div className="pf-support-chat-header">
+
                 <div className="pf-support-ai-avatar">
                   {humanMode
                     ? "👨‍💼"
@@ -1342,6 +1834,7 @@ export default function SupportPage() {
                 </div>
 
                 <div>
+
                   <strong>
                     {humanMode
                       ? t.customerConversation
@@ -1353,13 +1846,22 @@ export default function SupportPage() {
                       ? t.agentWaiting
                       : t.online}
                   </span>
+
                 </div>
 
                 <div className="pf-support-ai-dot" />
+
               </div>
 
+
+              {/* =================================================
+                  DÉMARRAGE
+              ================================================== */}
+
               {!chatStarted ? (
+
                 <div className="pf-support-chat-start">
+
                   <div className="pf-support-chat-icon">
                     🤖
                   </div>
@@ -1373,6 +1875,7 @@ export default function SupportPage() {
                   </p>
 
                   <div className="pf-support-start-actions">
+
                     <button
                       type="button"
                       className="pf-support-primary-button"
@@ -1399,30 +1902,35 @@ export default function SupportPage() {
                       }
                     >
                       👨‍💼{" "}
-                      {
-                        t.humanSupport
-                      }
+                      {t.humanSupport}
                     </button>
+
                   </div>
+
                 </div>
+
               ) : humanMode ? (
+
+                /* =================================================
+                   MODE HUMAIN
+                ================================================== */
+
                 <div className="pf-support-chat-active">
+
                   {ticketCreated ? (
+
                     <div className="pf-support-chat-start">
+
                       <div className="pf-support-chat-icon">
                         🎫
                       </div>
 
                       <h2>
-                        {
-                          t.ticketCreated
-                        }
+                        {t.ticketCreated}
                       </h2>
 
                       <p>
-                        {
-                          t.ticketReference
-                        }
+                        {t.ticketReference}
 
                         <br />
 
@@ -1434,9 +1942,7 @@ export default function SupportPage() {
 
                         <br />
 
-                        {
-                          t.keepReference
-                        }
+                        {t.keepReference}
                       </p>
 
                       <button
@@ -1458,10 +1964,19 @@ export default function SupportPage() {
                           →
                         </span>
                       </button>
+
                     </div>
+
                   ) : ticket ? (
+
+                    /* =================================================
+                       CONVERSATION EXISTANTE
+                    ================================================== */
+
                     <>
+
                       <div className="pf-support-messages">
+
                         {messages.map(
                           (item) => (
                             <div
@@ -1475,6 +1990,7 @@ export default function SupportPage() {
                                   : "ai"
                               }`}
                             >
+
                               {item.sender !==
                                 "user" && (
                                 <div className="pf-support-message-avatar">
@@ -1483,10 +1999,13 @@ export default function SupportPage() {
                               )}
 
                               <div className="pf-support-message-bubble">
+
                                 {renderMessageText(
                                   item,
                                 )}
+
                               </div>
+
                             </div>
                           ),
                         )}
@@ -1500,7 +2019,9 @@ export default function SupportPage() {
                             }
                           </div>
                         )}
+
                       </div>
+
 
                       <form
                         className="pf-support-chat-form"
@@ -1508,6 +2029,7 @@ export default function SupportPage() {
                           sendHumanMessage
                         }
                       >
+
                         <textarea
                           value={
                             message
@@ -1545,7 +2067,9 @@ export default function SupportPage() {
                             ? "…"
                             : "↑"}
                         </button>
+
                       </form>
+
 
                       {ticketError && (
                         <div className="pf-support-form-error">
@@ -1556,7 +2080,9 @@ export default function SupportPage() {
                         </div>
                       )}
 
+
                       <div className="pf-support-chat-toolbar">
+
                         <button
                           type="button"
                           onClick={
@@ -1568,16 +2094,26 @@ export default function SupportPage() {
                             t.backToAI
                           }
                         </button>
+
                       </div>
+
                     </>
+
                   ) : (
+
+                    /* =================================================
+                       FORMULAIRE NOUVEAU CONSEILLER
+                    ================================================== */
+
                     <form
                       className="pf-support-chat-active"
                       onSubmit={
                         createHumanTicket
                       }
                     >
+
                       <div className="pf-support-chat-start">
+
                         <div className="pf-support-chat-icon">
                           👨‍💼
                         </div>
@@ -1594,7 +2130,9 @@ export default function SupportPage() {
                           }
                         </p>
 
+
                         <div className="pf-support-human-form-fields">
+
                           <input
                             value={
                               customerName
@@ -1708,14 +2246,26 @@ export default function SupportPage() {
                               →
                             </span>
                           </button>
+
                         </div>
+
                       </div>
+
                     </form>
                   )}
+
                 </div>
+
               ) : (
+
+                /* =================================================
+                   MODE IA
+                ================================================== */
+
                 <div className="pf-support-chat-active">
+
                   <div className="pf-support-chat-toolbar">
+
                     <button
                       type="button"
                       onClick={() =>
@@ -1727,9 +2277,12 @@ export default function SupportPage() {
                         t.humanSupport
                       }
                     </button>
+
                   </div>
 
+
                   <div className="pf-support-messages">
+
                     {messages.map(
                       (
                         chatMessage,
@@ -1745,6 +2298,7 @@ export default function SupportPage() {
                               : "ai"
                           }`}
                         >
+
                           {chatMessage.sender ===
                             "ai" && (
                             <div className="pf-support-message-avatar">
@@ -1753,21 +2307,27 @@ export default function SupportPage() {
                           )}
 
                           <div className="pf-support-message-bubble">
+
                             {renderMessageText(
                               chatMessage,
                             )}
+
                           </div>
+
                         </div>
                       ),
                     )}
 
+
                     {isThinking && (
                       <div className="pf-support-message ai">
+
                         <div className="pf-support-message-avatar">
                           ✨
                         </div>
 
                         <div className="pf-support-message-bubble pf-support-thinking">
+
                           <span />
                           <span />
                           <span />
@@ -1777,10 +2337,14 @@ export default function SupportPage() {
                               t.thinking
                             }
                           </small>
+
                         </div>
+
                       </div>
                     )}
+
                   </div>
+
 
                   <form
                     className="pf-support-chat-form"
@@ -1788,6 +2352,7 @@ export default function SupportPage() {
                       sendAIMessage
                     }
                   >
+
                     <textarea
                       value={
                         message
@@ -1821,26 +2386,44 @@ export default function SupportPage() {
                         ? "…"
                         : "↑"}
                     </button>
+
                   </form>
+
                 </div>
               )}
+
             </div>
+
+
+            {/* =================================================
+                CATÉGORIES
+            ================================================== */}
+
             <div className="pf-support-category-section">
+
               <div className="pf-support-section-heading">
+
                 <span>
                   {t.categoryTitle}
                 </span>
 
                 <h2>
-                  {t.categoryDescription}
+                  {
+                    t.categoryDescription
+                  }
                 </h2>
+
               </div>
 
+
               <div className="pf-support-category-grid">
+
                 {categoryCards.map(
                   (card) => (
                     <button
-                      key={card.key}
+                      key={
+                        card.key
+                      }
                       type="button"
                       className={`pf-support-category-card ${
                         selectedCategory ===
@@ -1856,40 +2439,60 @@ export default function SupportPage() {
                         )
                       }
                     >
+
                       <span className="pf-support-category-icon">
-                        {card.icon}
+                        {
+                          card.icon
+                        }
                       </span>
 
                       <strong>
-                        {card.title}
+                        {
+                          card.title
+                        }
                       </strong>
 
                       <p>
-                        {card.description}
+                        {
+                          card.description
+                        }
                       </p>
 
                       <span className="pf-support-category-arrow">
                         →
                       </span>
+
                     </button>
                   ),
                 )}
+
               </div>
+
             </div>
 
+
+            {/* =================================================
+                ASSISTANCE HUMAINE
+            ================================================== */}
+
             <div className="pf-support-human-card">
+
               <div className="pf-support-human-icon">
                 👨‍💼
               </div>
 
               <div>
+
                 <span>
                   {t.humanSupport}
                 </span>
 
                 <p>
-                  {t.humanDescription}
+                  {
+                    t.humanDescription
+                  }
                 </p>
+
               </div>
 
               <button
@@ -1905,11 +2508,24 @@ export default function SupportPage() {
                   →
                 </span>
               </button>
+
             </div>
+
           </div>
 
+
+          {/* ===================================================
+              SIDEBAR
+          ==================================================== */}
+
           <aside className="pf-support-sidebar">
+
+            {/* =================================================
+                CONTACT
+            ================================================== */}
+
             <div className="pf-support-contact-card">
+
               <div className="pf-support-sidebar-icon">
                 📞
               </div>
@@ -1919,32 +2535,47 @@ export default function SupportPage() {
               </h3>
 
               <p>
-                {t.contactsDescription}
+                {
+                  t.contactsDescription
+                }
               </p>
 
+
               <div className="pf-support-contact-list">
+
                 <button
                   type="button"
-                  onClick={handleEmail}
+                  onClick={
+                    handleEmail
+                  }
                 >
+
                   <span>
                     ✉️
                   </span>
 
                   <div>
+
                     <small>
-                      {t.generalSupport}
+                      {
+                        t.generalSupport
+                      }
                     </small>
 
                     <strong>
-                      {t.email}
+                      {
+                        CONTACT.email
+                      }
                     </strong>
+
                   </div>
 
                   <b>
                     →
                   </b>
+
                 </button>
+
 
                 <button
                   type="button"
@@ -1952,48 +2583,69 @@ export default function SupportPage() {
                     handleWhatsApp
                   }
                 >
+
                   <span>
                     💬
                   </span>
 
                   <div>
+
                     <small>
-                      {t.whatsapp}
+                      {
+                        t.whatsapp
+                      }
                     </small>
 
                     <strong>
-                      {t.whatsapp}
+                      {
+                        CONTACT.phoneDisplay
+                      }
                     </strong>
+
                   </div>
 
                   <b>
                     →
                   </b>
+
                 </button>
+
 
                 <button
                   type="button"
-                  onClick={handlePhone}
+                  onClick={
+                    handlePhone
+                  }
                 >
+
                   <span>
                     ☎️
                   </span>
 
                   <div>
+
                     <small>
-                      {t.phone}
+                      {
+                        t.phone
+                      }
                     </small>
 
                     <strong>
-                      {t.phone}
+                      {
+                        CONTACT.phoneDisplay
+                      }
                     </strong>
+
                   </div>
 
                   <b>
                     →
                   </b>
+
                 </button>
+
               </div>
+
 
               <button
                 type="button"
@@ -2008,15 +2660,19 @@ export default function SupportPage() {
                 {showContacts
                   ? "−"
                   : "+"}{" "}
-                {t.paymentSupport}
+                {
+                  t.paymentSupport
+                }
                 {" / "}
                 {t.complaints}
                 {" / "}
                 {t.sales}
               </button>
 
+
               {showContacts && (
                 <div className="pf-support-extra-contacts">
+
                   <button
                     type="button"
                     onClick={() =>
@@ -2025,6 +2681,7 @@ export default function SupportPage() {
                       )
                     }
                   >
+
                     <span>
                       💳
                     </span>
@@ -2037,10 +2694,12 @@ export default function SupportPage() {
 
                     <small>
                       {
-                        t.unavailable
+                        CONTACT.email
                       }
                     </small>
+
                   </button>
+
 
                   <button
                     type="button"
@@ -2050,20 +2709,25 @@ export default function SupportPage() {
                       )
                     }
                   >
+
                     <span>
                       🚨
                     </span>
 
                     <strong>
-                      {t.complaints}
+                      {
+                        t.complaints
+                      }
                     </strong>
 
                     <small>
                       {
-                        t.unavailable
+                        CONTACT.email
                       }
                     </small>
+
                   </button>
+
 
                   <button
                     type="button"
@@ -2073,6 +2737,7 @@ export default function SupportPage() {
                       )
                     }
                   >
+
                     <span>
                       🤝
                     </span>
@@ -2083,20 +2748,30 @@ export default function SupportPage() {
 
                     <small>
                       {
-                        t.unavailable
+                        CONTACT.email
                       }
                     </small>
+
                   </button>
+
                 </div>
               )}
+
             </div>
 
+
+            {/* =================================================
+                HORAIRES
+            ================================================== */}
+
             <div className="pf-support-hours-card">
+
               <span>
                 🕐
               </span>
 
               <div>
+
                 <strong>
                   {t.hoursTitle}
                 </strong>
@@ -2104,8 +2779,15 @@ export default function SupportPage() {
                 <p>
                   {t.hours}
                 </p>
+
               </div>
+
             </div>
+
+
+            {/* =================================================
+                SÉCURITÉ
+            ================================================== */}
 
             <button
               type="button"
@@ -2117,18 +2799,23 @@ export default function SupportPage() {
                 )
               }
             >
+
               <span>
                 🔐
               </span>
 
               <div>
+
                 <strong>
                   {t.secureTitle}
                 </strong>
 
                 <p>
-                  {t.secureDescription}
+                  {
+                    t.secureDescription
+                  }
                 </p>
+
               </div>
 
               <b>
@@ -2136,9 +2823,16 @@ export default function SupportPage() {
                   ? "−"
                   : "+"}
               </b>
+
             </button>
 
+
+            {/* =================================================
+                TICKET
+            ================================================== */}
+
             <div className="pf-support-ticket-card">
+
               <span>
                 🎫
               </span>
@@ -2148,10 +2842,14 @@ export default function SupportPage() {
               </h3>
 
               <p>
-                {t.ticketDescription}
+                {
+                  t.ticketDescription
+                }
               </p>
 
+
               {ticket ? (
+
                 <button
                   type="button"
                   className="pf-support-ticket-button"
@@ -2159,9 +2857,13 @@ export default function SupportPage() {
                     resumeTicket
                   }
                 >
-                  {t.reopenTicket}
+                  {
+                    t.reopenTicket
+                  }
                 </button>
+
               ) : (
+
                 <button
                   type="button"
                   className="pf-support-ticket-button"
@@ -2169,16 +2871,30 @@ export default function SupportPage() {
                     openHumanSupport()
                   }
                 >
-                  {t.humanSupport}
+                  {
+                    t.humanSupport
+                  }
                 </button>
+
               )}
+
             </div>
+
           </aside>
+
         </div>
+
       </section>
 
+
+      {/* =====================================================
+          FOOTER
+      ====================================================== */}
+
       <footer className="pf-support-footer">
+
         <div>
+
           <strong>
             {t.brand}
           </strong>
@@ -2186,9 +2902,11 @@ export default function SupportPage() {
           <span>
             {t.footer}
           </span>
+
         </div>
 
         <div>
+
           <Link href="/">
             {t.backHome}
           </Link>
@@ -2196,8 +2914,11 @@ export default function SupportPage() {
           <Link href="/register">
             {t.createAccount}
           </Link>
+
         </div>
+
       </footer>
+
     </main>
   );
 }
