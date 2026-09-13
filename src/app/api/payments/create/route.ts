@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/app/lib/supabase/server";
+
 import {
   createPayment,
   generateMerchantReference,
@@ -11,17 +12,21 @@ import type {
   PaymentProviderCode,
 } from "@/app/lib/payments/types";
 
+/* =========================================================
+   TYPES
+========================================================= */
+
 type BillingCycle =
   | "monthly"
   | "yearly";
 
+type PaymentMethod =
+  | "mobile_money"
+  | "card";
+
 type RequestBody = {
   billingCycle?: BillingCycle;
-
-  paymentMethod?:
-    | "mobile_money"
-    | "card";
-
+  paymentMethod?: PaymentMethod;
   phone?: string;
 };
 
@@ -30,18 +35,15 @@ const ALLOWED_BILLING_CYCLES: BillingCycle[] = [
   "yearly",
 ];
 
-/**
- * =========================================================
- * DEVISE
- * =========================================================
- */
+/* =========================================================
+   DEVISE
+========================================================= */
 
 function normalizeCurrency(
   value: unknown,
 ): string | null {
   if (
-    typeof value !==
-    "string"
+    typeof value !== "string"
   ) {
     return null;
   }
@@ -62,62 +64,15 @@ function normalizeCurrency(
   return normalized;
 }
 
-/**
- * =========================================================
- * PRIORITÉ FOURNISSEURS
- * =========================================================
- *
- * La priorité reste spécifique au pays.
- *
- * Pour chaque pays, le fournisseur doit également être
- * compatible avec le moyen de paiement demandé.
- *
- * Exemple :
- *
- * CG + mobile_money
- * → Yabetoo
- * → GoFreshPay
- * → Moko Afrika
- *
- * CG + card
- * → Moko Afrika si activé et compatible
- *
- * CD + mobile_money
- * → GoFreshPay
- * → Moko Afrika
- *
- * CD + card
- * → Moko Afrika si activé et compatible
- */
-
-const COUNTRY_PROVIDER_PRIORITY: Record<
-  string,
-  PaymentProviderCode[]
-> = {
-  CG: [
-    "yabetoo",
-    "gofreshpay",
-    "moko_afrika",
-  ],
-
-  CD: [
-    "gofreshpay",
-    "moko_afrika",
-  ],
-};
-
-/**
- * =========================================================
- * NORMALISATION FORMULE
- * =========================================================
- */
+/* =========================================================
+   FORMULE
+========================================================= */
 
 function normalizeBillingCycle(
   value: unknown,
 ): BillingCycle | null {
   if (
-    typeof value !==
-    "string"
+    typeof value !== "string"
   ) {
     return null;
   }
@@ -138,21 +93,15 @@ function normalizeBillingCycle(
   return normalized as BillingCycle;
 }
 
-/**
- * =========================================================
- * NORMALISATION MOYEN DE PAIEMENT
- * =========================================================
- */
+/* =========================================================
+   MOYEN DE PAIEMENT
+========================================================= */
 
 function normalizePaymentMethod(
   value: unknown,
-):
-  | "mobile_money"
-  | "card"
-  | null {
+): PaymentMethod | null {
   if (
-    typeof value !==
-    "string"
+    typeof value !== "string"
   ) {
     return null;
   }
@@ -170,8 +119,7 @@ function normalizePaymentMethod(
   }
 
   if (
-    normalized ===
-    "card"
+    normalized === "card"
   ) {
     return "card";
   }
@@ -179,18 +127,15 @@ function normalizePaymentMethod(
   return null;
 }
 
-/**
- * =========================================================
- * NORMALISATION TÉLÉPHONE
- * =========================================================
- */
+/* =========================================================
+   TÉLÉPHONE
+========================================================= */
 
 function normalizePhone(
   value: unknown,
 ): string | null {
   if (
-    typeof value !==
-    "string"
+    typeof value !== "string"
   ) {
     return null;
   }
@@ -205,11 +150,9 @@ function normalizePhone(
   return phone;
 }
 
-/**
- * =========================================================
- * SÉPARATION NOM / PRÉNOM
- * =========================================================
- */
+/* =========================================================
+   NOM CLIENT
+========================================================= */
 
 function splitName(
   fullName:
@@ -235,8 +178,7 @@ function splitName(
     );
 
   if (
-    parts.length ===
-    1
+    parts.length === 1
   ) {
     return {
       firstName:
@@ -256,11 +198,9 @@ function splitName(
   };
 }
 
-/**
- * =========================================================
- * ERREUR JSON
- * =========================================================
- */
+/* =========================================================
+   ERREUR JSON
+========================================================= */
 
 function jsonError(
   message: string,
@@ -282,22 +222,171 @@ function jsonError(
   );
 }
 
+/* =========================================================
+   FOURNISSEURS PAR PAYS
+========================================================= */
+
+const COUNTRY_PROVIDER_PRIORITY: Record<
+  string,
+  PaymentProviderCode[]
+> = {
+  CG: [
+    "yabetoo",
+    "gofreshpay",
+    "moko_afrika",
+  ],
+
+  CD: [
+    "gofreshpay",
+    "moko_afrika",
+  ],
+};
+
+/* =========================================================
+   RECONNAÎTRE UN MOYEN DE PAIEMENT FOURNISSEUR
+========================================================= */
+
 /**
- * =========================================================
- * POST
- * =========================================================
+ * Certains fournisseurs enregistrent :
+ *
+ * mobile_money
+ * momo
+ * mtn
+ * airtel
+ * orange
+ * mpesa
+ * etc.
+ *
+ * Pour éviter qu'un fournisseur Mobile Money soit
+ * rejeté simplement parce que sa DB utilise "mtn"
+ * ou "airtel", nous normalisons ici.
  */
+
+function providerSupportsPaymentMethod(
+  providerMethods: unknown,
+  requestedMethod: PaymentMethod,
+): boolean {
+  const methods =
+    Array.isArray(
+      providerMethods,
+    )
+      ? providerMethods.map(
+          (value) =>
+            String(
+              value,
+            )
+              .trim()
+              .toLowerCase(),
+        )
+      : [];
+
+  if (
+    requestedMethod ===
+    "mobile_money"
+  ) {
+    return (
+      methods.includes(
+        "mobile_money",
+      ) ||
+      methods.includes(
+        "momo",
+      ) ||
+      methods.includes(
+        "mtn",
+      ) ||
+      methods.includes(
+        "airtel",
+      ) ||
+      methods.includes(
+        "orange",
+      ) ||
+      methods.includes(
+        "mpesa",
+      ) ||
+      methods.includes(
+        "africell",
+      ) ||
+      methods.includes(
+        "vodacom",
+      ) ||
+      methods.includes(
+        "moov",
+      ) ||
+      methods.includes(
+        "wave",
+      ) ||
+      methods.includes(
+        "free_money",
+      )
+    );
+  }
+
+  return (
+    methods.includes(
+      "card",
+    ) ||
+    methods.includes(
+      "visa",
+    ) ||
+    methods.includes(
+      "mastercard",
+    )
+  );
+}
+
+/* =========================================================
+   PAYS FOURNISSEUR
+========================================================= */
+
+function providerSupportsCountry(
+  providerCountries: unknown,
+  countryCode: string,
+): boolean {
+  const countries =
+    Array.isArray(
+      providerCountries,
+    )
+      ? providerCountries.map(
+          (value) =>
+            String(
+              value,
+            )
+              .trim()
+              .toUpperCase(),
+        )
+      : [];
+
+  /*
+   * Une liste vide signifie :
+   * le fournisseur n'impose pas de restriction
+   * de pays dans la configuration DB.
+   */
+  return (
+    countries.length === 0 ||
+    countries.includes(
+      countryCode,
+    )
+  );
+}
+
+/* =========================================================
+   POST
+========================================================= */
 
 export async function POST(
   request: Request,
 ) {
   try {
+    /* =======================================================
+       1. CLIENT SUPABASE
+    ======================================================= */
+
     const supabase =
       await createClient();
 
-    // =======================================================
-    // 1. UTILISATEUR CONNECTÉ
-    // =======================================================
+    /* =======================================================
+       2. UTILISATEUR CONNECTÉ
+    ======================================================= */
 
     const {
       data: {
@@ -315,12 +404,16 @@ export async function POST(
       return jsonError(
         "Votre session a expiré. Veuillez vous reconnecter.",
         401,
+        {
+          code:
+            "AUTHENTICATION_REQUIRED",
+        },
       );
     }
 
-    // =======================================================
-    // 2. LIRE LA REQUÊTE
-    // =======================================================
+    /* =======================================================
+       3. LIRE LA REQUÊTE
+    ======================================================= */
 
     let body: RequestBody;
 
@@ -330,17 +423,21 @@ export async function POST(
     } catch {
       return jsonError(
         "Les données envoyées sont invalides.",
+        400,
+        {
+          code:
+            "INVALID_REQUEST_BODY",
+        },
       );
     }
+
+    /* =======================================================
+       4. FORMULE
+    ======================================================= */
 
     const billingCycle =
       normalizeBillingCycle(
         body.billingCycle,
-      );
-
-    const paymentMethod =
-      normalizePaymentMethod(
-        body.paymentMethod,
       );
 
     if (
@@ -348,20 +445,39 @@ export async function POST(
     ) {
       return jsonError(
         "La formule d'abonnement sélectionnée est invalide.",
+        400,
+        {
+          code:
+            "INVALID_BILLING_CYCLE",
+        },
       );
     }
+
+    /* =======================================================
+       5. MOYEN DE PAIEMENT
+    ======================================================= */
+
+    const paymentMethod =
+      normalizePaymentMethod(
+        body.paymentMethod,
+      );
 
     if (
       !paymentMethod
     ) {
       return jsonError(
         "Le mode de paiement sélectionné est invalide.",
+        400,
+        {
+          code:
+            "INVALID_PAYMENT_METHOD",
+        },
       );
     }
 
-    // =======================================================
-    // 3. PROFIL
-    // =======================================================
+    /* =======================================================
+       6. PROFIL
+    ======================================================= */
 
     const {
       data: profile,
@@ -392,6 +508,10 @@ export async function POST(
       return jsonError(
         "Impossible de récupérer votre profil.",
         500,
+        {
+          code:
+            "PROFILE_QUERY_ERROR",
+        },
       );
     }
 
@@ -399,6 +519,10 @@ export async function POST(
       return jsonError(
         "Votre profil PharmaFlow est introuvable.",
         404,
+        {
+          code:
+            "PROFILE_NOT_FOUND",
+        },
       );
     }
 
@@ -408,15 +532,19 @@ export async function POST(
       return jsonError(
         "Aucune pharmacie n'est associée à votre compte.",
         400,
+        {
+          code:
+            "PHARMACY_NOT_ASSOCIATED",
+        },
       );
     }
 
     const pharmacyId =
       profile.pharmacy_id;
 
-    // =======================================================
-    // 4. PHARMACIE
-    // =======================================================
+    /* =======================================================
+       7. PHARMACIE
+    ======================================================= */
 
     const {
       data: pharmacy,
@@ -447,6 +575,10 @@ export async function POST(
       return jsonError(
         "Impossible de récupérer les informations de votre pharmacie.",
         500,
+        {
+          code:
+            "PHARMACY_QUERY_ERROR",
+        },
       );
     }
 
@@ -454,12 +586,16 @@ export async function POST(
       return jsonError(
         "Votre pharmacie est introuvable.",
         404,
+        {
+          code:
+            "PHARMACY_NOT_FOUND",
+        },
       );
     }
 
-    // =======================================================
-    // 5. STATUT PHARMACIE
-    // =======================================================
+    /* =======================================================
+       8. STATUT PHARMACIE
+    ======================================================= */
 
     const pharmacyStatus =
       String(
@@ -469,13 +605,14 @@ export async function POST(
         .trim()
         .toLowerCase();
 
-    const blockedPharmacyStatuses = [
-      "inactive",
-      "disabled",
-      "blocked",
-      "suspended",
-      "closed",
-    ];
+    const blockedPharmacyStatuses =
+      [
+        "inactive",
+        "disabled",
+        "blocked",
+        "suspended",
+        "closed",
+      ];
 
     if (
       blockedPharmacyStatuses.includes(
@@ -485,12 +622,16 @@ export async function POST(
       return jsonError(
         "Cette pharmacie n'est actuellement pas autorisée à effectuer un paiement.",
         403,
+        {
+          code:
+            "PHARMACY_PAYMENT_BLOCKED",
+        },
       );
     }
 
-    // =======================================================
-    // 6. DEVISE
-    // =======================================================
+    /* =======================================================
+       9. DEVISE
+    ======================================================= */
 
     const currency =
       normalizeCurrency(
@@ -508,29 +649,32 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 7. RÉCUPÉRER LE PLAN
-    // =======================================================
-    //
-    // IMPORTANT :
-    //
-    // subscription_plans NE contient PAS de colonne
-    // "description".
-    //
-    // Structure utilisée :
-    //
-    // id
-    // code
-    // name
-    // duration_days
-    // is_active
-    // created_at
-    // updated_at
-    //
-    // C'est la correction du problème :
-    //
-    // "Impossible de récupérer le plan d'abonnement."
-    // =======================================================
+    /* =======================================================
+       10. PAYS
+    ======================================================= */
+
+    const countryCode =
+      String(
+        pharmacy.country_code ??
+          "",
+      )
+        .trim()
+        .toUpperCase();
+
+    if (!countryCode) {
+      return jsonError(
+        "Le pays de votre pharmacie n'est pas configuré.",
+        400,
+        {
+          code:
+            "COUNTRY_NOT_CONFIGURED",
+        },
+      );
+    }
+
+    /* =======================================================
+       11. PLAN
+    ======================================================= */
 
     const planCode =
       billingCycle;
@@ -582,14 +726,15 @@ export async function POST(
         {
           code:
             "SUBSCRIPTION_PLAN_NOT_FOUND",
+
           billingCycle,
         },
       );
     }
 
-    // =======================================================
-    // 8. RÉCUPÉRER LE PRIX
-    // =======================================================
+    /* =======================================================
+       12. PRIX DU PLAN
+    ======================================================= */
 
     const {
       data: planPrice,
@@ -671,9 +816,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 9. ABONNEMENT ACTUEL
-    // =======================================================
+    /* =======================================================
+       13. ABONNEMENT ACTUEL
+    ======================================================= */
 
     const {
       data: subscription,
@@ -730,32 +875,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 10. PAYS
-    // =======================================================
-
-    const countryCode =
-      String(
-        pharmacy.country_code ??
-          "",
-      )
-        .trim()
-        .toUpperCase();
-
-    if (!countryCode) {
-      return jsonError(
-        "Le pays de votre pharmacie n'est pas configuré.",
-        400,
-        {
-          code:
-            "COUNTRY_NOT_CONFIGURED",
-        },
-      );
-    }
-
-    // =======================================================
-    // 11. FOURNISSEURS ACTIVÉS
-    // =======================================================
+    /* =======================================================
+       14. FOURNISSEURS ACTIVÉS
+    ======================================================= */
 
     const {
       data: providers,
@@ -792,26 +914,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 12. SÉLECTION DU FOURNISSEUR
-    // =======================================================
-    //
-    // Le fournisseur est sélectionné selon :
-    //
-    // 1. pays
-    // 2. moyen de paiement
-    // 3. fournisseur activé
-    // 4. priorité pays
-    //
-    // Donc :
-    //
-    // mobile_money ≠ card
-    //
-    // Le backend envoie réellement le moyen choisi.
-    // =======================================================
-
-    const requestedProviderMethod =
-      paymentMethod;
+    /* =======================================================
+       15. FOURNISSEURS COMPATIBLES
+    ======================================================= */
 
     const providerPriority =
       COUNTRY_PROVIDER_PRIORITY[
@@ -819,74 +924,51 @@ export async function POST(
       ] ?? [];
 
     const compatibleProviders =
-      (providers ?? []).filter(
-        (provider) => {
-          const providerCode =
-            String(
-              provider.code ??
-                "",
-            )
-              .trim()
-              .toLowerCase() as PaymentProviderCode;
+      (providers ?? [])
+        .filter(
+          (provider) => {
+            const providerCode =
+              String(
+                provider.code ??
+                  "",
+              )
+                .trim()
+                .toLowerCase() as PaymentProviderCode;
 
-          const countries =
-            Array.isArray(
-              provider.countries,
-            )
-              ? provider.countries.map(
-                  (
-                    value,
-                  ) =>
-                    String(
-                      value,
-                    )
-                      .trim()
-                      .toUpperCase(),
-                )
-              : [];
+            const countrySupported =
+              providerSupportsCountry(
+                provider.countries,
+                countryCode,
+              );
 
-          const paymentMethods =
-            Array.isArray(
-              provider.payment_methods,
-            )
-              ? provider.payment_methods.map(
-                  (
-                    value,
-                  ) =>
-                    String(
-                      value,
-                    )
-                      .trim()
-                      .toLowerCase(),
-                )
-              : [];
+            const methodSupported =
+              providerSupportsPaymentMethod(
+                provider.payment_methods,
+                paymentMethod,
+              );
 
-          const countrySupported =
-            countries.length ===
-              0 ||
-            countries.includes(
-              countryCode,
+            /*
+             * Pour un pays qui possède une priorité
+             * configurée, seuls les fournisseurs présents
+             * dans cette priorité sont sélectionnés.
+             *
+             * Pour les autres pays, on laisse le moteur
+             * gérer la sélection.
+             */
+            const prioritySupported =
+              providerPriority.length ===
+                0 ||
+              providerPriority.includes(
+                providerCode,
+              );
+
+            return (
+              countrySupported &&
+              methodSupported &&
+              prioritySupported
             );
-
-          const methodSupported =
-            paymentMethods.includes(
-              requestedProviderMethod,
-            );
-
-          const prioritySupported =
-            providerPriority.length ===
-              0 ||
-            providerPriority.includes(
-              providerCode,
-            );
-
-          return (
-            countrySupported &&
-            methodSupported &&
-            prioritySupported
-          );
-        },
-      );
+          },
+        );
 
     if (
       compatibleProviders.length ===
@@ -914,9 +996,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 13. CHOISIR LE FOURNISSEUR
-    // =======================================================
+    /* =======================================================
+       16. SÉLECTION DU FOURNISSEUR
+    ======================================================= */
 
     let selectedProvider:
       | (typeof compatibleProviders)[number]
@@ -926,28 +1008,31 @@ export async function POST(
       providerPriority.length >
       0
     ) {
-      selectedProvider =
-        providerPriority
-          .map(
+      for (
+        const priorityCode of
+          providerPriority
+      ) {
+        const found =
+          compatibleProviders.find(
             (
-              code,
+              provider,
             ) =>
-              compatibleProviders.find(
-                (
-                  provider,
-                ) =>
-                  String(
-                    provider.code ??
-                      "",
-                  )
-                    .trim()
-                    .toLowerCase() ===
-                  code,
-              ),
-          )
-          .find(
-            Boolean,
+              String(
+                provider.code ??
+                  "",
+              )
+                .trim()
+                .toLowerCase() ===
+              priorityCode,
           );
+
+        if (found) {
+          selectedProvider =
+            found;
+
+          break;
+        }
+      }
     } else {
       selectedProvider =
         compatibleProviders[0];
@@ -974,16 +1059,77 @@ export async function POST(
         .trim()
         .toLowerCase() as PaymentProviderCode;
 
-    // =======================================================
-    // 14. COMPATIBILITÉ CARTE MOKO AFRIKA
-    // =======================================================
-    //
-    // Le Hosted Checkout Card Moko Afrika utilisé ici
-    // accepte actuellement USD et CDF.
-    //
-    // Nous ne convertissons jamais silencieusement
-    // XAF/EUR/etc. en USD ou CDF.
-    // =======================================================
+    /* =======================================================
+       17. COMPATIBILITÉ YABÉTOO
+    ======================================================= */
+
+    if (
+      providerCode ===
+        "yabetoo" &&
+      countryCode !== "CG"
+    ) {
+      return jsonError(
+        "Yabétoo est actuellement configuré pour le Congo-Brazzaville.",
+        400,
+        {
+          code:
+            "YABETOO_COUNTRY_NOT_SUPPORTED",
+
+          provider:
+            "yabetoo",
+
+          countryCode,
+        },
+      );
+    }
+
+    if (
+      providerCode ===
+        "yabetoo" &&
+      paymentMethod !==
+        "mobile_money"
+    ) {
+      return jsonError(
+        "Yabétoo est actuellement utilisé par PharmaFlow pour les paiements Mobile Money.",
+        400,
+        {
+          code:
+            "YABETOO_PAYMENT_METHOD_NOT_SUPPORTED",
+
+          provider:
+            "yabetoo",
+
+          paymentMethod,
+        },
+      );
+    }
+
+    if (
+      providerCode ===
+        "yabetoo" &&
+      currency !== "XAF"
+    ) {
+      return jsonError(
+        "Yabétoo est actuellement configuré pour les paiements en XAF au Congo-Brazzaville.",
+        400,
+        {
+          code:
+            "YABETOO_CURRENCY_NOT_SUPPORTED",
+
+          provider:
+            "yabetoo",
+
+          currency,
+
+          supportedCurrencies:
+            ["XAF"],
+        },
+      );
+    }
+
+    /* =======================================================
+       18. COMPATIBILITÉ CARTE MOKO AFRIKA
+    ======================================================= */
 
     if (
       paymentMethod ===
@@ -1018,9 +1164,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 15. INFORMATIONS CLIENT
-    // =======================================================
+    /* =======================================================
+       19. CLIENT
+    ======================================================= */
 
     const customerPhone =
       normalizePhone(
@@ -1052,9 +1198,9 @@ export async function POST(
             .toLowerCase()
         : "";
 
-    // =======================================================
-    // 16. TÉLÉPHONE OBLIGATOIRE MOBILE MONEY
-    // =======================================================
+    /* =======================================================
+       20. TÉLÉPHONE MOBILE MONEY
+    ======================================================= */
 
     if (
       paymentMethod ===
@@ -1071,9 +1217,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 17. EMAIL OBLIGATOIRE POUR CARTE
-    // =======================================================
+    /* =======================================================
+       21. EMAIL CARTE
+    ======================================================= */
 
     if (
       paymentMethod ===
@@ -1090,9 +1236,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 18. ADRESSE DE FACTURATION
-    // =======================================================
+    /* =======================================================
+       22. ADRESSE DE FACTURATION
+    ======================================================= */
 
     const addressLine1 =
       String(
@@ -1136,16 +1282,16 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 19. RÉFÉRENCE UNIQUE
-    // =======================================================
+    /* =======================================================
+       23. RÉFÉRENCE UNIQUE
+    ======================================================= */
 
     const merchantReference =
       generateMerchantReference();
 
-    // =======================================================
-    // 20. TYPE DE PAIEMENT
-    // =======================================================
+    /* =======================================================
+       24. TYPE DE PAIEMENT
+    ======================================================= */
 
     const paymentMethodType:
       PaymentMethodType =
@@ -1154,14 +1300,18 @@ export async function POST(
         ? "card"
         : "mobile_money";
 
-    // =======================================================
-    // 21. MÉTADONNÉES
-    // =======================================================
+    /* =======================================================
+       25. MÉTADONNÉES
+    ======================================================= */
 
     const metadata: Record<
       string,
       unknown
     > = {
+      /* -----------------------------------------------------
+         Abonnement
+      ----------------------------------------------------- */
+
       billing_cycle:
         billingCycle,
 
@@ -1174,8 +1324,15 @@ export async function POST(
       pharmacy_id:
         pharmacyId,
 
+      subscription_id:
+        subscription.id,
+
       created_by:
         user.id,
+
+      /* -----------------------------------------------------
+         Paiement
+      ----------------------------------------------------- */
 
       payment_method_type:
         paymentMethodType,
@@ -1194,9 +1351,9 @@ export async function POST(
       reference_amount:
         amount,
 
-      // -------------------------------------------------------
-      // Client
-      // -------------------------------------------------------
+      /* -----------------------------------------------------
+         Client
+      ----------------------------------------------------- */
 
       customer_name:
         customerName ||
@@ -1210,9 +1367,9 @@ export async function POST(
         customerPhone ||
         null,
 
-      // -------------------------------------------------------
-      // Facturation
-      // -------------------------------------------------------
+      /* -----------------------------------------------------
+         Facturation
+      ----------------------------------------------------- */
 
       addressLine1:
         addressLine1 ||
@@ -1224,9 +1381,9 @@ export async function POST(
 
       countryCode,
 
-      // -------------------------------------------------------
-      // Compatibilité Moko Afrika Card
-      // -------------------------------------------------------
+      /* -----------------------------------------------------
+         Moko Afrika Card
+      ----------------------------------------------------- */
 
       bill_to_forename:
         firstName ||
@@ -1255,17 +1412,17 @@ export async function POST(
       bill_to_address_country:
         countryCode,
 
-      // -------------------------------------------------------
-      // Suivi serveur
-      // -------------------------------------------------------
+      /* -----------------------------------------------------
+         Suivi serveur
+      ----------------------------------------------------- */
 
       server_created_at:
         new Date().toISOString(),
     };
 
-    // =======================================================
-    // 22. CRÉER LA TRANSACTION LOCALE
-    // =======================================================
+    /* =======================================================
+       26. CRÉER TRANSACTION LOCALE
+    ======================================================= */
 
     const {
       data:
@@ -1341,9 +1498,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 23. APPEL DU MOTEUR DE PAIEMENT
-    // =======================================================
+    /* =======================================================
+       27. APPEL DU FOURNISSEUR
+    ======================================================= */
 
     let paymentResult;
 
@@ -1451,9 +1608,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 24. FOURNISSEUR REFUSE
-    // =======================================================
+    /* =======================================================
+       28. FOURNISSEUR REFUSE
+    ======================================================= */
 
     if (
       !paymentResult.success
@@ -1521,9 +1678,9 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 25. STATUT LOCAL
-    // =======================================================
+    /* =======================================================
+       29. STATUT LOCAL
+    ======================================================= */
 
     const localStatus =
       paymentResult.status ===
@@ -1540,9 +1697,48 @@ export async function POST(
               ? "expired"
               : "pending";
 
-    // =======================================================
-    // 26. MISE À JOUR TRANSACTION
-    // =======================================================
+    /* =======================================================
+       30. MÉTADONNÉES FOURNISSEUR
+    ======================================================= */
+
+    const providerMetadata =
+      paymentResult.metadata ??
+      null;
+
+    const updatedMetadata:
+      Record<
+        string,
+        unknown
+      > = {
+      ...metadata,
+
+      /* -----------------------------------------------------
+         ID transaction fournisseur
+      ----------------------------------------------------- */
+
+      provider_transaction_id:
+        paymentResult.providerTransactionId ??
+        null,
+
+      /* -----------------------------------------------------
+         Client secret Yabétoo
+      ----------------------------------------------------- */
+
+      client_secret:
+        paymentResult.clientSecret ??
+        null,
+
+      /* -----------------------------------------------------
+         Réponse fournisseur
+      ----------------------------------------------------- */
+
+      provider_response:
+        providerMetadata,
+    };
+
+    /* =======================================================
+       31. MISE À JOUR TRANSACTION
+    ======================================================= */
 
     const updatePayload:
       Record<
@@ -1560,13 +1756,8 @@ export async function POST(
         paymentResult.checkoutUrl ??
         null,
 
-      metadata: {
-        ...metadata,
-
-        provider_response:
-          paymentResult.metadata ??
-          null,
-      },
+      metadata:
+        updatedMetadata,
     };
 
     if (
@@ -1640,33 +1831,35 @@ export async function POST(
       );
     }
 
-    // =======================================================
-    // 27. RÉPONSE
-    // =======================================================
-    //
-    // IMPORTANT :
-    //
-    // L'abonnement n'est PAS activé ici.
-    //
-    // Flux :
-    //
-    // CREATE
-    //   ↓
-    // Moko Afrika
-    //   ↓
-    // Checkout / Mobile Money
-    //   ↓
-    // Paiement réel
-    //   ↓
-    // Webhook / Verify
-    //   ↓
-    // Vérification montant + devise + transaction
-    //   ↓
-    // Activation abonnement
-    //
-    // Cela évite d'activer un abonnement simplement parce
-    // que la création de paiement a réussi.
-    // =======================================================
+    /* =======================================================
+       32. RÉPONSE
+    ======================================================= */
+
+    /*
+     * IMPORTANT :
+     *
+     * La création du paiement ne signifie PAS
+     * automatiquement que l'abonnement est payé.
+     *
+     * Pour Yabétoo :
+     *
+     * CREATE
+     *    ↓
+     * clientSecret + Payment Intent
+     *    ↓
+     * CONFIRM
+     *    ↓
+     * MTN / Airtel
+     *    ↓
+     * WEBHOOK / VERIFY
+     *    ↓
+     * vérification montant + devise
+     *    ↓
+     * activation abonnement
+     *
+     * L'activation sera donc traitée dans
+     * l'étape de confirmation/vérification.
+     */
 
     return NextResponse.json({
       success: true,
@@ -1687,6 +1880,14 @@ export async function POST(
 
         providerTransactionId:
           updatedTransaction.provider_transaction_id,
+
+        /*
+         * Nécessaire pour la confirmation
+         * de l'intention Yabétoo.
+         */
+        clientSecret:
+          paymentResult.clientSecret ??
+          null,
 
         amount:
           updatedTransaction.amount,
@@ -1735,6 +1936,9 @@ export async function POST(
 
         message:
           "Une erreur inattendue est survenue lors de la création du paiement.",
+
+        code:
+          "PAYMENT_CREATE_UNEXPECTED_ERROR",
       },
       {
         status: 500,
