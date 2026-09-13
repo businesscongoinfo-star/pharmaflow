@@ -158,17 +158,6 @@ function getRoleRedirect(
    VÉRIFICATION ABONNEMENT
 ============================================================ */
 
-/**
- * Détermine si l'utilisateur peut actuellement accéder
- * à l'espace PharmaFlow.
- *
- * Règles :
- * - active : accès si non expiré
- * - paid : accès si non expiré
- * - trial / trialing : accès uniquement si l'essai est encore actif
- * - cancelled : accès uniquement jusqu'à expires_at
- * - tout autre statut : accès refusé
- */
 function hasValidSubscription(
   subscription: Subscription | null,
 ): boolean {
@@ -181,10 +170,6 @@ function hasValidSubscription(
   )
     .trim()
     .toLowerCase();
-
-  /* ----------------------------------------------------------
-     STATUTS AUTORISÉS
-  ---------------------------------------------------------- */
 
   const allowedStatuses = [
     "active",
@@ -206,10 +191,6 @@ function hasValidSubscription(
     status === "trial" ||
     status === "trialing"
   ) {
-    /*
-     * Une période d'essai doit obligatoirement
-     * avoir une date de fin valide.
-     */
     if (!subscription.trial_ends_at) {
       return false;
     }
@@ -226,10 +207,6 @@ function hasValidSubscription(
       return false;
     }
 
-    /*
-     * Si expires_at existe également,
-     * elle doit elle aussi être valide.
-     */
     if (subscription.expires_at) {
       const expiresAt = new Date(
         subscription.expires_at,
@@ -251,13 +228,6 @@ function hasValidSubscription(
      ABONNEMENT PAYÉ / ACTIF / ANNULÉ
   ---------------------------------------------------------- */
 
-  /*
-   * Pour un abonnement normal, nous exigeons
-   * une date d'expiration valide.
-   *
-   * Cela empêche un abonnement mal configuré
-   * de donner un accès illimité par erreur.
-   */
   if (!subscription.expires_at) {
     return false;
   }
@@ -270,11 +240,6 @@ function hasValidSubscription(
     return false;
   }
 
-  /*
-   * Même si l'abonnement est "cancelled",
-   * le client peut conserver son accès jusqu'à
-   * la fin de la période déjà payée.
-   */
   if (expiresAt <= Date.now()) {
     return false;
   }
@@ -395,10 +360,7 @@ export default function DashboardPage() {
             userError ||
             !user
           ) {
-            router.replace(
-              "/login",
-            );
-
+            router.replace("/login");
             return;
           }
 
@@ -543,10 +505,6 @@ export default function DashboardPage() {
               .trim()
               .toLowerCase();
 
-          /*
-           * Une pharmacie active ou en période d'essai
-           * peut utiliser le Dashboard.
-           */
           if (
             pharmacyStatus &&
             pharmacyStatus !== "active" &&
@@ -611,10 +569,6 @@ export default function DashboardPage() {
             currentSubscription,
           );
 
-          /* --------------------------------------------------
-             CONTRÔLE D'ACCÈS
-          -------------------------------------------------- */
-
           if (
             !hasValidSubscription(
               currentSubscription,
@@ -622,10 +576,6 @@ export default function DashboardPage() {
           ) {
             setRedirecting(true);
 
-            /*
-             * Nettoyage des données locales avant
-             * de rediriger vers le paiement.
-             */
             setProducts([]);
             setSales([]);
             setTodaySales([]);
@@ -888,10 +838,8 @@ export default function DashboardPage() {
           ).toLowerCase();
 
         return (
-          status !==
-            "cancelled" &&
-          status !==
-            "refunded"
+          status !== "cancelled" &&
+          status !== "refunded"
         );
       },
     );
@@ -1182,17 +1130,14 @@ export default function DashboardPage() {
       ).toLowerCase();
 
     if (
-      value ===
-        "cancelled" ||
-      value ===
-        "refunded"
+      value === "cancelled" ||
+      value === "refunded"
     ) {
       return "pf-status-danger";
     }
 
     if (
-      value ===
-      "pending"
+      value === "pending"
     ) {
       return "pf-status-warning";
     }
@@ -1207,9 +1152,19 @@ export default function DashboardPage() {
   async function logout() {
     await supabase.auth.signOut();
 
-    router.replace(
-      "/login",
-    );
+    router.replace("/login");
+  }
+
+  /* ==========================================================
+     OUVRIR / FERMER MENU MOBILE
+  ========================================================== */
+
+  function openMobileMenu() {
+    setMobileMenu(true);
+  }
+
+  function closeMobileMenu() {
+    setMobileMenu(false);
   }
 
   /* ==========================================================
@@ -1222,9 +1177,7 @@ export default function DashboardPage() {
   ) {
     return (
       <main className="pf-dashboard-loading">
-
         <div className="pf-loading-card">
-
           <div className="pf-loading-logo">
             <span>✚</span>
           </div>
@@ -1242,16 +1195,14 @@ export default function DashboardPage() {
                 )
               : tCommon("loading")}
           </p>
-
         </div>
-
       </main>
     );
   }
 
-  /* ==========================================================
+  /* ============================================================
      INTERFACE
-  ========================================================== */
+  ============================================================ */
 
   return (
     <main className="pf-app-shell">
@@ -1265,9 +1216,7 @@ export default function DashboardPage() {
           type="button"
           aria-label={tCommon("close")}
           className="pf-mobile-overlay"
-          onClick={() =>
-            setMobileMenu(false)
-          }
+          onClick={closeMobileMenu}
         />
       )}
 
@@ -1290,19 +1239,18 @@ export default function DashboardPage() {
           <button
             type="button"
             className="pf-brand-button"
-            onClick={() =>
+            onClick={() => {
+              closeMobileMenu();
               router.push(
                 "/dashboard",
-              )
-            }
+              );
+            }}
           >
-
             <span className="pf-brand-mark">
               ✚
             </span>
 
             <span>
-
               <strong>
                 Pharma<span>Flow</span>
               </strong>
@@ -1312,9 +1260,18 @@ export default function DashboardPage() {
                   "pharmacyManagement",
                 )}
               </small>
-
             </span>
+          </button>
 
+          {/* BOUTON FERMER MOBILE */}
+
+          <button
+            type="button"
+            className="pf-sidebar-close"
+            aria-label={tCommon("close")}
+            onClick={closeMobileMenu}
+          >
+            ×
           </button>
 
         </div>
@@ -1339,14 +1296,12 @@ export default function DashboardPage() {
             </strong>
 
             <small>
-
               {pharmacy?.city ||
                 "—"}
 
               {pharmacy?.country_code
                 ? ` • ${pharmacy.country_code}`
                 : ""}
-
             </small>
 
           </div>
@@ -1408,9 +1363,7 @@ export default function DashboardPage() {
                   }
                   type="button"
                   onClick={() => {
-                    setMobileMenu(
-                      false,
-                    );
+                    closeMobileMenu();
 
                     router.push(
                       item.href,
@@ -1446,14 +1399,20 @@ export default function DashboardPage() {
 
         {/* SUPPORT */}
 
-        <div className="pf-sidebar-support">
+        <button
+          type="button"
+          className="pf-sidebar-support"
+          onClick={() => {
+            closeMobileMenu();
+            router.push("/support");
+          }}
+        >
 
           <div className="pf-support-icon">
             ?
           </div>
 
           <div>
-
             <strong>
               {tDashboard(
                 "needHelp",
@@ -1465,21 +1424,18 @@ export default function DashboardPage() {
                 "supportAvailable",
               )}
             </span>
-
           </div>
 
-        </div>
+        </button>
 
         {/* UTILISATEUR */}
 
         <div className="pf-sidebar-user">
 
           <div className="pf-avatar">
-
             {getInitials(
               profile?.full_name,
             )}
-
           </div>
 
           <div className="pf-user-details">
@@ -1498,6 +1454,7 @@ export default function DashboardPage() {
           <button
             type="button"
             title={tNav("logout")}
+            aria-label={tNav("logout")}
             onClick={logout}
             className="pf-logout-icon"
           >
@@ -1523,14 +1480,12 @@ export default function DashboardPage() {
             <button
               type="button"
               className="pf-mobile-menu-button"
-              onClick={() =>
-                setMobileMenu(
-                  true,
-                )
-              }
+              onClick={openMobileMenu}
               aria-label={tDashboard(
                 "openMenu",
               )}
+              aria-expanded={mobileMenu}
+              aria-controls="pf-dashboard-sidebar"
             >
               ☰
             </button>
@@ -1544,7 +1499,6 @@ export default function DashboardPage() {
               </span>
 
               <h1>
-
                 {tDashboard(
                   "hello",
                 )}{" "}
@@ -1558,7 +1512,6 @@ export default function DashboardPage() {
                 <span>
                   👋
                 </span>
-
               </h1>
 
             </div>
@@ -1567,17 +1520,19 @@ export default function DashboardPage() {
 
           <div className="pf-header-actions">
 
+            {/* ACTUALISER */}
+
             <button
               type="button"
               className="pf-header-icon-button"
               title={tCommon("refresh")}
+              aria-label={tCommon("refresh")}
               onClick={() =>
-                loadDashboard(
-                  true,
-                )
+                loadDashboard(true)
               }
+              disabled={refreshing}
+              aria-busy={refreshing}
             >
-
               <span
                 className={
                   refreshing
@@ -1587,8 +1542,9 @@ export default function DashboardPage() {
               >
                 ↻
               </span>
-
             </button>
+
+            {/* NOTIFICATIONS */}
 
             <button
               type="button"
@@ -1596,12 +1552,17 @@ export default function DashboardPage() {
               title={tDashboard(
                 "notifications",
               )}
+              aria-label={tDashboard(
+                "notifications",
+              )}
+              onClick={() =>
+                router.push(
+                  "/support",
+                )
+              }
             >
-
               ♧
-
               <span />
-
             </button>
 
             <div className="pf-header-divider" />
@@ -1609,15 +1570,12 @@ export default function DashboardPage() {
             <div className="pf-header-profile">
 
               <div className="pf-avatar pf-avatar-small">
-
                 {getInitials(
                   profile?.full_name,
                 )}
-
               </div>
 
               <div>
-
                 <strong>
                   {profile?.full_name ||
                     tUsers("owner")}
@@ -1626,7 +1584,6 @@ export default function DashboardPage() {
                 <span>
                   {tUsers("owner")}
                 </span>
-
               </div>
 
             </div>
@@ -1641,9 +1598,7 @@ export default function DashboardPage() {
 
         <div className="pf-dashboard-content">
 
-          {/* ==================================================
-              ERREUR
-          ================================================== */}
+          {/* ERREUR */}
 
           {error && (
             <div className="pf-dashboard-alert">
@@ -1653,7 +1608,6 @@ export default function DashboardPage() {
               </div>
 
               <div>
-
                 <strong>
                   {tDashboard(
                     "loadErrorTitle",
@@ -1663,7 +1617,6 @@ export default function DashboardPage() {
                 <p>
                   {error}
                 </p>
-
               </div>
 
               <button
@@ -1678,9 +1631,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ==================================================
-              INTRODUCTION
-          ================================================== */}
+          {/* INTRODUCTION */}
 
           <section className="pf-dashboard-intro">
 
@@ -1697,7 +1648,6 @@ export default function DashboardPage() {
               </h2>
 
               <p>
-
                 {tDashboard(
                   "activityOf",
                 )}{" "}
@@ -1710,14 +1660,11 @@ export default function DashboardPage() {
                 {tDashboard(
                   "today",
                 )}
-
               </p>
 
             </div>
 
             <div className="pf-intro-actions">
-
-              {/* AJOUTER PRODUIT */}
 
               <button
                 type="button"
@@ -1728,7 +1675,6 @@ export default function DashboardPage() {
                   )
                 }
               >
-
                 <span>
                   ＋
                 </span>
@@ -1736,10 +1682,7 @@ export default function DashboardPage() {
                 {tProducts(
                   "addProduct",
                 )}
-
               </button>
-
-              {/* NOUVELLE VENTE */}
 
               <button
                 type="button"
@@ -1750,7 +1693,6 @@ export default function DashboardPage() {
                   )
                 }
               >
-
                 <span>
                   ▤
                 </span>
@@ -1758,16 +1700,13 @@ export default function DashboardPage() {
                 {tSales(
                   "newSale",
                 )}
-
               </button>
 
             </div>
 
           </section>
 
-          {/* ==================================================
-              INFORMATIONS PHARMACIE
-          ================================================== */}
+          {/* INFORMATIONS PHARMACIE */}
 
           <section className="pf-pharmacy-banner">
 
@@ -1791,7 +1730,6 @@ export default function DashboardPage() {
                 </h3>
 
                 <p>
-
                   {pharmacy?.city ||
                     "—"}
 
@@ -1803,7 +1741,6 @@ export default function DashboardPage() {
 
                   {pharmacy?.currency_code ||
                     "XAF"}
-
                 </p>
 
               </div>
@@ -1823,7 +1760,6 @@ export default function DashboardPage() {
                 </span>
 
                 <strong>
-
                   {pharmacy?.status ===
                   "active"
                     ? tDashboard(
@@ -1831,7 +1767,6 @@ export default function DashboardPage() {
                       )
                     : pharmacy?.status ||
                       tCommon("active")}
-
                 </strong>
 
               </div>
@@ -1840,9 +1775,7 @@ export default function DashboardPage() {
 
           </section>
 
-          {/* ==================================================
-              ABONNEMENT
-          ================================================== */}
+          {/* ABONNEMENT */}
 
           <section
             className={`pf-subscription-card ${
@@ -1936,13 +1869,9 @@ export default function DashboardPage() {
 
           </section>
 
-          {/* ==================================================
-              INDICATEURS PRINCIPAUX
-          ================================================== */}
+          {/* INDICATEURS PRINCIPAUX */}
 
           <section className="pf-kpi-grid">
-
-            {/* PRODUITS */}
 
             <DashboardStat
               icon="◈"
@@ -1963,8 +1892,6 @@ export default function DashboardPage() {
               }
             />
 
-            {/* STOCK */}
-
             <DashboardStat
               icon="▣"
               iconClass="pf-kpi-blue"
@@ -1983,8 +1910,6 @@ export default function DashboardPage() {
                 )
               }
             />
-
-            {/* ALERTES */}
 
             <DashboardStat
               icon="!"
@@ -2035,8 +1960,6 @@ export default function DashboardPage() {
               }
             />
 
-            {/* VENTES */}
-
             <DashboardStat
               icon="₣"
               iconClass="pf-kpi-green"
@@ -2063,15 +1986,11 @@ export default function DashboardPage() {
 
           </section>
 
-          {/* ==================================================
-              GRILLE PRINCIPALE
-          ================================================== */}
+          {/* GRILLE PRINCIPALE */}
 
           <section className="pf-main-dashboard-grid">
 
-            {/* =================================================
-                VENTES RÉCENTES
-            ================================================= */}
+            {/* VENTES RÉCENTES */}
 
             <div className="pf-panel pf-sales-panel">
 
@@ -2108,7 +2027,6 @@ export default function DashboardPage() {
                     )
                   }
                 >
-
                   {tDashboard(
                     "viewAll",
                   )}
@@ -2116,7 +2034,6 @@ export default function DashboardPage() {
                   <span>
                     →
                   </span>
-
                 </button>
 
               </div>
@@ -2223,11 +2140,9 @@ export default function DashboardPage() {
                             <td>
 
                               <span className="pf-date-value">
-
                                 {formatDate(
                                   sale.created_at,
                                 )}
-
                               </span>
 
                             </td>
@@ -2235,14 +2150,12 @@ export default function DashboardPage() {
                             <td>
 
                               <strong className="pf-sale-total">
-
                                 {formatMoney(
                                   Number(
                                     sale.total ||
                                       0,
                                   ),
                                 )}
-
                               </strong>
 
                             </td>
@@ -2280,9 +2193,7 @@ export default function DashboardPage() {
 
             </div>
 
-            {/* =================================================
-                ÉTAT DU STOCK
-            ================================================= */}
+            {/* ÉTAT DU STOCK */}
 
             <div className="pf-panel pf-stock-panel">
 
@@ -2414,7 +2325,6 @@ export default function DashboardPage() {
                         quantity <= 0;
 
                       return (
-
                         <div
                           key={
                             product.id
@@ -2423,11 +2333,9 @@ export default function DashboardPage() {
                         >
 
                           <div className="pf-stock-product-icon">
-
                             {isOut
                               ? "!"
                               : "◈"}
-
                           </div>
 
                           <div className="pf-stock-product">
@@ -2437,13 +2345,10 @@ export default function DashboardPage() {
                             </strong>
 
                             <span>
-
                               {tStock(
                                 "minimumRequired",
                               )}{" "}
-
                               {minimum}
-
                             </span>
 
                           </div>
@@ -2469,7 +2374,6 @@ export default function DashboardPage() {
                           </div>
 
                         </div>
-
                       );
                     },
                   )}
@@ -2507,9 +2411,7 @@ export default function DashboardPage() {
 
           </section>
 
-          {/* ==================================================
-              ACTIONS RAPIDES
-          ================================================== */}
+          {/* ACTIONS RAPIDES */}
 
           <section className="pf-quick-section">
 
@@ -2584,9 +2486,7 @@ export default function DashboardPage() {
 
           </section>
 
-          {/* ==================================================
-              FOOTER
-          ================================================== */}
+          {/* FOOTER */}
 
           <footer className="pf-dashboard-footer">
 
@@ -2609,11 +2509,9 @@ export default function DashboardPage() {
             </div>
 
             <span>
-
               ©️{" "}
               {new Date().getFullYear()}{" "}
               PharmaFlow
-
             </span>
 
           </footer>
