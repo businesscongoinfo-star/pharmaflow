@@ -1,848 +1,1598 @@
-import { NextRequest, NextResponse } from "next/server";
-
-import { supabaseAdmin } from "../../../lib/supabase/admin";
-
 import {
-  isSuccessfulPaymentStatus,
-  normalizePaymentStatus,
-} from "../../../lib/payments/types";
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
-import { mokoAfrikaAdapter } from "../../../lib/payments/moko-afrika";
+import { supabaseAdmin } from "@/app/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-type PaymentTransactionRow = {
+/* =========================================================
+   TYPES
+========================================================= */
+
+type JsonObject =
+  Record<string, unknown>;
+
+type PaymentProvider =
+  | "moko_afrika"
+  | "yabetoo"
+  | "gofreshpay";
+
+type PaymentTransaction = {
   id: string;
+
   pharmacy_id: string;
-  subscription_id: string | null;
-  merchant_reference: string | null;
-  provider_transaction_id: string | null;
-  amount: number | null;
-  currency: string | null;
-  status: string | null;
-  metadata: Record<string, unknown> | null;
+
+  subscription_id:
+    | string
+    | null;
+
+  provider:
+    | string
+    | null;
+
+  merchant_reference:
+    | string
+    | null;
+
+  provider_transaction_id:
+    | string
+    | null;
+
+  amount:
+    | number
+    | null;
+
+  currency:
+    | string
+    | null;
+
+  payment_method:
+    | string
+    | null;
+
+  status:
+    | string
+    | null;
+
+  metadata:
+    | JsonObject
+    | null;
+
+  paid_at:
+    | string
+    | null;
+
+  created_at:
+    | string
+    | null;
+
+  updated_at:
+    | string
+    | null;
 };
 
-function json(
-  data: Record<string, unknown>,
+/* =========================================================
+   RESPONSE
+========================================================= */
+
+function jsonResponse(
+  data: JsonObject,
   status = 200,
 ) {
-  return NextResponse.json(data, { status });
-}
-
-function getHeader(
-  headers: Headers,
-  name: string,
-): string | null {
-  const value = headers.get(name);
-  return value?.trim() || null;
-}
-
-function isCardWebhook(headers: Headers, payload: unknown): boolean {
-  const signature =
-    getHeader(headers, "x-freshpay-signature") ||
-    getHeader(headers, "X-FreshPay-Signature");
-
-  if (signature) {
-    return true;
-  }
-
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "transaction_uuid" in payload
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-function getWebhookReference(payload: any): string | null {
-  return (
-    payload?.merchant_reference ??
-    payload?.reference ??
-    payload?.merchantReference ??
-    payload?.order_reference ??
-    null
-  );
-}
-
-function getProviderTransactionId(payload: any): string | null {
-  return (
-    payload?.transaction_uuid ??
-    payload?.transaction_id ??
-    payload?.Transaction_id ??
-    payload?.provider_transaction_id ??
-    null
-  );
-}
-
-function getWebhookAmount(payload: any): number | null {
-  const raw =
-    payload?.amount ??
-    payload?.Amount ??
-    payload?.data?.amount ??
-    null;
-
-  if (raw === null || raw === undefined) {
-    return null;
-  }
-
-  const value = Number(raw);
-
-  return Number.isFinite(value) ? value : null;
-}
-
-function getWebhookCurrency(payload: any): string | null {
-  const value =
-    payload?.currency ??
-    payload?.Currency ??
-    payload?.data?.currency ??
-    null;
-
-  if (!value) {
-    return null;
-  }
-
-  return String(value).trim().toUpperCase();
-}
-
-function getWebhookStatus(payload: any): string {
-  return String(
-    payload?.status ??
-      payload?.Status ??
-      payload?.transaction_status ??
-      payload?.Trans_Status ??
-      payload?.data?.transaction_status ??
-      payload?.event_type ??
-      "",
-  )
-    .trim()
-    .toLowerCase();
-}
-
-async function findPaymentTransaction(
-  merchantReference: string | null,
-  providerTransactionId: string | null,
-): Promise<PaymentTransactionRow | null> {
-  if (
-    !merchantReference &&
-    !providerTransactionId
-  ) {
-    return null;
-  }
-
-  let query = supabaseAdmin
-    .from("payment_transactions")
-    .select(
-      [
-        "id",
-        "pharmacy_id",
-        "subscription_id",
-        "merchant_reference",
-        "provider_transaction_id",
-        "amount",
-        "currency",
-        "status",
-        "metadata",
-      ].join(","),
-    )
-    .eq("provider", "moko_afrika")
-    .limit(1);
-
-  if (merchantReference) {
-    query = query.eq(
-      "merchant_reference",
-      merchantReference,
-    );
-  } else if (providerTransactionId) {
-    query = query.eq(
-      "provider_transaction_id",
-      providerTransactionId,
-    );
-  }
-
-  const { data, error } = await query.maybeSingle();
-
-  if (error) {
-    console.error(
-      "[Moko Webhook] Recherche transaction:",
-      error,
-    );
-
-    return null;
-  }
-
-  return normalizePaymentTransaction(data);
-}
-
-async function findPaymentByProviderTransactionId(
-  providerTransactionId: string,
-): Promise<PaymentTransactionRow | null> {
-  const { data, error } = await supabaseAdmin
-    .from("payment_transactions")
-    .select(
-      [
-        "id",
-        "pharmacy_id",
-        "subscription_id",
-        "merchant_reference",
-        "provider_transaction_id",
-        "amount",
-        "currency",
-        "status",
-        "metadata",
-      ].join(","),
-    )
-    .eq("provider", "moko_afrika")
-    .eq(
-      "provider_transaction_id",
-      providerTransactionId,
-    )
-    .maybeSingle();
-
-  if (error) {
-    console.error(
-      "[Moko Webhook] Recherche transaction provider:",
-      error,
-    );
-
-    return null;
-  }
-
-}
-
-async function activateSubscription(
-  paymentId: string,
-) {
-  const { data, error } = await supabaseAdmin.rpc(
-    "pf_activate_subscription_from_payment",
+  return NextResponse.json(
+    data,
     {
-      p_payment_id: paymentId,
+      status,
     },
   );
+}
 
-  if (error) {
-    console.error(
-      "[Moko Webhook] Activation abonnement:",
-      error,
+/* =========================================================
+   OBJECT
+========================================================= */
+
+function isObject(
+  value: unknown,
+): value is JsonObject {
+  return (
+    typeof value ===
+      "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+/* =========================================================
+   STRING
+========================================================= */
+
+function normalizeString(
+  value: unknown,
+): string | null {
+  if (
+    typeof value !==
+    "string"
+  ) {
+    return null;
+  }
+
+  const result =
+    value.trim();
+
+  return result
+    ? result
+    : null;
+}
+
+/* =========================================================
+   AMOUNT
+========================================================= */
+
+function normalizeAmount(
+  value: unknown,
+): number | null {
+  if (
+    typeof value ===
+      "number" &&
+    Number.isFinite(value)
+  ) {
+    return value;
+  }
+
+  if (
+    typeof value ===
+      "string" &&
+    value.trim()
+  ) {
+    const normalized =
+      value
+        .trim()
+        .replace(",", ".");
+
+    const amount =
+      Number(
+        normalized,
+      );
+
+    return Number.isFinite(
+      amount,
+    )
+      ? amount
+      : null;
+  }
+
+  return null;
+}
+
+/* =========================================================
+   CURRENCY
+========================================================= */
+
+function normalizeCurrency(
+  value: unknown,
+): string | null {
+  const currency =
+    normalizeString(
+      value,
     );
 
-    return {
-      success: false,
-      data: null,
+  return currency
+    ? currency.toUpperCase()
+    : null;
+}
+
+/* =========================================================
+   PROVIDER
+========================================================= */
+
+function normalizeProvider(
+  value: unknown,
+): PaymentProvider | null {
+  const provider =
+    normalizeString(
+      value,
+    )?.toLowerCase();
+
+  if (
+    provider ===
+    "moko_afrika"
+  ) {
+    return "moko_afrika";
+  }
+
+  if (
+    provider ===
+    "yabetoo"
+  ) {
+    return "yabetoo";
+  }
+
+  if (
+    provider ===
+    "gofreshpay"
+  ) {
+    return "gofreshpay";
+  }
+
+  return null;
+}
+
+/* =========================================================
+   METADATA
+========================================================= */
+
+function normalizeMetadata(
+  value: unknown,
+): JsonObject {
+  return isObject(value)
+    ? value
+    : {};
+}
+
+/* =========================================================
+   GET NESTED VALUE
+========================================================= */
+
+function getNestedValue(
+  object: unknown,
+  paths: string[][],
+): unknown {
+  for (
+    const path of paths
+  ) {
+    let current =
+      object;
+
+    let found = true;
+
+    for (
+      const key of path
+    ) {
+      if (
+        !isObject(
+          current,
+        ) ||
+        !Object.prototype.hasOwnProperty.call(
+          current,
+          key,
+        )
+      ) {
+        found = false;
+        break;
+      }
+
+      current =
+        current[key];
+    }
+
+    if (found) {
+      return current;
+    }
+  }
+
+  return undefined;
+}
+
+/* =========================================================
+   GET REFERENCE
+========================================================= */
+
+function getMerchantReference(
+  payload: JsonObject,
+): string | null {
+  const value =
+    getNestedValue(
+      payload,
+      [
+        ["merchant_reference"],
+        ["merchantReference"],
+        ["reference"],
+        ["order_reference"],
+        ["merchant_ref"],
+        ["data", "merchant_reference"],
+        ["data", "merchantReference"],
+        ["data", "reference"],
+      ],
+    );
+
+  return normalizeString(
+    value,
+  );
+}
+
+/* =========================================================
+   GET PROVIDER TRANSACTION ID
+========================================================= */
+
+function getProviderTransactionId(
+  payload: JsonObject,
+): string | null {
+  const value =
+    getNestedValue(
+      payload,
+      [
+        ["provider_transaction_id"],
+        ["providerTransactionId"],
+        ["transaction_uuid"],
+        ["transaction_id"],
+        ["transactionId"],
+        ["Transaction_id"],
+        ["data", "provider_transaction_id"],
+        ["data", "providerTransactionId"],
+        ["data", "transaction_uuid"],
+        ["data", "transaction_id"],
+      ],
+    );
+
+  return normalizeString(
+    value,
+  );
+}
+
+/* =========================================================
+   GET AMOUNT
+========================================================= */
+
+function getWebhookAmount(
+  payload: JsonObject,
+): number | null {
+  const value =
+    getNestedValue(
+      payload,
+      [
+        ["amount"],
+        ["Amount"],
+        ["data", "amount"],
+      ],
+    );
+
+  return normalizeAmount(
+    value,
+  );
+}
+
+/* =========================================================
+   GET CURRENCY
+========================================================= */
+
+function getWebhookCurrency(
+  payload: JsonObject,
+): string | null {
+  const value =
+    getNestedValue(
+      payload,
+      [
+        ["currency"],
+        ["Currency"],
+        ["data", "currency"],
+      ],
+    );
+
+  return normalizeCurrency(
+    value,
+  );
+}
+
+/* =========================================================
+   GET STATUS
+========================================================= */
+
+function getWebhookStatus(
+  payload: JsonObject,
+): string | null {
+  const value =
+    getNestedValue(
+      payload,
+      [
+        ["status"],
+        ["Status"],
+        ["transaction_status"],
+        ["transactionStatus"],
+        ["Trans_Status"],
+        ["data", "status"],
+        ["data", "transaction_status"],
+        ["event_type"],
+        ["event"],
+      ],
+    );
+
+  return normalizeString(
+    value,
+  )?.toLowerCase() ??
+    null;
+}
+
+/* =========================================================
+   FIND TRANSACTION
+========================================================= */
+
+async function findPaymentTransaction(
+  merchantReference:
+    | string
+    | null,
+  providerTransactionId:
+    | string
+    | null,
+): Promise<{
+  transaction:
+    | PaymentTransaction
+    | null;
+
+  error:
+    | unknown
+    | null;
+}> {
+  /*
+   * -------------------------------------------------------
+   * RECHERCHE PAR MERCHANT REFERENCE
+   * -------------------------------------------------------
+   */
+
+  if (
+    merchantReference
+  ) {
+    const {
+      data,
       error,
-    };
+    } =
+      await supabaseAdmin
+        .from(
+          "payment_transactions",
+        )
+        .select(
+          `
+            id,
+            pharmacy_id,
+            subscription_id,
+            provider,
+            merchant_reference,
+            provider_transaction_id,
+            amount,
+            currency,
+            payment_method,
+            status,
+            metadata,
+            paid_at,
+            created_at,
+            updated_at
+          `,
+        )
+        .eq(
+          "merchant_reference",
+          merchantReference,
+        )
+        .maybeSingle();
+
+    if (error) {
+      return {
+        transaction:
+          null,
+        error,
+      };
+    }
+
+    if (data) {
+      return {
+        transaction:
+          data as PaymentTransaction,
+        error: null,
+      };
+    }
+  }
+
+  /*
+   * -------------------------------------------------------
+   * RECHERCHE PAR PROVIDER TRANSACTION ID
+   * -------------------------------------------------------
+   */
+
+  if (
+    providerTransactionId
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await supabaseAdmin
+        .from(
+          "payment_transactions",
+        )
+        .select(
+          `
+            id,
+            pharmacy_id,
+            subscription_id,
+            provider,
+            merchant_reference,
+            provider_transaction_id,
+            amount,
+            currency,
+            payment_method,
+            status,
+            metadata,
+            paid_at,
+            created_at,
+            updated_at
+          `,
+        )
+        .eq(
+          "provider_transaction_id",
+          providerTransactionId,
+        )
+        .maybeSingle();
+
+    if (error) {
+      return {
+        transaction:
+          null,
+        error,
+      };
+    }
+
+    if (data) {
+      return {
+        transaction:
+          data as PaymentTransaction,
+        error: null,
+      };
+    }
   }
 
   return {
-    success: true,
-    data,
+    transaction:
+      null,
     error: null,
   };
 }
+
+/* =========================================================
+   VERIFY INTERNALLY
+========================================================= */
+
+async function verifyThroughInternalEndpoint(
+  request: NextRequest,
+  transaction:
+    PaymentTransaction,
+) {
+  const origin =
+    new URL(
+      request.url,
+    ).origin;
+
+  const verifyUrl =
+    `${origin}/api/payments/verify`;
+
+  const payload = {
+    merchantReference:
+      transaction.merchant_reference ??
+      undefined,
+
+    providerTransactionId:
+      transaction.provider_transaction_id ??
+      undefined,
+
+    amount:
+      transaction.amount ??
+      undefined,
+
+    currency:
+      transaction.currency ??
+      undefined,
+
+    provider:
+      transaction.provider ??
+      undefined,
+  };
+
+  const verification =
+    await fetch(
+      verifyUrl,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
+        body:
+          JSON.stringify(
+            payload,
+          ),
+
+        cache: "no-store",
+      },
+    );
+
+  let data:
+    | JsonObject
+    | null =
+    null;
+
+  try {
+    const parsed =
+      await verification.json();
+
+    if (
+      isObject(parsed)
+    ) {
+      data = parsed;
+    }
+  } catch {
+    data = null;
+  }
+
+  return {
+    response:
+      verification,
+
+    data,
+  };
+}
+
+/* =========================================================
+   AMOUNT CHECK
+========================================================= */
+
+function amountMatches(
+  expected:
+    | number
+    | null,
+  received:
+    | number
+    | null,
+): boolean {
+  if (
+    expected ===
+      null ||
+    received ===
+      null
+  ) {
+    return true;
+  }
+
+  return (
+    Math.abs(
+      Number(expected) -
+        Number(received),
+    ) < 0.01
+  );
+}
+
+/* =========================================================
+   CURRENCY CHECK
+========================================================= */
+
+function currencyMatches(
+  expected:
+    | string
+    | null,
+  received:
+    | string
+    | null,
+): boolean {
+  if (
+    !expected ||
+    !received
+  ) {
+    return true;
+  }
+
+  return (
+    expected
+      .trim()
+      .toUpperCase() ===
+    received
+      .trim()
+      .toUpperCase()
+  );
+}
+
+/* =========================================================
+   WEBHOOK HANDLER
+========================================================= */
 
 async function handleWebhook(
   request: NextRequest,
 ) {
   /*
-   * IMPORTANT :
-   * On lit d'abord le corps brut.
-   * Ne pas utiliser request.json() avant la vérification
-   * de signature du webhook carte.
+   * -------------------------------------------------------
+   * 1. CORPS BRUT
+   * -------------------------------------------------------
    */
-  const rawBody = await request.text();
+
+  const rawBody =
+    await request.text();
 
   if (!rawBody) {
-    return json(
+    return jsonResponse(
       {
         success: false,
-        message: "Empty webhook body",
+
+        message:
+          "Empty webhook body",
       },
       400,
     );
   }
 
-  let payload: any;
+  /*
+   * -------------------------------------------------------
+   * 2. JSON
+   * -------------------------------------------------------
+   */
+
+  let payload:
+    | JsonObject
+    | null =
+    null;
 
   try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    console.error(
-      "[Moko Webhook] JSON invalide",
-    );
-
-    return json(
-      {
-        success: false,
-        message: "Invalid JSON",
-      },
-      400,
-    );
-  }
-
-  const headers = request.headers;
-
-  /*
-   * Carte Moko Checkout :
-   * vérification obligatoire de X-FreshPay-Signature.
-   *
-   * On passe directement request.headers.
-   * NE PAS transformer Headers en objet { ...headers }.
-   */
-  const cardWebhook = isCardWebhook(
-    headers,
-    payload,
-  );
-
-  if (cardWebhook) {
-    const signaturePresent =
-      !!getHeader(
-        headers,
-        "x-freshpay-signature",
-      );
-
-    if (!signaturePresent) {
-      console.error(
-        "[Moko Webhook] Signature carte absente",
-      );
-
-      return json(
-        {
-          success: false,
-          message: "Missing webhook signature",
-        },
-        401,
-      );
-    }
-
-    const signatureValid =
-      mokoAfrikaAdapter.verifyWebhookSignature?.(
+    const parsed =
+      JSON.parse(
         rawBody,
-        headers,
-      ) ?? false;
-
-    if (!signatureValid) {
-      console.error(
-        "[Moko Webhook] Signature carte invalide",
       );
-
-      return json(
-        {
-          success: false,
-          message: "Invalid webhook signature",
-        },
-        401,
-      );
-    }
-  }
-
-  /*
-   * Normalisation du callback Moko.
-   */
-  const parsed =
-    mokoAfrikaAdapter.parseWebhook?.(
-      payload,
-      headers,
-    );
-
-  if (!parsed) {
-    return json(
-      {
-        success: false,
-        message: "Unable to parse Moko webhook",
-      },
-      400,
-    );
-  }
-
-  if (!parsed.success) {
-    return json(
-      {
-        success: false,
-        message:
-          parsed.message ||
-          "Webhook parsing failed",
-      },
-      400,
-    );
-  }
-
-  const merchantReference =
-    parsed.merchantReference ||
-    getWebhookReference(payload);
-
-  const providerTransactionId =
-    parsed.providerTransactionId ||
-    getProviderTransactionId(payload);
-
-  const webhookAmount =
-    parsed.amount ??
-    getWebhookAmount(payload);
-
-  const webhookCurrency =
-    parsed.currency ||
-    getWebhookCurrency(payload);
-
-  const webhookStatus =
-    parsed.status ||
-    normalizePaymentStatus(
-      getWebhookStatus(payload),
-    );
-
-  /*
-   * Recherche de la transaction locale.
-   */
-  let transaction =
-    await findPaymentTransaction(
-      merchantReference,
-      providerTransactionId,
-    );
-
-  /*
-   * Fallback important :
-   * certains callbacks ne renvoient pas exactement
-   * le merchant_reference attendu.
-   */
-  if (
-    !transaction &&
-    providerTransactionId
-  ) {
-    transaction =
-      await findPaymentByProviderTransactionId(
-        providerTransactionId,
-      );
-  }
-
-  if (!transaction) {
-    console.error(
-      "[Moko Webhook] Transaction inconnue:",
-      {
-        merchantReference,
-        providerTransactionId,
-      },
-    );
-
-    /*
-     * On retourne 200 afin d'éviter des retries
-     * interminables d'un webhook impossible à rattacher.
-     *
-     * La transaction n'est PAS activée.
-     */
-    return json({
-      success: true,
-      received: true,
-      processed: false,
-      message:
-        "Webhook received but transaction not found",
-    });
-  }
-
-  /*
-   * Vérification montant/devise lorsque Moko
-   * les fournit dans le callback.
-   */
-  if (
-    webhookAmount !== null &&
-    transaction.amount !== null
-  ) {
-    const expectedAmount =
-      Number(transaction.amount);
 
     if (
-      !Number.isFinite(expectedAmount) ||
-      Math.abs(
-        webhookAmount - expectedAmount,
-      ) > 0.000001
+      !isObject(parsed)
     ) {
-      console.error(
-        "[Moko Webhook] Montant différent:",
-        {
-          paymentId: transaction.id,
-          expectedAmount,
-          webhookAmount,
-        },
-      );
-
-      await supabaseAdmin
-        .from("payment_transactions")
-        .update({
-          status: "failed",
-          failure_reason:
-            "Webhook amount mismatch",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", transaction.id);
-
-      return json(
+      return jsonResponse(
         {
           success: false,
-          message: "Amount mismatch",
+
+          message:
+            "Invalid webhook payload",
         },
         400,
       );
     }
-  }
 
-  if (
-    webhookCurrency &&
-    transaction.currency &&
-    webhookCurrency !==
-      String(transaction.currency)
-        .trim()
-        .toUpperCase()
-  ) {
-    console.error(
-      "[Moko Webhook] Devise différente:",
-      {
-        paymentId: transaction.id,
-        expectedCurrency:
-          transaction.currency,
-        webhookCurrency,
-      },
-    );
-
-    await supabaseAdmin
-      .from("payment_transactions")
-      .update({
-        status: "failed",
-        failure_reason:
-          "Webhook currency mismatch",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", transaction.id);
-
-    return json(
+    payload = parsed;
+  } catch {
+    return jsonResponse(
       {
         success: false,
-        message: "Currency mismatch",
+
+        message:
+          "Invalid JSON",
       },
       400,
     );
   }
 
   /*
-   * On effectue une vérification serveur-à-serveur
-   * auprès de Moko avant toute activation.
-   *
-   * Le callback seul ne suffit donc pas.
+   * -------------------------------------------------------
+   * 3. EXTRACTION
+   * -------------------------------------------------------
    */
-  let verifiedStatus =
-    normalizePaymentStatus(
-      webhookStatus,
+
+  const merchantReference =
+    getMerchantReference(
+      payload,
     );
 
-  let verification = null;
+  const providerTransactionId =
+    getProviderTransactionId(
+      payload,
+    );
+
+  const webhookAmount =
+    getWebhookAmount(
+      payload,
+    );
+
+  const webhookCurrency =
+    getWebhookCurrency(
+      payload,
+    );
+
+  const webhookStatus =
+    getWebhookStatus(
+      payload,
+    );
+
+  /*
+   * -------------------------------------------------------
+   * 4. LOG NON SENSIBLE
+   * -------------------------------------------------------
+   */
+
+  console.log(
+    "[Payment Webhook] received:",
+    {
+      merchantReference,
+
+      providerTransactionId,
+
+      amount:
+        webhookAmount,
+
+      currency:
+        webhookCurrency,
+
+      status:
+        webhookStatus,
+    },
+  );
+
+  /*
+   * -------------------------------------------------------
+   * 5. RÉFÉRENCE
+   * -------------------------------------------------------
+   */
 
   if (
-    providerTransactionId ||
-    merchantReference
+    !merchantReference &&
+    !providerTransactionId
   ) {
-    verification =
-      await mokoAfrikaAdapter.verifyPayment({
-        pharmacyId:
-          transaction.pharmacy_id,
-        merchantReference:
-          transaction.merchant_reference ||
-          merchantReference ||
-          undefined,
-        providerTransactionId:
-          transaction.provider_transaction_id ||
-          providerTransactionId ||
-          undefined,
-        expectedAmount:
-          transaction.amount ??
-          webhookAmount ??
-          undefined,
-        expectedCurrency:
-          transaction.currency ||
-          webhookCurrency ||
-          undefined,
-      });
-
-    if (verification) {
-      verifiedStatus =
-        normalizePaymentStatus(
-          verification.status,
-        );
-    }
-  }
-
-  /*
-   * Si Moko confirme explicitement le paiement,
-   * on considère la transaction comme successful.
-   */
-  const successful =
-    isSuccessfulPaymentStatus(
-      verifiedStatus,
-    );
-
-  /*
-   * Statuts non définitifs :
-   * on conserve pending/created.
-   */
-  if (!successful) {
-    const normalizedStatus =
-      normalizePaymentStatus(
-        verifiedStatus,
-      );
-
-    const updateData: Record<
-      string,
-      unknown
-    > = {
-      status: normalizedStatus,
-      updated_at:
-        new Date().toISOString(),
-    };
-
-    if (
-      normalizedStatus === "failed" ||
-      normalizedStatus === "cancelled" ||
-      normalizedStatus === "expired"
-    ) {
-      updateData.failure_reason =
-        verification?.failureReason ||
-        parsed.failureReason ||
-        parsed.message ||
-        "Payment not successful";
-    }
-
-    const { error: updateError } =
-      await supabaseAdmin
-        .from("payment_transactions")
-        .update(updateData)
-        .eq("id", transaction.id);
-
-    if (updateError) {
-      console.error(
-        "[Moko Webhook] Mise à jour transaction:",
-        updateError,
-      );
-
-      return json(
-        {
-          success: false,
-          message:
-            "Unable to update transaction",
-        },
-        500,
-      );
-    }
-
-    return json({
-      success: true,
-      received: true,
-      processed: true,
-      payment_id: transaction.id,
-      status: normalizedStatus,
-      activated: false,
-    });
-  }
-
-  /*
-   * À partir d'ici le paiement est confirmé.
-   *
-   * Protection contre une double activation.
-   */
-  const currentMetadata =
-    transaction.metadata || {};
-
-  const activationStatus =
-    String(
-      currentMetadata.activation_status ??
-        "",
-    );
-
-  if (
-    activationStatus === "activated"
-  ) {
-    return json({
-      success: true,
-      received: true,
-      processed: true,
-      payment_id: transaction.id,
-      status: "successful",
-      activated: true,
-      already_processed: true,
-    });
-  }
-
-  /*
-   * Première étape : enregistrer le paiement
-   * comme successful.
-   */
-  const successfulMetadata = {
-    ...currentMetadata,
-    activation_status:
-      "processing",
-    webhook_received_at:
-      new Date().toISOString(),
-  };
-
-  const { error: paymentUpdateError } =
-    await supabaseAdmin
-      .from("payment_transactions")
-      .update({
-        status: "successful",
-        provider_transaction_id:
-          transaction.provider_transaction_id ||
-          providerTransactionId ||
-          verification?.providerTransactionId ||
-          null,
-        merchant_reference:
-          transaction.merchant_reference ||
-          merchantReference ||
-          verification?.merchantReference ||
-          null,
-        paid_at:
-          new Date().toISOString(),
-        updated_at:
-          new Date().toISOString(),
-        metadata:
-          successfulMetadata,
-      })
-      .eq("id", transaction.id);
-
-  if (paymentUpdateError) {
-    console.error(
-      "[Moko Webhook] Enregistrement paiement:",
-      paymentUpdateError,
-    );
-
-    return json(
-      {
-        success: false,
-        message:
-          "Unable to save successful payment",
-      },
-      500,
-    );
-  }
-
-  /*
-   * Activation atomique côté serveur.
-   *
-   * Le RPC doit appliquer les règles d'abonnement :
-   * - essai terminé / abonnement existant
-   * - renouvellement anticipé
-   * - bonus
-   * - période mensuelle
-   * - période annuelle
-   */
-  const activation =
-    await activateSubscription(
-      transaction.id,
-    );
-
-  if (!activation.success) {
-    /*
-     * Le paiement reste successful.
-     * On ne le transforme surtout PAS en failed.
-     *
-     * Cela permet au Super Admin / système de
-     * réconciliation de traiter les paiements encaissés
-     * dont l'activation n'a pas encore été effectuée.
-     */
-    await supabaseAdmin
-      .from("payment_transactions")
-      .update({
-        metadata: {
-          ...successfulMetadata,
-          activation_status:
-            "activation_failed",
-          activation_error:
-            activation.error?.message ||
-            "Subscription activation failed",
-          activation_failed_at:
-            new Date().toISOString(),
-        },
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq("id", transaction.id);
-
-    return json(
+    return jsonResponse(
       {
         success: true,
+
         received: true,
-        processed: true,
-        payment_id: transaction.id,
-        status: "successful",
-        activated: false,
-        activation_pending: true,
+
+        processed: false,
+
+        message:
+          "Webhook reçu mais aucune référence de transaction exploitable.",
       },
       200,
     );
   }
 
   /*
-   * Activation terminée.
+   * -------------------------------------------------------
+   * 6. RECHERCHE TRANSACTION
+   * -------------------------------------------------------
    */
-  const finalMetadata = {
-    ...successfulMetadata,
-    activation_status:
-      "activated",
-    activated_at:
-      new Date().toISOString(),
+
+  const search =
+    await findPaymentTransaction(
+      merchantReference,
+      providerTransactionId,
+    );
+
+  if (
+    search.error
+  ) {
+    console.error(
+      "[Payment Webhook] Database search error:",
+      search.error,
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+
+        message:
+          "Unable to search payment transaction.",
+      },
+      500,
+    );
+  }
+
+  const transaction =
+    search.transaction;
+
+  /*
+   * -------------------------------------------------------
+   * 7. TRANSACTION INCONNUE
+   * -------------------------------------------------------
+   */
+
+  if (
+    !transaction
+  ) {
+    console.warn(
+      "[Payment Webhook] Transaction not found:",
+      {
+        merchantReference,
+
+        providerTransactionId,
+      },
+    );
+
+    /*
+     * On retourne 200 pour éviter une boucle
+     * de retry inutile du fournisseur.
+     *
+     * Aucun abonnement n'est activé.
+     */
+    return jsonResponse(
+      {
+        success: true,
+
+        received: true,
+
+        processed: false,
+
+        message:
+          "Webhook received but transaction not found.",
+      },
+      200,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 8. FOURNISSEUR
+   * -------------------------------------------------------
+   */
+
+  const provider =
+    normalizeProvider(
+      transaction.provider,
+    );
+
+  if (
+    !provider
+  ) {
+    console.error(
+      "[Payment Webhook] Unknown provider:",
+      transaction.provider,
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+
+        received: true,
+
+        processed: false,
+
+        message:
+          "Unknown payment provider.",
+
+        transactionId:
+          transaction.id,
+
+        provider:
+          transaction.provider,
+      },
+      409,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 9. VÉRIFICATION MONTANT WEBHOOK
+   * -------------------------------------------------------
+   */
+
+  if (
+    !amountMatches(
+      transaction.amount,
+      webhookAmount,
+    )
+  ) {
+    console.error(
+      "[Payment Webhook] Amount mismatch:",
+      {
+        transactionId:
+          transaction.id,
+
+        expected:
+          transaction.amount,
+
+        received:
+          webhookAmount,
+      },
+    );
+
+    await supabaseAdmin
+      .from(
+        "payment_transactions",
+      )
+      .update({
+        status:
+          "failed",
+
+        failure_reason:
+          "Webhook amount mismatch.",
+
+        metadata: {
+          ...normalizeMetadata(
+            transaction.metadata,
+          ),
+
+          webhook_verification:
+            "amount_mismatch",
+
+          webhook_amount:
+            webhookAmount,
+
+          webhook_received_at:
+            new Date()
+              .toISOString(),
+        },
+
+        updated_at:
+          new Date()
+            .toISOString(),
+      })
+      .eq(
+        "id",
+        transaction.id,
+      );
+
+    return jsonResponse(
+      {
+        success: false,
+
+        received: true,
+
+        processed: false,
+
+        message:
+          "Amount mismatch.",
+
+        transactionId:
+          transaction.id,
+      },
+      409,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 10. VÉRIFICATION DEVISE WEBHOOK
+   * -------------------------------------------------------
+   */
+
+  if (
+    !currencyMatches(
+      transaction.currency,
+      webhookCurrency,
+    )
+  ) {
+    console.error(
+      "[Payment Webhook] Currency mismatch:",
+      {
+        transactionId:
+          transaction.id,
+
+        expected:
+          transaction.currency,
+
+        received:
+          webhookCurrency,
+      },
+    );
+
+    await supabaseAdmin
+      .from(
+        "payment_transactions",
+      )
+      .update({
+        status:
+          "failed",
+
+        failure_reason:
+          "Webhook currency mismatch.",
+
+        metadata: {
+          ...normalizeMetadata(
+            transaction.metadata,
+          ),
+
+          webhook_verification:
+            "currency_mismatch",
+
+          webhook_currency:
+            webhookCurrency,
+
+          webhook_received_at:
+            new Date()
+              .toISOString(),
+        },
+
+        updated_at:
+          new Date()
+            .toISOString(),
+      })
+      .eq(
+        "id",
+        transaction.id,
+      );
+
+    return jsonResponse(
+      {
+        success: false,
+
+        received: true,
+
+        processed: false,
+
+        message:
+          "Currency mismatch.",
+
+        transactionId:
+          transaction.id,
+      },
+      409,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 11. PROTECTION DOUBLE ACTIVATION
+   * -------------------------------------------------------
+   */
+
+  const metadata =
+    normalizeMetadata(
+      transaction.metadata,
+    );
+
+  const activationStatus =
+    normalizeString(
+      metadata.activation_status,
+    );
+
+  if (
+    transaction.status ===
+      "successful" &&
+    activationStatus ===
+      "activated"
+  ) {
+    return jsonResponse(
+      {
+        success: true,
+
+        received: true,
+
+        processed: true,
+
+        alreadyProcessed:
+          true,
+
+        paymentId:
+          transaction.id,
+
+        provider,
+
+        status:
+          "successful",
+
+        activated:
+          true,
+      },
+      200,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 12. MISE À JOUR INFORMATIONS WEBHOOK
+   * -------------------------------------------------------
+   */
+
+  const webhookMetadata = {
+    ...metadata,
+
+    webhook_received:
+      true,
+
+    webhook_received_at:
+      new Date()
+        .toISOString(),
+
+    webhook_status:
+      webhookStatus,
+
+    webhook_amount:
+      webhookAmount,
+
+    webhook_currency:
+      webhookCurrency,
+
+    webhook_provider:
+      provider,
   };
 
-  await supabaseAdmin
-    .from("payment_transactions")
-    .update({
-      metadata: finalMetadata,
-      updated_at:
-        new Date().toISOString(),
-    })
-    .eq("id", transaction.id);
+  /*
+   * -------------------------------------------------------
+   * 13. SAUVEGARDER L'ID FOURNISSEUR
+   * -------------------------------------------------------
+   */
 
-  return json({
-    success: true,
-    received: true,
-    processed: true,
-    payment_id: transaction.id,
-    status: "successful",
-    activated: true,
-  });
+  const providerIdToSave =
+    providerTransactionId ??
+    transaction.provider_transaction_id ??
+    null;
+
+  const merchantReferenceToSave =
+    merchantReference ??
+    transaction.merchant_reference ??
+    null;
+
+  const { error: webhookUpdateError } =
+    await supabaseAdmin
+      .from(
+        "payment_transactions",
+      )
+      .update({
+        provider_transaction_id:
+          providerIdToSave,
+
+        merchant_reference:
+          merchantReferenceToSave,
+
+        metadata:
+          webhookMetadata,
+
+        updated_at:
+          new Date()
+            .toISOString(),
+      })
+      .eq(
+        "id",
+        transaction.id,
+      );
+
+  if (
+    webhookUpdateError
+  ) {
+    console.error(
+      "[Payment Webhook] Failed to save webhook data:",
+      webhookUpdateError,
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+
+        message:
+          "Unable to save webhook information.",
+
+        transactionId:
+          transaction.id,
+      },
+      500,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 14. VÉRIFICATION SERVEUR
+   * -------------------------------------------------------
+   *
+   * IMPORTANT :
+   *
+   * Le webhook n'active jamais directement
+   * l'abonnement.
+   *
+   * Il demande à /api/payments/verify
+   * de vérifier réellement le paiement
+   * auprès du fournisseur.
+   */
+
+  let verification;
+
+  try {
+    verification =
+      await verifyThroughInternalEndpoint(
+        request,
+        {
+          ...transaction,
+
+          provider_transaction_id:
+            providerIdToSave,
+
+          merchant_reference:
+            merchantReferenceToSave,
+        },
+      );
+  } catch (error) {
+    console.error(
+      "[Payment Webhook] Internal verification error:",
+      error,
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+
+        message:
+          "Internal payment verification failed.",
+
+        transactionId:
+          transaction.id,
+      },
+      500,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 15. RÉPONSE VERIFICATION
+   * -------------------------------------------------------
+   */
+
+  const verificationData =
+    verification.data;
+
+  /*
+   * Le endpoint verify peut retourner
+   * 200 même pour un paiement pending/failed.
+   *
+   * Nous regardons donc success,
+   * verified et paymentStatus.
+   */
+
+  const verified =
+    verificationData?.verified ===
+    true;
+
+  const paymentStatus =
+    normalizeString(
+      verificationData?.paymentStatus,
+    );
+
+  const activationStatusFromVerification =
+    normalizeString(
+      verificationData?.activationStatus,
+    );
+
+  /*
+   * -------------------------------------------------------
+   * 16. VERIFICATION SUCCESSFUL
+   * -------------------------------------------------------
+   */
+
+  if (
+    verified &&
+    paymentStatus ===
+      "successful"
+  ) {
+    return jsonResponse(
+      {
+        success: true,
+
+        received: true,
+
+        processed: true,
+
+        paymentId:
+          transaction.id,
+
+        provider,
+
+        status:
+          "successful",
+
+        activated:
+          activationStatusFromVerification ===
+          "activated",
+
+        activationStatus:
+          activationStatusFromVerification ??
+          "pending",
+
+        verification:
+          verificationData,
+      },
+      200,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 17. PENDING
+   * -------------------------------------------------------
+   */
+
+  if (
+    paymentStatus ===
+    "pending"
+  ) {
+    return jsonResponse(
+      {
+        success: true,
+
+        received: true,
+
+        processed: true,
+
+        paymentId:
+          transaction.id,
+
+        provider,
+
+        status:
+          "pending",
+
+        activated:
+          false,
+
+        message:
+          "Payment is still pending.",
+      },
+      200,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 18. FAILED
+   * -------------------------------------------------------
+   */
+
+  if (
+    paymentStatus ===
+    "failed" ||
+    paymentStatus ===
+      "cancelled" ||
+    paymentStatus ===
+      "expired"
+  ) {
+    return jsonResponse(
+      {
+        success: true,
+
+        received: true,
+
+        processed: true,
+
+        paymentId:
+          transaction.id,
+
+        provider,
+
+        status:
+          paymentStatus,
+
+        activated:
+          false,
+
+        message:
+          "Payment was not successful.",
+      },
+      200,
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * 19. VERIFICATION IMPOSSIBLE
+   * -------------------------------------------------------
+   */
+
+  console.warn(
+    "[Payment Webhook] Verification unresolved:",
+    {
+      transactionId:
+        transaction.id,
+
+      provider,
+
+      verificationStatus:
+        verification.response.status,
+
+      verificationData,
+    },
+  );
+
+  /*
+   * On ne transforme pas un paiement
+   * en failed simplement parce que
+   * la vérification est temporairement
+   * indisponible.
+   */
+  await supabaseAdmin
+    .from(
+      "payment_transactions",
+    )
+    .update({
+      metadata: {
+        ...webhookMetadata,
+
+        verification_status:
+          "pending",
+
+        verification_http_status:
+          verification.response.status,
+
+        verification_checked_at:
+          new Date()
+            .toISOString(),
+      },
+
+      updated_at:
+        new Date()
+          .toISOString(),
+    })
+    .eq(
+      "id",
+      transaction.id,
+    );
+
+  return jsonResponse(
+    {
+      success: true,
+
+      received: true,
+
+      processed: true,
+
+      paymentId:
+        transaction.id,
+
+      provider,
+
+      status:
+        "pending",
+
+      activated:
+        false,
+
+      message:
+        "Webhook received. Payment verification is pending.",
+    },
+    200,
+  );
 }
+
+/* =========================================================
+   POST
+========================================================= */
 
 export async function POST(
   request: NextRequest,
 ) {
   try {
-    return await handleWebhook(request);
+    return await handleWebhook(
+      request,
+    );
   } catch (error) {
     console.error(
-      "[Moko Webhook] Unexpected error:",
+      "[Payment Webhook] Unexpected error:",
       error,
     );
 
     /*
-     * 500 uniquement en cas d'erreur serveur.
-     * Moko pourra alors réessayer le webhook.
+     * 500 uniquement lorsqu'il y a
+     * réellement une erreur serveur.
+     *
+     * Le fournisseur pourra alors
+     * réessayer son webhook.
      */
-    return json(
+
+    return jsonResponse(
       {
         success: false,
+
         message:
-          "Internal webhook error",
+          "Internal webhook error.",
       },
       500,
     );
   }
 }
 
-export async function GET() {
-  return json({
-    success: true,
-    service:
-      "PharmaFlow Moko Afrika webhook",
-    provider: "moko_afrika",
-    status: "ready",
-  });
-}
+/* =========================================================
+   GET
+========================================================= */
 
-function normalizePaymentTransaction(data: { error: true; } & "Received a generic string"): PaymentTransactionRow | PromiseLike<PaymentTransactionRow> {
-  throw new Error("Function not implemented.");
+export async function GET() {
+  return jsonResponse(
+    {
+      success: true,
+
+      service:
+        "PharmaFlow Payment Webhook",
+
+      providers: [
+        "moko_afrika",
+        "yabetoo",
+        "gofreshpay",
+      ],
+
+      status:
+        "ready",
+    },
+    200,
+  );
 }

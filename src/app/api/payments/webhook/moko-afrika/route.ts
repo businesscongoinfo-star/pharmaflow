@@ -1,15 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/app/lib/supabase/admin";
+
 import {
   isSuccessfulPaymentStatus,
   normalizePaymentStatus,
 } from "@/app/lib/payments/types";
+
 import { mokoAfrikaAdapter } from "@/app/lib/payments/moko-afrika";
 
 export const runtime = "nodejs";
 
 type JsonObject = Record<string, unknown>;
+
+type PaymentTransaction = {
+  id: string;
+  pharmacy_id: string;
+  subscription_id: string | null;
+  provider_id: string | null;
+  provider: string;
+  provider_transaction_id: string | null;
+  merchant_reference: string;
+  amount: number;
+  currency: string;
+  payment_method: string | null;
+  status: string;
+  metadata: unknown;
+  created_at: string;
+  updated_at: string;
+  paid_at: string | null;
+};
 
 function jsonResponse(
   data: JsonObject,
@@ -18,7 +38,9 @@ function jsonResponse(
   return NextResponse.json(data, { status });
 }
 
-function isObject(value: unknown): value is JsonObject {
+function isObject(
+  value: unknown,
+): value is JsonObject {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -31,7 +53,12 @@ function getValue(
   keys: string[],
 ): unknown {
   for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(object, key)) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        object,
+        key,
+      )
+    ) {
       return object[key];
     }
   }
@@ -65,11 +92,9 @@ function normalizeAmount(
     typeof value === "string" &&
     value.trim() !== ""
   ) {
-    const normalized = value
-      .trim()
-      .replace(",", ".");
-
-    const amount = Number(normalized);
+    const amount = Number(
+      value.trim().replace(",", "."),
+    );
 
     if (Number.isFinite(amount)) {
       return amount;
@@ -82,7 +107,8 @@ function normalizeAmount(
 function normalizeCurrency(
   value: unknown,
 ): string | null {
-  const currency = normalizeString(value);
+  const currency =
+    normalizeString(value);
 
   if (!currency) {
     return null;
@@ -91,6 +117,29 @@ function normalizeCurrency(
   return currency.toUpperCase();
 }
 
+/**
+ * Moko/FreshPay callback:
+ *
+ * {
+ *   "data": "<BASE64_ENCRYPTED_DATA>"
+ * }
+ *
+ * Le contenu de data doit être vérifié par HMAC
+ * avant d'être déchiffré.
+ */
+function getEncryptedCallbackData(
+  body: JsonObject,
+): string | null {
+  return normalizeString(
+    body.data,
+  );
+}
+
+/**
+ * Extraction générique utilisée uniquement
+ * comme secours lorsque l'adaptateur n'a pas
+ * pu extraire certaines informations.
+ */
 function extractPayload(
   body: unknown,
 ): JsonObject {
@@ -98,15 +147,14 @@ function extractPayload(
     return {};
   }
 
-  const nestedCandidates = [
-    body.data,
+  const candidates = [
     body.payload,
     body.transaction,
     body.payment,
     body.result,
   ];
 
-  for (const candidate of nestedCandidates) {
+  for (const candidate of candidates) {
     if (isObject(candidate)) {
       return candidate;
     }
@@ -121,6 +169,7 @@ function getMerchantReference(
 ): string | null {
   const value =
     getValue(payload, [
+      "Reference",
       "reference",
       "merchant_reference",
       "merchantReference",
@@ -130,6 +179,7 @@ function getMerchantReference(
       "orderReference",
     ]) ??
     getValue(body, [
+      "Reference",
       "reference",
       "merchant_reference",
       "merchantReference",
@@ -148,6 +198,7 @@ function getProviderTransactionId(
 ): string | null {
   const value =
     getValue(payload, [
+      "Transaction_id",
       "transaction_id",
       "transactionId",
       "provider_transaction_id",
@@ -157,6 +208,7 @@ function getProviderTransactionId(
       "id",
     ]) ??
     getValue(body, [
+      "Transaction_id",
       "transaction_id",
       "transactionId",
       "provider_transaction_id",
@@ -175,15 +227,15 @@ function getAmount(
 ): number | null {
   const value =
     getValue(payload, [
-      "amount",
       "Amount",
+      "amount",
       "trans_amount",
       "Trans_Amount",
       "transaction_amount",
     ]) ??
     getValue(body, [
-      "amount",
       "Amount",
+      "amount",
       "trans_amount",
       "Trans_Amount",
       "transaction_amount",
@@ -198,14 +250,14 @@ function getCurrency(
 ): string | null {
   const value =
     getValue(payload, [
-      "currency",
       "Currency",
+      "currency",
       "currency_code",
       "currencyCode",
     ]) ??
     getValue(body, [
-      "currency",
       "Currency",
+      "currency",
       "currency_code",
       "currencyCode",
     ]);
@@ -213,31 +265,62 @@ function getCurrency(
   return normalizeCurrency(value);
 }
 
+/**
+ * IMPORTANT :
+ *
+ * Moko distingue notamment :
+ *
+ * Status
+ * Trans_Status
+ *
+ * La documentation indique que Status peut confirmer
+ * la réception alors que Trans_Status représente
+ * le statut transactionnel à suivre.
+ *
+ * Nous privilégions donc TOUJOURS Trans_Status.
+ */
 function getProviderStatus(
   body: JsonObject,
   payload: JsonObject,
 ): string | null {
-  const value =
+  const transactionStatus =
     getValue(payload, [
-      "status",
-      "Status",
-      "trans_status",
       "Trans_Status",
+      "trans_status",
       "transaction_status",
       "payment_status",
       "paymentStatus",
     ]) ??
     getValue(body, [
-      "status",
-      "Status",
-      "trans_status",
       "Trans_Status",
+      "trans_status",
       "transaction_status",
       "payment_status",
       "paymentStatus",
     ]);
 
-  return normalizeString(value);
+  const normalizedTransactionStatus =
+    normalizeString(
+      transactionStatus,
+    );
+
+  if (normalizedTransactionStatus) {
+    return normalizedTransactionStatus;
+  }
+
+  const genericStatus =
+    getValue(payload, [
+      "Status",
+      "status",
+    ]) ??
+    getValue(body, [
+      "Status",
+      "status",
+    ]);
+
+  return normalizeString(
+    genericStatus,
+  );
 }
 
 function getPaymentMethod(
@@ -246,6 +329,7 @@ function getPaymentMethod(
 ): string | null {
   const value =
     getValue(payload, [
+      "Method",
       "method",
       "payment_method",
       "paymentMethod",
@@ -253,6 +337,7 @@ function getPaymentMethod(
       "operator",
     ]) ??
     getValue(body, [
+      "Method",
       "method",
       "payment_method",
       "paymentMethod",
@@ -269,20 +354,32 @@ function getFailureReason(
 ): string | null {
   const value =
     getValue(payload, [
+      "Trans_Status_Description",
+      "trans_status_description",
+      "Status_Description",
+      "status_description",
       "failure_reason",
       "failureReason",
       "error",
       "error_message",
       "errorMessage",
+      "Comment",
+      "comment",
       "message",
       "Message",
     ]) ??
     getValue(body, [
+      "Trans_Status_Description",
+      "trans_status_description",
+      "Status_Description",
+      "status_description",
       "failure_reason",
       "failureReason",
       "error",
       "error_message",
       "errorMessage",
+      "Comment",
+      "comment",
       "message",
       "Message",
     ]);
@@ -297,9 +394,8 @@ function providerStatusToPaymentStatus(
     return "pending";
   }
 
-  const normalized = value
-    .trim()
-    .toLowerCase();
+  const normalized =
+    value.trim().toLowerCase();
 
   if (
     normalized === "successful" ||
@@ -340,11 +436,33 @@ function providerStatusToPaymentStatus(
 
   return "pending";
 }
+
+function mergeMetadata(
+  existing: unknown,
+  additions: JsonObject,
+): JsonObject {
+  return {
+    ...(isObject(existing)
+      ? existing
+      : {}),
+    ...additions,
+  };
+}
+
 export async function POST(
   request: NextRequest,
 ) {
   try {
-    const rawBody = await request.text();
+    /*
+     * =====================================================
+     * 1. LECTURE DU BODY BRUT
+     * =====================================================
+     *
+     * Important pour ne pas perdre la valeur exacte
+     * de body.data utilisée pour la signature.
+     */
+    const rawBody =
+      await request.text();
 
     if (!rawBody.trim()) {
       return jsonResponse(
@@ -380,56 +498,96 @@ export async function POST(
       );
     }
 
-    const payload = extractPayload(body);
+    /*
+     * =====================================================
+     * 2. EXTRACTION DE DATA
+     * =====================================================
+     */
+    const encryptedData =
+      getEncryptedCallbackData(body);
 
-    const merchantReference =
-      getMerchantReference(
-        body,
-        payload,
+    if (!encryptedData) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Champ data chiffré manquant.",
+        },
+        400,
       );
-
-    const providerTransactionId =
-      getProviderTransactionId(
-        body,
-        payload,
-      );
-
-    const amount =
-      getAmount(
-        body,
-        payload,
-      );
-
-    const currency =
-      getCurrency(
-        body,
-        payload,
-      );
-
-    const providerStatus =
-      getProviderStatus(
-        body,
-        payload,
-      );
-
-    const paymentMethod =
-      getPaymentMethod(
-        body,
-        payload,
-      );
-
-    const failureReason =
-      getFailureReason(
-        body,
-        payload,
-      );
+    }
 
     /*
-     * Si l'adaptateur Moko Afrika sait interpréter
-     * directement le webhook, on lui laisse la priorité.
+     * =====================================================
+     * 3. VÉRIFICATION X-SIGNATURE
+     * =====================================================
+     *
+     * Moko indique :
+     *
+     * HMAC-SHA256(
+     *   encrypted_message,
+     *   HMAC_KEY
+     * )
+     *
+     * La signature porte donc sur data AVANT
+     * le déchiffrement.
+     */
+    const verifyWebhookSignature =
+      mokoAfrikaAdapter.verifyWebhookSignature;
+
+    if (
+      typeof verifyWebhookSignature !==
+      "function"
+    ) {
+      console.error(
+        "MOKO AFRIKA WEBHOOK SECURITY ERROR: verifyWebhookSignature indisponible.",
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Vérification de signature Moko Afrika non configurée.",
+        },
+        500,
+      );
+    }
+
+    const signatureValid =
+      verifyWebhookSignature(
+        encryptedData,
+        request.headers,
+      );
+
+    if (!signatureValid) {
+      console.warn(
+        "MOKO AFRIKA WEBHOOK INVALID SIGNATURE",
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Signature Moko Afrika invalide.",
+        },
+        401,
+      );
+    }
+
+    /*
+     * À partir d'ici seulement, le callback est
+     * considéré comme authentique.
+     */
+
+    /*
+     * =====================================================
+     * 4. DÉCHIFFREMENT + PARSING
+     * =====================================================
      */
     let parsedStatus:
-      | ReturnType<typeof normalizePaymentStatus>
+      | ReturnType<
+          typeof normalizePaymentStatus
+        >
       | null = null;
 
     let parsedMerchantReference:
@@ -447,26 +605,41 @@ export async function POST(
     let parsedCurrency:
       | string
       | null = null;
-let parsedPaymentMethod:
-  | string
-  | null = null;
 
-let parsedFailureReason:
-  | string
-  | null = null;
+    let parsedPaymentMethod:
+      | string
+      | null = null;
 
-try {
-  if (
-    typeof mokoAfrikaAdapter.parseWebhook ===
-    "function"
-  ) {
-    const parsed =
-      mokoAfrikaAdapter.parseWebhook(
-        body,
-        request.headers,
-      );
+    let parsedFailureReason:
+      | string
+      | null = null;
 
-    if (parsed) {
+    let parsedPayload:
+      | JsonObject
+      | null = null;
+
+    try {
+      if (
+        typeof mokoAfrikaAdapter.parseWebhook !==
+        "function"
+      ) {
+        throw new Error(
+          "parseWebhook Moko Afrika indisponible.",
+        );
+      }
+
+      const parsed =
+        mokoAfrikaAdapter.parseWebhook(
+          body,
+          request.headers,
+        );
+
+      if (!parsed) {
+        throw new Error(
+          "Webhook Moko Afrika non interprétable.",
+        );
+      }
+
       parsedStatus =
         normalizePaymentStatus(
           parsed.status,
@@ -501,42 +674,89 @@ try {
         normalizeString(
           parsed.failureReason,
         );
+
+      if (
+        isObject(parsed.metadata)
+      ) {
+        parsedPayload =
+          parsed.metadata;
+      }
+    } catch (error) {
+      console.error(
+        "MOKO AFRIKA WEBHOOK DECRYPTION/PARSING ERROR:",
+        error,
+      );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Impossible de déchiffrer ou d'interpréter le callback Moko Afrika.",
+        },
+        400,
+      );
     }
-  }
-} catch {
-  /*
-   * Le format du webhook peut varier selon
-   * la version du compte fournisseur.
-   *
-   * Nous continuons avec l'extraction générique
-   * ci-dessus.
-   */
-}
 
-    const finalMerchantReference =
+    /*
+     * =====================================================
+     * 5. EXTRACTION DE SECOURS
+     * =====================================================
+     */
+    const genericPayload =
+      extractPayload(body);
+
+    const merchantReference =
       parsedMerchantReference ??
-      merchantReference;
+      getMerchantReference(
+        genericPayload,
+        genericPayload,
+      );
 
-    const finalProviderTransactionId =
+    const providerTransactionId =
       parsedProviderTransactionId ??
-      providerTransactionId;
+      getProviderTransactionId(
+        genericPayload,
+        genericPayload,
+      );
 
-    const finalAmount =
+    const amount =
       parsedAmount ??
-      amount;
+      getAmount(
+        genericPayload,
+        genericPayload,
+      );
 
-    const finalCurrency =
+    const currency =
       parsedCurrency ??
-      currency;
+      getCurrency(
+        genericPayload,
+        genericPayload,
+      );
 
-    const finalPaymentMethod =
+    const providerStatus =
+      getProviderStatus(
+        genericPayload,
+        genericPayload,
+      );
+
+    const paymentMethod =
       parsedPaymentMethod ??
-      paymentMethod;
+      getPaymentMethod(
+        genericPayload,
+        genericPayload,
+      );
 
-    const finalFailureReason =
+    const failureReason =
       parsedFailureReason ??
-      failureReason;
+      getFailureReason(
+        genericPayload,
+        genericPayload,
+      );
 
+    /*
+     * Si parseWebhook n'a pas déterminé le statut,
+     * nous utilisons Trans_Status en priorité.
+     */
     const finalStatus =
       parsedStatus ??
       providerStatusToPaymentStatus(
@@ -544,8 +764,8 @@ try {
       );
 
     if (
-      !finalMerchantReference &&
-      !finalProviderTransactionId
+      !merchantReference &&
+      !providerTransactionId
     ) {
       return jsonResponse(
         {
@@ -558,14 +778,15 @@ try {
     }
 
     /*
-     * Recherche de la transaction PharmaFlow.
-     *
-     * On essaie d'abord la référence marchande,
-     * puis l'identifiant fournisseur.
+     * =====================================================
+     * 6. RECHERCHE TRANSACTION PHARMAFLOW
+     * =====================================================
      */
-    let transaction: any = null;
+    let transaction:
+      | PaymentTransaction
+      | null = null;
 
-    if (finalMerchantReference) {
+    if (merchantReference) {
       const result =
         await supabaseAdmin
           .from("payment_transactions")
@@ -590,7 +811,7 @@ try {
           )
           .eq(
             "merchant_reference",
-            finalMerchantReference,
+            merchantReference,
           )
           .maybeSingle();
 
@@ -610,12 +831,15 @@ try {
         );
       }
 
-      transaction = result.data;
+      transaction =
+        result.data as
+          | PaymentTransaction
+          | null;
     }
 
     if (
       !transaction &&
-      finalProviderTransactionId
+      providerTransactionId
     ) {
       const result =
         await supabaseAdmin
@@ -641,7 +865,7 @@ try {
           )
           .eq(
             "provider_transaction_id",
-            finalProviderTransactionId,
+            providerTransactionId,
           )
           .eq(
             "provider",
@@ -665,23 +889,30 @@ try {
         );
       }
 
-      transaction = result.data;
+      transaction =
+        result.data as
+          | PaymentTransaction
+          | null;
     }
 
+    /*
+     * =====================================================
+     * 7. TRANSACTION INCONNUE
+     * =====================================================
+     */
     if (!transaction) {
       console.warn(
         "MOKO AFRIKA WEBHOOK UNKNOWN TRANSACTION:",
         {
-          merchantReference:
-            finalMerchantReference,
-          providerTransactionId:
-            finalProviderTransactionId,
+          merchantReference,
+          providerTransactionId,
         },
       );
 
       /*
-       * Nous retournons 200 pour éviter qu'un fournisseur
-       * renvoie indéfiniment le même webhook.
+       * 200 évite les répétitions infinies
+       * du fournisseur pour une transaction
+       * qui n'existe pas dans PharmaFlow.
        */
       return jsonResponse(
         {
@@ -689,15 +920,16 @@ try {
           received: true,
           processed: false,
           message:
-            "Webhook reçu mais transaction PharmaFlow introuvable.",
+            "Webhook authentifié mais transaction PharmaFlow introuvable.",
         },
         200,
       );
     }
 
     /*
-     * Sécurité : la transaction doit appartenir
-     * au fournisseur Moko Afrika.
+     * =====================================================
+     * 8. VÉRIFICATION FOURNISSEUR
+     * =====================================================
      */
     if (
       transaction.provider !==
@@ -719,7 +951,9 @@ try {
     }
 
     /*
-     * Protection contre une activation déjà effectuée.
+     * =====================================================
+     * 9. MÉTADONNÉES EXISTANTES
+     * =====================================================
      */
     const existingMetadata =
       isObject(transaction.metadata)
@@ -731,6 +965,11 @@ try {
         existingMetadata.activation_status,
       );
 
+    /*
+     * =====================================================
+     * 10. IDEMPOTENCE
+     * =====================================================
+     */
     if (
       transaction.status ===
         "successful" &&
@@ -753,15 +992,14 @@ try {
     }
 
     /*
-     * Vérification du montant.
-     *
-     * Si le fournisseur renvoie un montant,
-     * il doit correspondre au montant attendu.
+     * =====================================================
+     * 11. VÉRIFICATION MONTANT
+     * =====================================================
      */
     if (
-      finalAmount !== null &&
+      amount !== null &&
       Number(transaction.amount) !==
-        Number(finalAmount)
+        Number(amount)
     ) {
       console.error(
         "MOKO AFRIKA WEBHOOK AMOUNT MISMATCH:",
@@ -769,7 +1007,7 @@ try {
           expected:
             transaction.amount,
           received:
-            finalAmount,
+            amount,
           transactionId:
             transaction.id,
         },
@@ -781,15 +1019,18 @@ try {
           status: "failed",
           failure_reason:
             "Montant du webhook différent du montant attendu.",
-          metadata: {
-            ...existingMetadata,
-            webhook_amount:
-              finalAmount,
-            webhook_currency:
-              finalCurrency,
-            webhook_received_at:
-              new Date().toISOString(),
-          },
+          metadata:
+            mergeMetadata(
+              existingMetadata,
+              {
+                webhook_amount:
+                  amount,
+                webhook_currency:
+                  currency,
+                webhook_received_at:
+                  new Date().toISOString(),
+              },
+            ),
         })
         .eq(
           "id",
@@ -807,13 +1048,15 @@ try {
     }
 
     /*
-     * Vérification de la devise.
+     * =====================================================
+     * 12. VÉRIFICATION DEVISE
+     * =====================================================
      */
     if (
-      finalCurrency &&
-      String(transaction.currency)
-        .toUpperCase() !==
-        finalCurrency
+      currency &&
+      String(
+        transaction.currency,
+      ).toUpperCase() !== currency
     ) {
       console.error(
         "MOKO AFRIKA WEBHOOK CURRENCY MISMATCH:",
@@ -821,7 +1064,7 @@ try {
           expected:
             transaction.currency,
           received:
-            finalCurrency,
+            currency,
           transactionId:
             transaction.id,
         },
@@ -833,15 +1076,18 @@ try {
           status: "failed",
           failure_reason:
             "Devise du webhook différente de la devise attendue.",
-          metadata: {
-            ...existingMetadata,
-            webhook_amount:
-              finalAmount,
-            webhook_currency:
-              finalCurrency,
-            webhook_received_at:
-              new Date().toISOString(),
-          },
+          metadata:
+            mergeMetadata(
+              existingMetadata,
+              {
+                webhook_amount:
+                  amount,
+                webhook_currency:
+                  currency,
+                webhook_received_at:
+                  new Date().toISOString(),
+              },
+            ),
         })
         .eq(
           "id",
@@ -858,34 +1104,57 @@ try {
       );
     }
 
+    /*
+     * =====================================================
+     * 13. MÉTADONNÉES WEBHOOK
+     * =====================================================
+     */
     const normalizedStatus =
       normalizePaymentStatus(
         finalStatus,
       );
 
-    const newMetadata: JsonObject = {
-      ...existingMetadata,
-      webhook_provider:
-        "moko_afrika",
-      webhook_received_at:
-        new Date().toISOString(),
-      webhook_status:
-        normalizedStatus,
-      webhook_amount:
-        finalAmount,
-      webhook_currency:
-        finalCurrency,
-      webhook_payment_method:
-        finalPaymentMethod,
-    };
+    const newMetadata =
+      mergeMetadata(
+        existingMetadata,
+        {
+          webhook_provider:
+            "moko_afrika",
 
-    if (finalFailureReason) {
+          webhook_received_at:
+            new Date().toISOString(),
+
+          webhook_status:
+            normalizedStatus,
+
+          webhook_amount:
+            amount,
+
+          webhook_currency:
+            currency,
+
+          webhook_payment_method:
+            paymentMethod,
+
+          webhook_signature_verified:
+            true,
+        },
+      );
+
+    if (failureReason) {
       newMetadata.webhook_failure_reason =
-        finalFailureReason;
+        failureReason;
+    }
+
+    if (parsedPayload) {
+      newMetadata.webhook_parsed_metadata =
+        parsedPayload;
     }
 
     /*
-     * CAS 1 : paiement réussi.
+     * =====================================================
+     * 14. PAIEMENT RÉUSSI
+     * =====================================================
      */
     if (
       isSuccessfulPaymentStatus(
@@ -897,13 +1166,17 @@ try {
           .from("payment_transactions")
           .update({
             status: "successful",
+
             provider_transaction_id:
-              finalProviderTransactionId ??
+              providerTransactionId ??
               transaction.provider_transaction_id,
+
             paid_at:
               transaction.paid_at ??
               new Date().toISOString(),
+
             failure_reason: null,
+
             metadata: {
               ...newMetadata,
               activation_status:
@@ -932,11 +1205,13 @@ try {
       }
 
       /*
-       * Activation du forfait après paiement confirmé.
+       * ===================================================
+       * 15. ACTIVATION IDEMPOTENTE
+       * ===================================================
        *
-       * La fonction SQL est idempotente :
-       * un même paiement ne doit pas prolonger
-       * plusieurs fois l'abonnement.
+       * Le paiement est déjà enregistré comme successful.
+       * Si l'activation échoue, le client ne doit surtout
+       * pas être obligé de payer une deuxième fois.
        */
       const activation =
         await supabaseAdmin.rpc(
@@ -969,11 +1244,6 @@ try {
             transaction.id,
           );
 
-        /*
-         * Le paiement reste successful.
-         * L'activation peut être retentée sans
-         * demander au client de payer une deuxième fois.
-         */
         return jsonResponse(
           {
             success: true,
@@ -983,6 +1253,8 @@ try {
               "successful",
             activationStatus:
               "pending",
+            transactionId:
+              transaction.id,
             message:
               "Paiement confirmé. Activation de l'abonnement en attente.",
           },
@@ -995,10 +1267,13 @@ try {
         .update({
           metadata: {
             ...newMetadata,
+
             activation_status:
               "activated",
+
             activation_result:
               activation.data ?? null,
+
             activated_at:
               new Date().toISOString(),
           },
@@ -1027,7 +1302,9 @@ try {
     }
 
     /*
-     * CAS 2 : paiement en attente.
+     * =====================================================
+     * 16. PAIEMENT EN ATTENTE
+     * =====================================================
      */
     if (
       normalizedStatus ===
@@ -1038,10 +1315,13 @@ try {
           .from("payment_transactions")
           .update({
             status: "pending",
+
             provider_transaction_id:
-              finalProviderTransactionId ??
+              providerTransactionId ??
               transaction.provider_transaction_id,
-            metadata: newMetadata,
+
+            metadata:
+              newMetadata,
           })
           .eq(
             "id",
@@ -1079,7 +1359,9 @@ try {
     }
 
     /*
-     * CAS 3 : paiement échoué, annulé ou expiré.
+     * =====================================================
+     * 17. ÉCHEC / ANNULATION / EXPIRATION
+     * =====================================================
      */
     const finalFailureStatus =
       normalizedStatus ===
@@ -1096,13 +1378,17 @@ try {
         .update({
           status:
             finalFailureStatus,
+
           provider_transaction_id:
-            finalProviderTransactionId ??
+            providerTransactionId ??
             transaction.provider_transaction_id,
+
           failure_reason:
-            finalFailureReason ??
+            failureReason ??
             `Paiement ${finalFailureStatus}.`,
-          metadata: newMetadata,
+
+          metadata:
+            newMetadata,
         })
         .eq(
           "id",
@@ -1158,7 +1444,8 @@ export async function GET() {
   return jsonResponse(
     {
       success: true,
-      provider: "moko_afrika",
+      provider:
+        "moko_afrika",
       webhook: true,
       message:
         "Webhook Moko Afrika PharmaFlow opérationnel.",
