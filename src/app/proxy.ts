@@ -1,24 +1,42 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/* ==========================================================================
+/**
+ * ============================================================
+ * PHARMAFLOW — PROXY GLOBAL
+ * ============================================================
+ *
+ * Responsabilités :
+ *
+ * - authentification Supabase
+ * - protection des routes privées
+ * - autorisation par rôle
+ * - contrôle de l'abonnement
+ * - accès Super Admin
+ * - accès Agent plateforme
+ *
+ * IMPORTANT :
+ *
+ * L'expiration d'un abonnement NE déconnecte PAS l'utilisateur.
+ *
+ * L'utilisateur reste connecté et peut accéder à :
+ *
+ *     /abonnement
+ *
+ * afin de renouveler son abonnement.
+ *
+ * Après un paiement validé et un abonnement actif,
+ * l'accès au logiciel est automatiquement restauré.
+ * ============================================================
+ */
+
+/**
+ * ============================================================
  * TYPES
- * ========================================================================== */
+ * ============================================================
+ */
 
-type UserRole =
-  | "owner"
-  | "admin"
-  | "pharmacist"
-  | "cashier"
-  | "employee";
-
-type Profile = {
-  id: string;
-  role: UserRole;
-  pharmacy_id: string | null;
-};
-
-type Subscription = {
+type SubscriptionRow = {
   id: string;
   pharmacy_id: string;
   plan_id: string;
@@ -26,14 +44,27 @@ type Subscription = {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   expires_at: string | null;
-  created_at?: string | null;
 };
 
-/* ==========================================================================
- * ROUTES PUBLIQUES
- * ========================================================================== */
+type ProfileRow = {
+  id: string;
+  pharmacy_id: string | null;
+  role: string | null;
+};
 
-const PUBLIC_ROUTES = [
+/**
+ * ============================================================
+ * ROUTES PUBLIQUES
+ * ============================================================
+ *
+ * Ces routes restent accessibles sans abonnement.
+ *
+ * /abonnement est volontairement accessible afin qu'un
+ * utilisateur dont l'abonnement est expiré puisse renouveler.
+ * ============================================================
+ */
+
+const PUBLIC_PATHS = [
   "/",
   "/login",
   "/register",
@@ -42,42 +73,34 @@ const PUBLIC_ROUTES = [
   "/abonnement",
 ];
 
-/* ==========================================================================
- * ESPACES PAR RÔLE
- * ========================================================================== */
+/**
+ * ============================================================
+ * ESPACES PLATEFORME
+ * ============================================================
+ *
+ * Super Admin et Agent plateforme ne dépendent pas de
+ * pharmacy_id.
+ *
+ * Leur autorisation définitive est gérée par leur propre
+ * système de sécurité.
+ * ============================================================
+ */
 
-const ROLE_HOME: Record<UserRole, string> = {
-  owner: "/dashboard",
-  admin: "/admin",
-  pharmacist: "/pharmacien",
-  cashier: "/caisse",
-  employee: "/employe",
-};
+const PLATFORM_PREFIXES = [
+  "/super-admin",
+  "/agent",
+];
 
-/* ==========================================================================
- * ROUTES AVEC PERMISSIONS
- * ========================================================================== */
+/**
+ * ============================================================
+ * ROUTES PHARMACIE PROTÉGÉES
+ * ============================================================
+ */
 
-const ROUTE_PERMISSIONS: Record<string, string> = {
-  "/products": "products.view",
-  "/produits": "products.view",
-  "/stock": "stock.view",
-  "/ventes": "sales.view",
-  "/utilisateurs": "users.view",
-  "/rapports": "reports.view",
-  "/paiements": "payments.view",
-  "/parametres": "settings.view",
-};
-
-/* ==========================================================================
- * ROUTES NÉCESSITANT UN ABONNEMENT VALIDE
- * ========================================================================== */
-
-const SUBSCRIPTION_PROTECTED_ROUTES = [
+const PROTECTED_PREFIXES = [
   "/dashboard",
-  "/admin",
-  "/products",
   "/produits",
+  "/products",
   "/stock",
   "/ventes",
   "/utilisateurs",
@@ -86,177 +109,70 @@ const SUBSCRIPTION_PROTECTED_ROUTES = [
   "/parametres",
   "/caisse",
   "/pharmacien",
+  "/admin",
   "/employe",
 ];
 
-/* ==========================================================================
- * UTILITAIRES ROUTES
- * ========================================================================== */
-
 /**
- * Vérifie qu'une URL correspond réellement à une route.
- *
- * /products       → true
- * /products/123   → true
- * /products-test  → false
+ * ============================================================
+ * VÉRIFIER ROUTE PUBLIQUE
+ * ============================================================
  */
-function matchesRoute(
-  pathname: string,
-  route: string
-): boolean {
-  return (
-    pathname === route ||
-    pathname.startsWith(`${route}/`)
+
+function isPublicPath(pathname: string): boolean {
+  if (pathname === "/") {
+    return true;
+  }
+
+  return PUBLIC_PATHS.some(
+    (path) =>
+      pathname === path ||
+      pathname.startsWith(`${path}/`),
   );
 }
 
 /**
- * Vérifie si la route nécessite un abonnement valide.
+ * ============================================================
+ * VÉRIFIER ESPACE PLATEFORME
+ * ============================================================
  */
-function requiresValidSubscription(
-  pathname: string
-): boolean {
-  return SUBSCRIPTION_PROTECTED_ROUTES.some(
-    (route) =>
-      matchesRoute(pathname, route)
+
+function isPlatformPath(pathname: string): boolean {
+  return PLATFORM_PREFIXES.some(
+    (prefix) =>
+      pathname === prefix ||
+      pathname.startsWith(`${prefix}/`),
   );
 }
 
 /**
- * Vérifie si la route est publique.
+ * ============================================================
+ * VÉRIFIER ROUTE PROTÉGÉE
+ * ============================================================
  */
-function isPublicRoute(
-  pathname: string
-): boolean {
-  return PUBLIC_ROUTES.some((route) => {
-    if (route === "/") {
-      return pathname === "/";
-    }
 
-    return matchesRoute(
-      pathname,
-      route
-    );
-  });
+function isProtectedPath(pathname: string): boolean {
+  return PROTECTED_PREFIXES.some(
+    (prefix) =>
+      pathname === prefix ||
+      pathname.startsWith(`${prefix}/`),
+  );
 }
 
 /**
- * Détermine la permission requise pour une route.
+ * ============================================================
+ * VÉRIFIER DATE FUTURE
+ * ============================================================
  */
-function getRequiredPermission(
-  pathname: string
-): string | null {
-  for (const [
-    route,
-    permission,
-  ] of Object.entries(
-    ROUTE_PERMISSIONS
-  )) {
-    if (
-      matchesRoute(
-        pathname,
-        route
-      )
-    ) {
-      return permission;
-    }
-  }
 
-  return null;
-}
-
-/* ==========================================================================
- * CONTRÔLE DES RÔLES
- * ========================================================================== */
-
-function isRoleWorkspaceAllowed(
-  pathname: string,
-  role: UserRole
-): boolean {
-  /**
-   * Dashboard propriétaire.
-   */
-  if (
-    matchesRoute(
-      pathname,
-      "/dashboard"
-    )
-  ) {
-    return role === "owner";
-  }
-
-  /**
-   * Administration.
-   *
-   * Owner et admin peuvent accéder.
-   */
-  if (
-    matchesRoute(
-      pathname,
-      "/admin"
-    )
-  ) {
-    return (
-      role === "owner" ||
-      role === "admin"
-    );
-  }
-
-  /**
-   * Espace pharmacien.
-   */
-  if (
-    matchesRoute(
-      pathname,
-      "/pharmacien"
-    )
-  ) {
-    return role === "pharmacist";
-  }
-
-  /**
-   * Espace caisse.
-   */
-  if (
-    matchesRoute(
-      pathname,
-      "/caisse"
-    )
-  ) {
-    return role === "cashier";
-  }
-
-  /**
-   * Espace employé.
-   */
-  if (
-    matchesRoute(
-      pathname,
-      "/employe"
-    )
-  ) {
-    return role === "employee";
-  }
-
-  return true;
-}
-
-/* ==========================================================================
- * DATES / ABONNEMENT
- * ========================================================================== */
-
-/**
- * Vérifie qu'une date est valide et future.
- */
 function isValidFutureDate(
-  value: string | null | undefined
+  value: string | null,
 ): boolean {
   if (!value) {
     return false;
   }
 
-  const timestamp =
-    new Date(value).getTime();
+  const timestamp = new Date(value).getTime();
 
   return (
     Number.isFinite(timestamp) &&
@@ -265,345 +181,348 @@ function isValidFutureDate(
 }
 
 /**
- * Détermine si l'abonnement permet l'accès.
+ * ============================================================
+ * VÉRIFIER VALIDITÉ ABONNEMENT
+ * ============================================================
+ *
+ * TRIAL :
+ *   trial_ends_at doit être dans le futur.
+ *
+ * ACTIVE :
+ *   expires_at doit être dans le futur.
+ *
+ * Tout autre statut :
+ *   accès refusé.
  *
  * IMPORTANT :
- * Cette fonction ne déconnecte jamais l'utilisateur.
+ *
+ * Aucun signOut() ici.
+ * ============================================================
  */
+
 function subscriptionAllowsAccess(
-  subscription: Subscription | null
+  subscription: SubscriptionRow | null,
 ): boolean {
   if (!subscription) {
     return false;
   }
 
   const status = String(
-    subscription.status ?? ""
+    subscription.status ?? "",
   )
     .trim()
     .toLowerCase();
 
   /**
-   * Période d'essai.
+   * ----------------------------------------------------------
+   * ESSAI GRATUIT
+   * ----------------------------------------------------------
    */
-  if (
-    status === "trial" ||
-    status === "trialing"
-  ) {
+
+  if (status === "trial") {
     return isValidFutureDate(
       subscription.trial_ends_at ??
-        subscription.expires_at
+        subscription.expires_at,
     );
   }
 
   /**
-   * Abonnement payé.
+   * ----------------------------------------------------------
+   * ABONNEMENT PAYANT ACTIF
+   * ----------------------------------------------------------
    */
-  if (
-    status === "active" ||
-    status === "paid"
-  ) {
+
+  if (status === "active") {
     return isValidFutureDate(
-      subscription.expires_at
+      subscription.expires_at,
     );
   }
 
   /**
-   * Tout autre statut bloque l'espace
-   * de travail.
+   * ----------------------------------------------------------
+   * AUTRES STATUTS
+   * ----------------------------------------------------------
    */
+
   return false;
 }
 
 /**
- * Détermine la raison du blocage.
+ * ============================================================
+ * PAGE D'ACCUEIL SELON LE RÔLE
+ * ============================================================
  */
-function getSubscriptionBlockReason(
-  subscription: Subscription | null
-): string {
-  if (!subscription) {
-    return "no_subscription";
+
+function getRoleHome(role: string): string {
+  switch (role) {
+    case "owner":
+      return "/dashboard";
+
+    case "admin":
+      return "/admin";
+
+    case "pharmacist":
+      return "/pharmacien";
+
+    case "cashier":
+      return "/caisse";
+
+    case "employee":
+      return "/employe";
+
+    default:
+      return "/login";
   }
-
-  const status = String(
-    subscription.status ?? ""
-  )
-    .trim()
-    .toLowerCase();
-
-  if (
-    status === "trial" ||
-    status === "trialing"
-  ) {
-    return "trial_expired";
-  }
-
-  if (status === "past_due") {
-    return "past_due";
-  }
-
-  if (status === "suspended") {
-    return "suspended";
-  }
-
-  if (status === "cancelled") {
-    return "cancelled";
-  }
-
-  return "expired";
 }
 
 /**
- * Redirection vers la page abonnement.
- *
- * IMPORTANT :
- * Aucun signOut ici.
+ * ============================================================
+ * AUTORISATION PAR RÔLE
+ * ============================================================
  */
+
+function isAllowedByRole(
+  pathname: string,
+  role: string,
+): boolean {
+  /**
+   * ----------------------------------------------------------
+   * DASHBOARD
+   * ----------------------------------------------------------
+   */
+
+  if (
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/")
+  ) {
+    return role === "owner";
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * ADMIN
+   * ----------------------------------------------------------
+   */
+
+  if (
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/")
+  ) {
+    return (
+      role === "owner" ||
+      role === "admin"
+    );
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * PHARMACIEN
+   * ----------------------------------------------------------
+   */
+
+  if (
+    pathname === "/pharmacien" ||
+    pathname.startsWith("/pharmacien/")
+  ) {
+    return (
+      role === "owner" ||
+      role === "pharmacist"
+    );
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * CAISSE
+   * ----------------------------------------------------------
+   */
+
+  if (
+    pathname === "/caisse" ||
+    pathname.startsWith("/caisse/")
+  ) {
+    return (
+      role === "owner" ||
+      role === "cashier"
+    );
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * EMPLOYÉ
+   * ----------------------------------------------------------
+   */
+
+  if (
+    pathname === "/employe" ||
+    pathname.startsWith("/employe/")
+  ) {
+    return (
+      role === "owner" ||
+      role === "employee"
+    );
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * MODULES PHARMACIE
+   * ----------------------------------------------------------
+   */
+
+  const pharmacyModules = [
+    "/produits",
+    "/products",
+    "/stock",
+    "/ventes",
+    "/utilisateurs",
+    "/rapports",
+    "/paiements",
+    "/parametres",
+  ];
+
+  if (
+    pharmacyModules.some(
+      (path) =>
+        pathname === path ||
+        pathname.startsWith(`${path}/`),
+    )
+  ) {
+    return (
+      role === "owner" ||
+      role === "admin" ||
+      role === "pharmacist" ||
+      role === "cashier"
+    );
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * AUTRE ROUTE
+   * ----------------------------------------------------------
+   */
+
+  return true;
+}
+
+/**
+ * ============================================================
+ * REDIRECTION VERS LOGIN
+ * ============================================================
+ */
+
+function redirectToLogin(
+  request: NextRequest,
+) {
+  const url = request.nextUrl.clone();
+
+  url.pathname = "/login";
+  url.search = "";
+
+  url.searchParams.set(
+    "redirect",
+    request.nextUrl.pathname,
+  );
+
+  const response = NextResponse.redirect(url);
+
+  response.headers.set(
+    "Cache-Control",
+    "private, no-store, max-age=0",
+  );
+
+  return response;
+}
+
+/**
+ * ============================================================
+ * REDIRECTION VERS ABONNEMENT
+ * ============================================================
+ */
+
 function redirectToSubscription(
   request: NextRequest,
-  reason: string
+  reason: string,
 ) {
-  const url =
-    new URL(
-      "/abonnement",
-      request.url
-    );
+  const url = request.nextUrl.clone();
+
+  url.pathname = "/abonnement";
+  url.search = "";
 
   url.searchParams.set(
     "reason",
-    reason
+    reason,
   );
 
-  return NextResponse.redirect(
-    url
+  const response = NextResponse.redirect(url);
+
+  response.headers.set(
+    "Cache-Control",
+    "private, no-store, max-age=0",
   );
+
+  return response;
 }
 
-/* ==========================================================================
- * RÔLE
- * ========================================================================== */
-
-async function getCurrentRole(
-  supabase: ReturnType<
-    typeof createServerClient
-  >,
-  userId: string
-): Promise<UserRole | null> {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (
-    error ||
-    !data?.role
-  ) {
-    return null;
-  }
-
-  return data.role as UserRole;
-}
-
-/* ==========================================================================
- * PERMISSIONS
- * ========================================================================== */
-
-async function hasPermission(
-  supabase: ReturnType<
-    typeof createServerClient
-  >,
-  userId: string,
-  permissionCode: string
-): Promise<boolean> {
-  /**
-   * 1. Permission directe utilisateur.
-   */
-  const {
-    data: directPermission,
-    error: directError,
-  } = await supabase
-    .from("user_permissions")
-    .select(
-      "permission_code, allowed"
-    )
-    .eq(
-      "user_id",
-      userId
-    )
-    .eq(
-      "permission_code",
-      permissionCode
-    )
-    .maybeSingle();
-
-  if (directError) {
-    console.error(
-      "Erreur permissions utilisateur :",
-      directError.message
-    );
-  }
-
-  /**
-   * Une permission utilisateur explicite
-   * a priorité.
-   */
-  if (directPermission) {
-    return (
-      directPermission.allowed === true
-    );
-  }
-
-  /**
-   * 2. Récupération du rôle.
-   */
-  const role =
-    await getCurrentRole(
-      supabase,
-      userId
-    );
-
-  if (!role) {
-    return false;
-  }
-
-  /**
-   * 3. Permission du rôle.
-   */
-  const {
-    data: rolePermission,
-    error: roleError,
-  } =
-    await supabase
-      .from("role_permissions")
-      .select(
-        `
-          allowed,
-          role,
-          permission_code
-        `
-      )
-      .eq(
-        "role",
-        role
-      )
-      .eq(
-        "permission_code",
-        permissionCode
-      )
-      .maybeSingle();
-
-  if (roleError) {
-    console.error(
-      "Erreur permissions rôle :",
-      roleError.message
-    );
-
-    return false;
-  }
-
-  if (!rolePermission) {
-    return false;
-  }
-
-  return (
-    rolePermission.allowed === true
-  );
-}
-
-/* ==========================================================================
- * ABONNEMENT
- * ========================================================================== */
-
-async function getCurrentSubscription(
-  supabase: ReturnType<
-    typeof createServerClient
-  >,
-  pharmacyId: string
-): Promise<{
-  subscription: Subscription | null;
-  error: string | null;
-}> {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("subscriptions")
-    .select(
-      `
-        id,
-        pharmacy_id,
-        plan_id,
-        status,
-        trial_started_at,
-        trial_ends_at,
-        expires_at,
-        created_at
-      `
-    )
-    .eq(
-      "pharmacy_id",
-      pharmacyId
-    )
-    .order(
-      "created_at",
-      {
-        ascending: false,
-      }
-    )
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    return {
-      subscription: null,
-      error: error.message,
-    };
-  }
-
-  return {
-    subscription:
-      data as Subscription | null,
-    error: null,
-  };
-}
-
-/* ==========================================================================
+/**
+ * ============================================================
  * PROXY PRINCIPAL
- * ========================================================================== */
+ * ============================================================
+ */
 
 export async function proxy(
-  request: NextRequest
+  request: NextRequest,
 ) {
+  const pathname =
+    request.nextUrl.pathname;
+
   /**
-   * Réponse initiale.
+   * ==========================================================
+   * 1. ROUTES PUBLIQUES
+   * ==========================================================
    */
-  let response =
+
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  /**
+   * ==========================================================
+   * 2. ROUTES NON PROTÉGÉES
+   * ==========================================================
+   *
+   * Les API disposent de leurs propres contrôles.
+   *
+   * Le Proxy ne transforme donc pas leurs réponses JSON.
+   */
+
+  if (
+    !isProtectedPath(pathname) &&
+    !isPlatformPath(pathname)
+  ) {
+    return NextResponse.next();
+  }
+
+  /**
+   * ==========================================================
+   * 3. CLIENT SUPABASE SSR
+   * ==========================================================
+   */
+
+  let supabaseResponse =
     NextResponse.next({
       request,
     });
 
-  /**
-   * Client Supabase côté serveur.
-   */
   const supabase =
     createServerClient(
-      process.env
-        .NEXT_PUBLIC_SUPABASE_URL!,
-      process.env
-        .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
       {
         cookies: {
           getAll() {
             return request.cookies.getAll();
           },
 
-          setAll(
-            cookiesToSet
-          ) {
+          setAll(cookiesToSet) {
             cookiesToSet.forEach(
               ({
                 name,
@@ -611,12 +530,12 @@ export async function proxy(
               }) => {
                 request.cookies.set(
                   name,
-                  value
+                  value,
                 );
-              }
+              },
             );
 
-            response =
+            supabaseResponse =
               NextResponse.next({
                 request,
               });
@@ -627,336 +546,348 @@ export async function proxy(
                 value,
                 options,
               }) => {
-                response.cookies.set(
+                supabaseResponse.cookies.set(
                   name,
                   value,
-                  options
+                  options,
                 );
-              }
+              },
             );
           },
         },
-      }
+      },
     );
 
   /**
-   * Vérification de la session
-   * directement auprès de Supabase.
+   * ==========================================================
+   * 4. VÉRIFICATION DE SESSION SUPABASE
+   * ==========================================================
    */
+
   const {
-    data: {
-      user,
-    },
-  } =
-    await supabase.auth.getUser();
-
-  const pathname =
-    request.nextUrl.pathname;
-
-  /* ------------------------------------------------------------------------
-   * FICHIERS STATIQUES
-   * --------------------------------------------------------------------- */
+    data: claimsData,
+    error: claimsError,
+  } = await supabase.auth.getClaims();
 
   if (
-    pathname.startsWith(
-      "/_next"
-    ) ||
-    pathname.startsWith(
-      "/favicon"
-    ) ||
-    pathname.includes(".")
+    claimsError ||
+    !claimsData?.claims
   ) {
-    return response;
+    return redirectToLogin(request);
   }
 
-  /* ------------------------------------------------------------------------
-   * ROUTES PUBLIQUES
-   * --------------------------------------------------------------------- */
+  const userId =
+    typeof claimsData.claims.sub === "string"
+      ? claimsData.claims.sub
+      : null;
 
-  if (
-    isPublicRoute(pathname)
-  ) {
-    /**
-     * Un utilisateur déjà connecté qui ouvre
-     * login/register est renvoyé vers son espace.
-     */
-    if (
-      user &&
-      (
-        pathname ===
-          "/login" ||
-        pathname ===
-          "/register"
-      )
-    ) {
-      const {
-        data: publicProfile,
-      } =
-        await supabase
-          .from("profiles")
-          .select(
-            "id, role, pharmacy_id"
-          )
-          .eq(
-            "id",
-            user.id
-          )
-          .maybeSingle();
-
-      if (
-        publicProfile?.role
-      ) {
-        const role =
-          publicProfile.role as UserRole;
-
-        const destination =
-          ROLE_HOME[role];
-
-        if (destination) {
-          return NextResponse.redirect(
-            new URL(
-              destination,
-              request.url
-            )
-          );
-        }
-      }
-    }
-
-    /**
-     * /abonnement reste accessible,
-     * même lorsque l'abonnement est expiré.
-     */
-    return response;
+  if (!userId) {
+    return redirectToLogin(request);
   }
 
-  /* ------------------------------------------------------------------------
-   * UTILISATEUR NON CONNECTÉ
-   * --------------------------------------------------------------------- */
+  /**
+   * ==========================================================
+   * 5. SUPER ADMIN / AGENT PLATEFORME
+   * ==========================================================
+   *
+   * Ces espaces sont indépendants de pharmacy_id.
+   */
 
-  if (!user) {
-    const loginUrl =
-      new URL(
-        "/login",
-        request.url
-      );
-
-    /**
-     * On conserve la destination demandée.
-     */
-    loginUrl.searchParams.set(
-      "redirect",
-      pathname
+  if (isPlatformPath(pathname)) {
+    supabaseResponse.headers.set(
+      "Cache-Control",
+      "private, no-store, max-age=0",
     );
 
-    return NextResponse.redirect(
-      loginUrl
-    );
+    return supabaseResponse;
   }
 
-  /* ------------------------------------------------------------------------
-   * PROFIL
-   * --------------------------------------------------------------------- */
+  /**
+   * ==========================================================
+   * 6. RÉCUPÉRER LE PROFIL PHARMACIE
+   * ==========================================================
+   */
 
   const {
     data: profile,
     error: profileError,
-  } =
-    await supabase
-      .from("profiles")
-      .select(
-        "id, role, pharmacy_id"
-      )
-      .eq(
-        "id",
-        user.id
-      )
-      .maybeSingle();
+  } = await supabase
+    .from("profiles")
+    .select(
+      "id, pharmacy_id, role",
+    )
+    .eq("id", userId)
+    .maybeSingle<ProfileRow>();
 
   /**
-   * Le profil est obligatoire pour utiliser PharmaFlow.
+   * ==========================================================
+   * 7. PROFIL INTROUVABLE
+   * ==========================================================
    *
-   * Ce n'est PAS un contrôle d'abonnement.
-   * On déconnecte uniquement si le profil est réellement
-   * absent ou inexploitable.
+   * IMPORTANT :
+   *
+   * On ne fait PAS signOut().
+   *
+   * La session Supabase reste intacte.
    */
+
   if (
     profileError ||
-    !profile ||
-    !profile.role ||
-    !profile.pharmacy_id
+    !profile
   ) {
-    console.error(
-      "Profil PharmaFlow introuvable ou incomplet."
-    );
-
-    await supabase.auth.signOut();
-
-    return NextResponse.redirect(
-      new URL(
-        "/login",
-        request.url
-      )
-    );
+    return redirectToLogin(request);
   }
 
   /**
-   * Après cette vérification, pharmacy_id
-   * est garanti comme étant une chaîne.
+   * ==========================================================
+   * 8. PHARMACY_ID
+   * ==========================================================
    */
-  const typedProfile =
-    profile as Profile;
 
-  const role =
-    typedProfile.role;
+  if (!profile.pharmacy_id) {
+    const url =
+      request.nextUrl.clone();
 
-  const pharmacyId =
-    typedProfile.pharmacy_id;
+    url.pathname = "/login";
+    url.search = "";
+
+    url.searchParams.set(
+      "error",
+      "no_pharmacy",
+    );
+
+    const response =
+      NextResponse.redirect(url);
+
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store, max-age=0",
+    );
+
+    return response;
+  }
 
   /**
-   * Cette variable est explicitement vérifiée
-   * pour satisfaire TypeScript.
+   * ==========================================================
+   * 9. NORMALISER LE RÔLE
+   * ==========================================================
    */
-  if (!pharmacyId) {
-    await supabase.auth.signOut();
 
-    return NextResponse.redirect(
-      new URL(
-        "/login",
-        request.url
-      )
-    );
-  }
+  const role = String(
+    profile.role ?? "",
+  )
+    .trim()
+    .toLowerCase();
 
-  /* ------------------------------------------------------------------------
-   * CONTRÔLE ABONNEMENT
-   * --------------------------------------------------------------------- */
+  /**
+   * ==========================================================
+   * 10. AUTORISATION PAR RÔLE
+   * ==========================================================
+   */
 
   if (
-    requiresValidSubscription(
-      pathname
-    )
-  ) {
-    const {
-      subscription,
-      error:
-        subscriptionError,
-    } =
-      await getCurrentSubscription(
-        supabase,
-        pharmacyId
-      );
-
-    /**
-     * En cas d'erreur Supabase :
-     *
-     * - on bloque l'accès
-     * - on conserve la session
-     * - on envoie vers abonnement
-     */
-    if (
-      subscriptionError
-    ) {
-      console.error(
-        "Erreur vérification abonnement :",
-        subscriptionError
-      );
-
-      return redirectToSubscription(
-        request,
-        "verification"
-      );
-    }
-
-    /**
-     * Aucun abonnement ou abonnement expiré.
-     *
-     * IMPORTANT :
-     * Aucun signOut().
-     */
-    if (
-      !subscriptionAllowsAccess(
-        subscription
-      )
-    ) {
-      const reason =
-        getSubscriptionBlockReason(
-          subscription
-        );
-
-      return redirectToSubscription(
-        request,
-        reason
-      );
-    }
-  }
-
-  /* ------------------------------------------------------------------------
-   * CONTRÔLE DU RÔLE
-   * --------------------------------------------------------------------- */
-
-  if (
-    !isRoleWorkspaceAllowed(
+    !isAllowedByRole(
       pathname,
-      role
+      role,
     )
   ) {
-    const destination =
-      ROLE_HOME[role];
+    const roleHome =
+      getRoleHome(role);
 
-    return NextResponse.redirect(
-      new URL(
-        destination,
-        request.url
-      )
-    );
-  }
+    /**
+     * Rôle inconnu.
+     */
 
-  /* ------------------------------------------------------------------------
-   * CONTRÔLE DES PERMISSIONS
-   * --------------------------------------------------------------------- */
-
-  const requiredPermission =
-    getRequiredPermission(
-      pathname
-    );
-
-  if (
-    requiredPermission
-  ) {
-    const allowed =
-      await hasPermission(
-        supabase,
-        typedProfile.id,
-        requiredPermission
-      );
-
-    if (!allowed) {
-      const destination =
-        ROLE_HOME[role];
-
-      return NextResponse.redirect(
-        new URL(
-          destination,
-          request.url
-        )
-      );
+    if (roleHome === "/login") {
+      return redirectToLogin(request);
     }
+
+    const response =
+      NextResponse.redirect(
+        new URL(
+          roleHome,
+          request.url,
+        ),
+      );
+
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store, max-age=0",
+    );
+
+    return response;
   }
 
-  /* ------------------------------------------------------------------------
-   * ACCÈS AUTORISÉ
-   * --------------------------------------------------------------------- */
+  /**
+   * ==========================================================
+   * 11. RÉCUPÉRER LE DERNIER ABONNEMENT
+   * ==========================================================
+   *
+   * Le pharmacy_id vient exclusivement du profil authentifié.
+   */
 
-  return response;
+  const {
+    data: subscription,
+    error: subscriptionError,
+  } = await supabase
+    .from("subscriptions")
+    .select(
+      `
+        id,
+        pharmacy_id,
+        plan_id,
+        status,
+        trial_started_at,
+        trial_ends_at,
+        expires_at
+      `,
+    )
+    .eq(
+      "pharmacy_id",
+      profile.pharmacy_id,
+    )
+    .order(
+      "created_at",
+      {
+        ascending: false,
+      },
+    )
+    .limit(1)
+    .maybeSingle<SubscriptionRow>();
+
+  /**
+   * ==========================================================
+   * 12. ERREUR DE VÉRIFICATION
+   * ==========================================================
+   *
+   * En cas d'erreur, aucun accès au workspace.
+   *
+   * Mais la session reste active.
+   */
+
+  if (subscriptionError) {
+    console.error(
+      "PharmaFlow proxy subscription error:",
+      subscriptionError,
+    );
+
+    return redirectToSubscription(
+      request,
+      "verification",
+    );
+  }
+
+  /**
+   * ==========================================================
+   * 13. VÉRIFIER L'ABONNEMENT
+   * ==========================================================
+   */
+
+  const hasAccess =
+    subscriptionAllowsAccess(
+      subscription,
+    );
+
+  /**
+   * ==========================================================
+   * 14. ABONNEMENT ABSENT / EXPIRÉ / INVALIDE
+   * ==========================================================
+   *
+   * IMPORTANT :
+   *
+   * L'utilisateur reste connecté.
+   *
+   * Il est uniquement envoyé vers /abonnement.
+   */
+
+  if (!hasAccess) {
+    let reason =
+      "expired";
+
+    if (!subscription) {
+      reason =
+        "no_subscription";
+    } else {
+      const status =
+        String(
+          subscription.status ?? "",
+        )
+          .trim()
+          .toLowerCase();
+
+      if (
+        status === "past_due"
+      ) {
+        reason =
+          "past_due";
+      } else if (
+        status === "suspended"
+      ) {
+        reason =
+          "suspended";
+      } else if (
+        status === "cancelled"
+      ) {
+        reason =
+          "cancelled";
+      } else if (
+        status === "trial"
+      ) {
+        reason =
+          "trial_expired";
+      }
+    }
+
+    return redirectToSubscription(
+      request,
+      reason,
+    );
+  }
+
+  /**
+   * ==========================================================
+   * 15. ACCÈS AUTORISÉ
+   * ==========================================================
+   *
+   * Conditions :
+   *
+   * ✓ session valide
+   * ✓ profil valide
+   * ✓ pharmacy_id valide
+   * ✓ rôle autorisé
+   * ✓ abonnement valide
+   *
+   * → accès accordé.
+   */
+
+  supabaseResponse.headers.set(
+    "Cache-Control",
+    "private, no-store, max-age=0",
+  );
+
+  return supabaseResponse;
 }
 
-/* ==========================================================================
- * MATCHER NEXT.JS
- * ========================================================================== */
+/**
+ * ============================================================
+ * MATCHER NEXT.JS 16
+ * ============================================================
+ *
+ * Le Proxy ignore :
+ *
+ * - API
+ * - fichiers statiques
+ * - images Next.js
+ * - favicon
+ * - CSS
+ * - JavaScript
+ * - fichiers source maps
+ * - fichiers texte/XML
+ * ============================================================
+ */
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml)$).*)",
   ],
 };
