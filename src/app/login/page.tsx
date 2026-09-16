@@ -3,13 +3,17 @@
 import {
   FormEvent,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
 import Link from "next/link";
 
 import { useLocale } from "next-intl";
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
 import { createClient } from "../lib/supabase/client";
 
@@ -49,6 +53,7 @@ type PlatformAccessResponse = {
 
 type SubscriptionStatusResponse = {
   success?: boolean;
+  authenticated?: boolean;
 
   access?: {
     allowed?: boolean;
@@ -293,7 +298,11 @@ function setLocaleCookie(
 function getRoleHome(
   role: string | null | undefined,
 ) {
-  switch (role) {
+  switch (
+    String(role ?? "")
+      .trim()
+      .toLowerCase()
+  ) {
     case "owner":
       return "/dashboard";
 
@@ -327,20 +336,132 @@ function normalizeRole(
 }
 
 /* ============================================================
+   VÉRIFICATION REDIRECTION
+============================================================ */
+
+/*
+ * On ne fait jamais confiance aveuglément au paramètre
+ * ?redirect=...
+ *
+ * Le redirect doit correspondre à l'espace autorisé
+ * pour le rôle de l'utilisateur.
+ */
+
+function getAllowedDestination(
+  role: string | null | undefined,
+  requestedRedirect: string | null,
+) {
+  const roleHome =
+    getRoleHome(role);
+
+  if (
+    roleHome ===
+    "/login"
+  ) {
+    return "/login";
+  }
+
+  if (
+    !requestedRedirect
+  ) {
+    return roleHome;
+  }
+
+  /*
+   * Le redirect doit être une route interne.
+   */
+  if (
+    !requestedRedirect.startsWith(
+      "/",
+    ) ||
+    requestedRedirect.startsWith(
+      "//",
+    )
+  ) {
+    return roleHome;
+  }
+
+  /*
+   * Routes autorisées par rôle.
+   */
+
+  const normalizedRedirect =
+    requestedRedirect
+      .split("?")[0]
+      .split("#")[0];
+
+  const allowedByRole: Record<
+    string,
+    string[]
+  > = {
+    owner: [
+      "/dashboard",
+    ],
+
+    admin: [
+      "/admin",
+    ],
+
+    pharmacist: [
+      "/pharmacien",
+    ],
+
+    cashier: [
+      "/caisse",
+    ],
+
+    employee: [
+      "/employe",
+    ],
+  };
+
+  const normalizedRole =
+    normalizeRole(
+      role,
+    );
+
+  const allowedRoutes =
+    allowedByRole[
+      normalizedRole
+    ] ?? [];
+
+  if (
+    allowedRoutes.some(
+      (route) =>
+        normalizedRedirect ===
+          route ||
+        normalizedRedirect.startsWith(
+          `${route}/`,
+        ),
+    )
+  ) {
+    return requestedRedirect;
+  }
+
+  /*
+   * Si le redirect demandé ne correspond pas au rôle,
+   * on utilise l'espace officiel du rôle.
+   */
+  return roleHome;
+}
+
+/* ============================================================
    VÉRIFICATION ACCÈS PLATEFORME
 ============================================================ */
 
 async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
-  const response = await fetch(
-    "/api/auth/platform-access",
-    {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
+  const response =
+    await fetch(
+      "/api/auth/platform-access",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Accept:
+            "application/json",
+        },
       },
-    },
-  );
+    );
 
   if (!response.ok) {
     throw new Error(
@@ -356,16 +477,35 @@ async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
 ============================================================ */
 
 async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
-  const response = await fetch(
-    "/api/subscription/status",
-    {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
+  const response =
+    await fetch(
+      "/api/subscription/status",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Accept:
+            "application/json",
+        },
       },
-    },
-  );
+    );
+
+  /*
+   * IMPORTANT :
+   *
+   * Un 401 signifie que la session n'existe plus.
+   *
+   * Un autre code HTTP ne doit PAS provoquer un signOut
+   * automatique.
+   */
+  if (
+    response.status ===
+    401
+  ) {
+    throw new Error(
+      "SUBSCRIPTION_UNAUTHENTICATED",
+    );
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -381,11 +521,19 @@ async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
 ============================================================ */
 
 function getSubscriptionReasonMessage(
-  reason: string | null | undefined,
+  reason:
+    | string
+    | null
+    | undefined,
   locale: Locale,
 ) {
-  if (locale === "en") {
-    switch (reason) {
+  if (
+    locale ===
+    "en"
+  ) {
+    switch (
+      reason
+    ) {
       case "subscription_required":
         return "Your PharmaFlow subscription is not active.";
 
@@ -403,7 +551,9 @@ function getSubscriptionReasonMessage(
     }
   }
 
-  switch (reason) {
+  switch (
+    reason
+  ) {
     case "subscription_required":
       return "Votre abonnement PharmaFlow n'est pas actif.";
 
@@ -426,19 +576,45 @@ function getSubscriptionReasonMessage(
 ============================================================ */
 
 export default function LoginPage() {
-  const locale = useLocale();
+  const locale =
+    useLocale();
 
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const supabase = createClient();
+  const searchParams =
+    useSearchParams();
+
+  const supabase =
+    useMemo(
+      () =>
+        createClient(),
+      [],
+    );
 
   const currentLocale: Locale =
-    locale === "en"
+    locale ===
+    "en"
       ? "en"
       : "fr";
 
   const t =
-    TEXT[currentLocale];
+    TEXT[
+      currentLocale
+    ];
+
+  /*
+   * Destination demandée avant l'ouverture
+   * de la page de connexion.
+   *
+   * Exemple :
+   *
+   * /login?redirect=/pharmacien
+   */
+  const requestedRedirect =
+    searchParams.get(
+      "redirect",
+    );
 
   /* ==========================================================
      ÉTATS
@@ -480,11 +656,6 @@ export default function LoginPage() {
       newLocale,
     );
 
-    /*
-     * Recharge la page avec la nouvelle langue.
-     * Cela permet à next-intl de reprendre immédiatement
-     * le nouveau locale.
-     */
     window.location.reload();
   }
 
@@ -498,7 +669,9 @@ export default function LoginPage() {
     async function checkExistingSession() {
       try {
         const {
-          data: { user },
+          data: {
+            user,
+          },
         } =
           await supabase.auth.getUser();
 
@@ -517,7 +690,9 @@ export default function LoginPage() {
           const platformAccess =
             await checkPlatformAccess();
 
-          /* SUPER ADMIN */
+          /*
+           * SUPER ADMIN
+           */
 
           if (
             mounted &&
@@ -538,7 +713,9 @@ export default function LoginPage() {
             return;
           }
 
-          /* AGENT PLATEFORME */
+          /*
+           * AGENT PLATEFORME
+           */
 
           if (
             mounted &&
@@ -558,7 +735,9 @@ export default function LoginPage() {
 
             return;
           }
-        } catch (platformError) {
+        } catch (
+          platformError
+        ) {
           console.error(
             "LOGIN EXISTING SESSION PLATFORM:",
             platformError,
@@ -566,7 +745,7 @@ export default function LoginPage() {
         }
 
         /* ====================================================
-           2. PROFIL PHARMACIE
+           2. PROFIL
         ==================================================== */
 
         const {
@@ -592,6 +771,9 @@ export default function LoginPage() {
           return;
         }
 
+        const pharmacyId =
+          profile.pharmacy_id;
+
         /* ====================================================
            3. PHARMACIE
         ==================================================== */
@@ -606,7 +788,7 @@ export default function LoginPage() {
             )
             .eq(
               "id",
-              profile.pharmacy_id,
+              pharmacyId,
             )
             .maybeSingle();
 
@@ -637,17 +819,128 @@ export default function LoginPage() {
           );
 
         const destination =
-          getRoleHome(role);
+          getAllowedDestination(
+            role,
+            requestedRedirect,
+          );
 
         if (
-          destination !==
+          destination ===
           "/login"
+        ) {
+          return;
+        }
+
+        /* ====================================================
+           5. VÉRIFICATION ABONNEMENT
+        *
+        * IMPORTANT :
+        *
+        * On vérifie l'abonnement AVANT d'envoyer
+        * l'utilisateur dans son espace.
+        * ====================================================
+        */
+
+        try {
+          const subscription =
+            await checkSubscriptionAccess();
+
+          const allowed =
+            subscription
+              .access
+              ?.allowed ===
+            true;
+
+          /*
+           * PAS D'ABONNEMENT
+           *
+           * On ne déconnecte PAS l'utilisateur.
+           */
+          if (!allowed) {
+            const reason =
+              subscription
+                .access
+                ?.reason ??
+              "subscription_required";
+
+            if (
+              mounted
+            ) {
+              window.location.assign(
+                `/abonnement?reason=${encodeURIComponent(
+                  reason,
+                )}&redirect=${encodeURIComponent(
+                  destination,
+                )}`,
+              );
+            }
+
+            return;
+          }
+        } catch (
+          subscriptionError
+        ) {
+          console.error(
+            "LOGIN EXISTING SESSION SUBSCRIPTION:",
+            subscriptionError,
+          );
+
+          /*
+           * Si la session n'existe plus, retour login.
+           */
+          if (
+            subscriptionError instanceof
+              Error &&
+            subscriptionError.message ===
+              "SUBSCRIPTION_UNAUTHENTICATED"
+          ) {
+            router.replace(
+              `/login?redirect=${encodeURIComponent(
+                destination,
+              )}`,
+            );
+
+            return;
+          }
+
+          /*
+           * En cas d'erreur de vérification,
+           * on ne donne PAS accès au dashboard.
+           *
+           * On envoie vers l'espace abonnement.
+           * La session reste active.
+           */
+          if (
+            mounted
+          ) {
+            window.location.assign(
+              `/abonnement?reason=verification&redirect=${encodeURIComponent(
+                destination,
+              )}`,
+            );
+          }
+
+          return;
+        }
+
+        /* ====================================================
+           6. ABONNEMENT VALIDE
+        *
+        * Seulement maintenant on peut entrer
+        * dans l'espace de travail.
+        * ====================================================
+        */
+
+        if (
+          mounted
         ) {
           router.replace(
             destination,
           );
         }
-      } catch (sessionError) {
+      } catch (
+        sessionError
+      ) {
         console.error(
           "LOGIN EXISTING SESSION:",
           sessionError,
@@ -655,7 +948,7 @@ export default function LoginPage() {
       }
     }
 
-    checkExistingSession();
+    void checkExistingSession();
 
     return () => {
       mounted = false;
@@ -664,6 +957,7 @@ export default function LoginPage() {
     router,
     supabase,
     currentLocale,
+    requestedRedirect,
   ]);
 
   /* ==========================================================
@@ -741,7 +1035,8 @@ export default function LoginPage() {
       } =
         await supabase.auth.signInWithPassword(
           {
-            email: cleanEmail,
+            email:
+              cleanEmail,
             password,
           },
         );
@@ -769,7 +1064,7 @@ export default function LoginPage() {
         authData.user;
 
       /* ======================================================
-         2. VÉRIFICATION PLATEFORME
+         2. ACCÈS PLATEFORME
       ====================================================== */
 
       setSyncing(true);
@@ -780,12 +1075,21 @@ export default function LoginPage() {
       try {
         platformAccess =
           await checkPlatformAccess();
-      } catch (platformError) {
+      } catch (
+        platformError
+      ) {
         console.error(
           "LOGIN PLATFORM ACCESS:",
           platformError,
         );
 
+        /*
+         * Ici il s'agit réellement d'une erreur
+         * d'autorisation de plateforme.
+         *
+         * On conserve le comportement de sécurité
+         * existant.
+         */
         await supabase.auth.signOut();
 
         setSyncing(false);
@@ -843,7 +1147,7 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         3. PROFIL UTILISATEUR PHARMACIE
+         3. PROFIL UTILISATEUR
       ====================================================== */
 
       const {
@@ -867,7 +1171,9 @@ export default function LoginPage() {
           )
           .maybeSingle();
 
-      if (profileError) {
+      if (
+        profileError
+      ) {
         console.error(
           "LOGIN PROFILE:",
           profileError,
@@ -885,7 +1191,9 @@ export default function LoginPage() {
         return;
       }
 
-      if (!profileData) {
+      if (
+        !profileData
+      ) {
         await supabase.auth.signOut();
 
         setSyncing(false);
@@ -902,10 +1210,13 @@ export default function LoginPage() {
         profileData as Profile;
 
       /* ======================================================
-         4. PHARMACY_ID OBLIGATOIRE
+         4. PHARMACY_ID
       ====================================================== */
 
-      if (!profile.pharmacy_id) {
+      const pharmacyId =
+        profile.pharmacy_id;
+
+      if (!pharmacyId) {
         await supabase.auth.signOut();
 
         setSyncing(false);
@@ -941,11 +1252,13 @@ export default function LoginPage() {
           )
           .eq(
             "id",
-            profile.pharmacy_id,
+            pharmacyId,
           )
           .maybeSingle();
 
-      if (pharmacyError) {
+      if (
+        pharmacyError
+      ) {
         console.error(
           "LOGIN PHARMACY:",
           pharmacyError,
@@ -963,7 +1276,9 @@ export default function LoginPage() {
         return;
       }
 
-      if (!pharmacyData) {
+      if (
+        !pharmacyData
+      ) {
         await supabase.auth.signOut();
 
         setSyncing(false);
@@ -985,7 +1300,8 @@ export default function LoginPage() {
 
       const pharmacyStatus =
         String(
-          pharmacy.status ?? "",
+          pharmacy.status ??
+            "",
         )
           .trim()
           .toLowerCase();
@@ -999,6 +1315,12 @@ export default function LoginPage() {
           pharmacyStatus,
         )
       ) {
+        /*
+         * Ceci concerne le statut administratif
+         * de la pharmacie, pas son abonnement.
+         *
+         * On conserve donc le signOut ici.
+         */
         await supabase.auth.signOut();
 
         setSyncing(false);
@@ -1026,7 +1348,9 @@ export default function LoginPage() {
             ? "fr"
             : null;
 
-      if (!pharmacyLanguage) {
+      if (
+        !pharmacyLanguage
+      ) {
         await supabase.auth.signOut();
 
         setSyncing(false);
@@ -1048,68 +1372,7 @@ export default function LoginPage() {
       );
 
       /* ======================================================
-         9. VÉRIFICATION ABONNEMENT
-      ====================================================== */
-
-      try {
-        const subscription =
-          await checkSubscriptionAccess();
-
-        const allowed =
-          subscription.access
-            ?.allowed === true;
-
-        const blocked =
-          subscription.access
-            ?.blocked === true;
-
-        /*
-         * Si l'abonnement est expiré, absent ou bloqué,
-         * la session Supabase reste volontairement active.
-         */
-
-        if (
-          blocked ||
-          !allowed
-        ) {
-          const reason =
-            subscription.access
-              ?.reason ??
-            "subscription_required";
-
-          setSyncing(false);
-          setLoading(false);
-
-          /*
-           * Redirection automatique vers l'espace
-           * d'achat / renouvellement de l'abonnement.
-           */
-          window.location.assign(
-            `/abonnement?reason=${encodeURIComponent(
-              reason,
-            )}`,
-          );
-
-          return;
-        }
-      } catch (subscriptionError) {
-        console.error(
-          "LOGIN SUBSCRIPTION:",
-          subscriptionError,
-        );
-
-        setSyncing(false);
-        setLoading(false);
-
-        setError(
-          t.subscriptionError,
-        );
-
-        return;
-      }
-
-      /* ======================================================
-         10. RÔLE PHARMACIE
+         9. RÔLE + DESTINATION
       ====================================================== */
 
       const role =
@@ -1118,7 +1381,10 @@ export default function LoginPage() {
         );
 
       const destination =
-        getRoleHome(role);
+        getAllowedDestination(
+          role,
+          requestedRedirect,
+        );
 
       if (
         destination ===
@@ -1137,13 +1403,118 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         11. REDIRECTION FINALE
+         10. VÉRIFICATION ABONNEMENT
       ====================================================== */
 
+      try {
+        const subscription =
+          await checkSubscriptionAccess();
+
+        const allowed =
+          subscription
+            .access
+            ?.allowed ===
+          true;
+
+        /*
+         * ====================================================
+         * PAS D'ABONNEMENT / ABONNEMENT EXPIRÉ
+         *
+         * TRÈS IMPORTANT :
+         *
+         * Aucun signOut ici.
+         *
+         * La session reste ouverte afin que l'utilisateur
+         * puisse acheter son abonnement.
+         * ====================================================
+         */
+
+        if (
+          !allowed
+        ) {
+          const reason =
+            subscription
+              .access
+              ?.reason ??
+            "subscription_required";
+
+          setSyncing(false);
+          setLoading(false);
+
+          window.location.assign(
+            `/abonnement?reason=${encodeURIComponent(
+              reason,
+            )}&redirect=${encodeURIComponent(
+              destination,
+            )}`,
+          );
+
+          return;
+        }
+      } catch (
+        subscriptionError
+      ) {
+        console.error(
+          "LOGIN SUBSCRIPTION:",
+          subscriptionError,
+        );
+
+        /*
+         * Si la session a réellement expiré,
+         * on demande une nouvelle connexion.
+         */
+        if (
+          subscriptionError instanceof
+            Error &&
+          subscriptionError.message ===
+            "SUBSCRIPTION_UNAUTHENTICATED"
+        ) {
+          setSyncing(false);
+          setLoading(false);
+
+          router.replace(
+            `/login?redirect=${encodeURIComponent(
+              destination,
+            )}`,
+          );
+
+          return;
+        }
+
+        /*
+         * Pour une erreur de vérification,
+         * on ne donne pas accès à l'application.
+         *
+         * Mais on ne déconnecte pas l'utilisateur.
+         */
+        setSyncing(false);
+        setLoading(false);
+
+        window.location.assign(
+          `/abonnement?reason=verification&redirect=${encodeURIComponent(
+            destination,
+          )}`,
+        );
+
+        return;
+      }
+
+      /* ======================================================
+         11. ABONNEMENT VALIDE
+      ====================================================== */
+
+      setSyncing(true);
+
+      /*
+       * Maintenant seulement, l'utilisateur peut
+       * accéder à son espace.
+       */
       window.location.assign(
         destination,
       );
-    } catch (err) {
+    } catch (
+      err
+    ) {
       console.error(
         "LOGIN:",
         err,
@@ -1159,10 +1530,12 @@ export default function LoginPage() {
   }
 
   /* ==========================================================
-     ÉCRAN DE CHARGEMENT
+     ÉCRAN DE CHARGEMENT / SYNCHRONISATION
   ========================================================== */
 
-  if (syncing) {
+  if (
+    syncing
+  ) {
     return (
       <main className="pf-auth-page">
 
@@ -1230,11 +1603,15 @@ export default function LoginPage() {
 
                 <span
                   style={{
-                    display: "block",
-                    marginTop: "3px",
+                    display:
+                      "block",
+                    marginTop:
+                      "3px",
                   }}
                 >
-                  {t.securityDescription}
+                  {
+                    t.securityDescription
+                  }
                 </span>
 
               </div>
@@ -1278,10 +1655,14 @@ export default function LoginPage() {
 
           <div
             style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: "16px",
+              display:
+                "flex",
+              alignItems:
+                "flex-start",
+              justifyContent:
+                "space-between",
+              gap:
+                "16px",
             }}
           >
 
@@ -1320,54 +1701,71 @@ export default function LoginPage() {
               role="group"
               aria-label="Language selector"
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                padding: "4px",
-                borderRadius: "12px",
+                display:
+                  "flex",
+                alignItems:
+                  "center",
+                gap:
+                  "4px",
+                padding:
+                  "4px",
+                borderRadius:
+                  "12px",
                 background:
                   "rgba(241, 245, 249, 0.9)",
                 border:
                   "1px solid rgba(226, 232, 240, 0.9)",
-                flexShrink: 0,
+                flexShrink:
+                  0,
               }}
             >
 
               <button
                 type="button"
                 onClick={() =>
-                  changeLanguage("fr")
+                  changeLanguage(
+                    "fr",
+                  )
                 }
                 aria-pressed={
-                  currentLocale === "fr"
+                  currentLocale ===
+                  "fr"
                 }
                 title={
                   t.languageFrench
                 }
                 style={{
-                  border: "none",
+                  border:
+                    "none",
                   cursor:
-                    currentLocale === "fr"
+                    currentLocale ===
+                    "fr"
                       ? "default"
                       : "pointer",
-                  borderRadius: "9px",
+                  borderRadius:
+                    "9px",
                   padding:
                     "7px 9px",
                   background:
-                    currentLocale === "fr"
+                    currentLocale ===
+                    "fr"
                       ? "#ffffff"
                       : "transparent",
                   color:
-                    currentLocale === "fr"
+                    currentLocale ===
+                    "fr"
                       ? "#0f172a"
                       : "#64748b",
-                  fontSize: "13px",
+                  fontSize:
+                    "13px",
                   fontWeight:
-                    currentLocale === "fr"
+                    currentLocale ===
+                    "fr"
                       ? 700
                       : 500,
                   boxShadow:
-                    currentLocale === "fr"
+                    currentLocale ===
+                    "fr"
                       ? "0 1px 4px rgba(15, 23, 42, 0.10)"
                       : "none",
                   transition:
@@ -1380,38 +1778,49 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() =>
-                  changeLanguage("en")
+                  changeLanguage(
+                    "en",
+                  )
                 }
                 aria-pressed={
-                  currentLocale === "en"
+                  currentLocale ===
+                  "en"
                 }
                 title={
                   t.languageEnglish
                 }
                 style={{
-                  border: "none",
+                  border:
+                    "none",
                   cursor:
-                    currentLocale === "en"
+                    currentLocale ===
+                    "en"
                       ? "default"
                       : "pointer",
-                  borderRadius: "9px",
+                  borderRadius:
+                    "9px",
                   padding:
                     "7px 9px",
                   background:
-                    currentLocale === "en"
+                    currentLocale ===
+                    "en"
                       ? "#ffffff"
                       : "transparent",
                   color:
-                    currentLocale === "en"
+                    currentLocale ===
+                    "en"
                       ? "#0f172a"
                       : "#64748b",
-                  fontSize: "13px",
+                  fontSize:
+                    "13px",
                   fontWeight:
-                    currentLocale === "en"
+                    currentLocale ===
+                    "en"
                       ? 700
                       : 500,
                   boxShadow:
-                    currentLocale === "en"
+                    currentLocale ===
+                    "en"
                       ? "0 1px 4px rgba(15, 23, 42, 0.10)"
                       : "none",
                   transition:
@@ -1479,7 +1888,9 @@ export default function LoginPage() {
           ================================================== */}
 
           <form
-            onSubmit={handleSubmit}
+            onSubmit={
+              handleSubmit
+            }
             className="pf-auth-form"
           >
 
@@ -1509,15 +1920,24 @@ export default function LoginPage() {
                   id="email"
                   name="email"
                   type="email"
-                  value={email}
-                  onChange={(event) => {
+                  value={
+                    email
+                  }
+                  onChange={(
+                    event,
+                  ) => {
 
                     setEmail(
-                      event.target.value,
+                      event.target
+                        .value,
                     );
 
-                    if (error) {
-                      setError("");
+                    if (
+                      error
+                    ) {
+                      setError(
+                        "",
+                      );
                     }
 
                   }}
@@ -1528,7 +1948,9 @@ export default function LoginPage() {
                   autoComplete="email"
                   autoCapitalize="none"
                   spellCheck={false}
-                  disabled={loading}
+                  disabled={
+                    loading
+                  }
                   required
                 />
 
@@ -1544,12 +1966,16 @@ export default function LoginPage() {
 
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
+                  display:
+                    "flex",
+                  alignItems:
+                    "center",
                   justifyContent:
                     "space-between",
-                  gap: "12px",
-                  marginBottom: "8px",
+                  gap:
+                    "12px",
+                  marginBottom:
+                    "8px",
                 }}
               >
 
@@ -1557,17 +1983,22 @@ export default function LoginPage() {
                   htmlFor="password"
                   className="pf-form-label"
                   style={{
-                    marginBottom: 0,
+                    marginBottom:
+                      0,
                   }}
                 >
-                  {t.password}
+                  {
+                    t.password
+                  }
                 </label>
 
                 <Link
                   href="/forgot-password"
                   className="pf-auth-forgot-link"
                 >
-                  {t.forgot}
+                  {
+                    t.forgot
+                  }
                 </Link>
 
               </div>
@@ -1589,15 +2020,24 @@ export default function LoginPage() {
                       ? "text"
                       : "password"
                   }
-                  value={password}
-                  onChange={(event) => {
+                  value={
+                    password
+                  }
+                  onChange={(
+                    event,
+                  ) => {
 
                     setPassword(
-                      event.target.value,
+                      event.target
+                        .value,
                     );
 
-                    if (error) {
-                      setError("");
+                    if (
+                      error
+                    ) {
+                      setError(
+                        "",
+                      );
                     }
 
                   }}
@@ -1606,7 +2046,9 @@ export default function LoginPage() {
                   }
                   className="pf-form-input pf-form-input-with-icon pf-form-input-with-action"
                   autoComplete="current-password"
-                  disabled={loading}
+                  disabled={
+                    loading
+                  }
                   required
                 />
 
@@ -1615,11 +2057,15 @@ export default function LoginPage() {
                   className="pf-input-action"
                   onClick={() =>
                     setShowPassword(
-                      (value) =>
+                      (
+                        value,
+                      ) =>
                         !value,
                     )
                   }
-                  disabled={loading}
+                  disabled={
+                    loading
+                  }
                   aria-label={
                     showPassword
                       ? t.hidePassword
@@ -1649,14 +2095,18 @@ export default function LoginPage() {
             <button
               type="submit"
               className="pf-btn pf-btn-primary pf-btn-full pf-auth-submit"
-              disabled={loading}
+              disabled={
+                loading
+              }
             >
 
               {loading ? (
                 <>
                   <span className="pf-spinner pf-spinner-small" />
 
-                  {t.loggingIn}
+                  {
+                    t.loggingIn
+                  }
                 </>
               ) : (
                 <>
@@ -1664,7 +2114,9 @@ export default function LoginPage() {
                     →
                   </span>
 
-                  {t.login}
+                  {
+                    t.login
+                  }
                 </>
               )}
 
@@ -1678,11 +2130,14 @@ export default function LoginPage() {
 
           <div
             style={{
-              marginTop: "24px",
-              paddingTop: "22px",
+              marginTop:
+                "24px",
+              paddingTop:
+                "22px",
               borderTop:
                 "1px solid var(--pf-border, #e2e8f0)",
-              textAlign: "center",
+              textAlign:
+                "center",
             }}
           >
 
@@ -1690,17 +2145,22 @@ export default function LoginPage() {
               style={{
                 color:
                   "var(--pf-text-soft, #64748b)",
-                fontSize: "14px",
+                fontSize:
+                  "14px",
               }}
             >
-              {t.noAccount}
+              {
+                t.noAccount
+              }
             </span>{" "}
 
             <Link
               href="/register"
               className="pf-auth-back-link"
             >
-              {t.createAccount}
+              {
+                t.createAccount
+              }
             </Link>
 
           </div>
@@ -1718,16 +2178,22 @@ export default function LoginPage() {
             <div>
 
               <strong>
-                {t.security}
+                {
+                  t.security
+                }
               </strong>
 
               <span
                 style={{
-                  display: "block",
-                  marginTop: "3px",
+                  display:
+                    "block",
+                  marginTop:
+                    "3px",
                 }}
               >
-                {t.securityDescription}
+                {
+                  t.securityDescription
+                }
               </span>
 
             </div>
