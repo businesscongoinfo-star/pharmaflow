@@ -22,6 +22,11 @@ type PharmacyRow = {
   currency_code: string | null;
   owner_id: string | null;
   status: string | null;
+
+  manual_access_enabled: boolean | null;
+  manual_access_until: string | null;
+  manual_access_reason: string | null;
+  manual_access_by: string | null;
 };
 
 type PlanRow = {
@@ -61,11 +66,13 @@ type SubscriptionStatus =
 type AccessReason =
   | "trial"
   | "active"
+  | "manual_access"
   | "expired"
   | "past_due"
   | "suspended"
   | "cancelled"
   | "no_subscription"
+  | "manual_access_expired"
   | "pharmacy_inactive";
 
 type TimeRemaining = {
@@ -75,6 +82,10 @@ type TimeRemaining = {
   remaining_hours: number;
   remaining_days: number;
 };
+
+/* ==========================================================================
+   HELPERS
+   ========================================================================== */
 
 function normalizeLanguage(
   value: string | null | undefined,
@@ -111,18 +122,28 @@ function normalizeSubscriptionStatus(
     .trim()
     .toLowerCase();
 
-  if (
-    status === "trial" ||
-    status === "active" ||
-    status === "expired" ||
-    status === "past_due" ||
-    status === "suspended" ||
-    status === "cancelled"
-  ) {
-    return status;
-  }
+  switch (status) {
+    case "trial":
+      return "trial";
 
-  return "expired";
+    case "active":
+      return "active";
+
+    case "expired":
+      return "expired";
+
+    case "past_due":
+      return "past_due";
+
+    case "suspended":
+      return "suspended";
+
+    case "cancelled":
+      return "cancelled";
+
+    default:
+      return "expired";
+  }
 }
 
 function calculateRemaining(
@@ -139,7 +160,8 @@ function calculateRemaining(
     };
   }
 
-  const targetMs = new Date(targetDate).getTime();
+  const targetMs =
+    new Date(targetDate).getTime();
 
   if (!Number.isFinite(targetMs)) {
     return {
@@ -156,28 +178,36 @@ function calculateRemaining(
     0,
   );
 
-  const remainingSeconds = Math.floor(
-    remainingMs / 1000,
-  );
+  const remainingSeconds =
+    Math.floor(
+      remainingMs / 1000,
+    );
 
-  const remainingMinutes = Math.floor(
-    remainingSeconds / 60,
-  );
+  const remainingMinutes =
+    Math.floor(
+      remainingSeconds / 60,
+    );
 
-  const remainingHours = Math.floor(
-    remainingMinutes / 60,
-  );
+  const remainingHours =
+    Math.floor(
+      remainingMinutes / 60,
+    );
 
-  const remainingDays = Math.floor(
-    remainingHours / 24,
-  );
+  const remainingDays =
+    Math.floor(
+      remainingHours / 24,
+    );
 
   return {
     remaining_ms: remainingMs,
-    remaining_seconds: remainingSeconds,
-    remaining_minutes: remainingMinutes,
-    remaining_hours: remainingHours,
-    remaining_days: remainingDays,
+    remaining_seconds:
+      remainingSeconds,
+    remaining_minutes:
+      remainingMinutes,
+    remaining_hours:
+      remainingHours,
+    remaining_days:
+      remainingDays,
   };
 }
 
@@ -207,13 +237,14 @@ function calculateTrialPercent(
   const total =
     endMs - startMs;
 
-  const elapsed = Math.min(
-    Math.max(
-      nowMs - startMs,
-      0,
-    ),
-    total,
-  );
+  const elapsed =
+    Math.min(
+      Math.max(
+        nowMs - startMs,
+        0,
+      ),
+      total,
+    );
 
   return Math.min(
     Math.max(
@@ -234,6 +265,11 @@ function isPharmacyActive(
       .trim()
       .toLowerCase();
 
+  /*
+   * Si aucun statut n'est renseigné,
+   * on conserve le comportement historique :
+   * la pharmacie n'est pas considérée comme bloquée.
+   */
   if (!normalized) {
     return true;
   }
@@ -245,6 +281,45 @@ function isPharmacyActive(
     "suspended",
     "closed",
   ].includes(normalized);
+}
+
+/**
+ * Vérifie l'accès manuel accordé par le Super Admin.
+ *
+ * L'accès est valide uniquement si :
+ *
+ * manual_access_enabled = true
+ * ET
+ * manual_access_until existe
+ * ET
+ * manual_access_until > maintenant
+ */
+function hasValidManualAccess(
+  pharmacy: PharmacyRow,
+  nowMs: number,
+): boolean {
+  if (
+    !pharmacy.manual_access_enabled
+  ) {
+    return false;
+  }
+
+  if (
+    !pharmacy.manual_access_until
+  ) {
+    return false;
+  }
+
+  const untilMs =
+    new Date(
+      pharmacy.manual_access_until,
+    ).getTime();
+
+  if (!Number.isFinite(untilMs)) {
+    return false;
+  }
+
+  return untilMs > nowMs;
 }
 
 function createError(
@@ -291,8 +366,103 @@ function buildEmptyExpiration() {
   };
 }
 
+function buildEmptyManualAccess() {
+  return {
+    enabled: false,
+    valid: false,
+    until: null,
+    reason: null,
+    granted_by: null,
+    remaining_ms: 0,
+    remaining_seconds: 0,
+    remaining_minutes: 0,
+    remaining_hours: 0,
+    remaining_days: 0,
+  };
+}
+
+function buildUserResponse(
+  profile: ProfileRow,
+  locale: Locale,
+  pharmacyId: string,
+) {
+  return {
+    id: profile.id,
+    full_name: profile.full_name,
+    phone: profile.phone,
+    role: profile.role,
+    language: locale,
+    pharmacy_id: pharmacyId,
+  };
+}
+
+function buildManualAccessResponse(
+  pharmacy: PharmacyRow,
+  nowMs: number,
+) {
+  const enabled =
+    Boolean(
+      pharmacy.manual_access_enabled,
+    );
+
+  const valid =
+    hasValidManualAccess(
+      pharmacy,
+      nowMs,
+    );
+
+  const remaining =
+    valid &&
+    pharmacy.manual_access_until
+      ? calculateRemaining(
+          pharmacy.manual_access_until,
+          nowMs,
+        )
+      : {
+          remaining_ms: 0,
+          remaining_seconds: 0,
+          remaining_minutes: 0,
+          remaining_hours: 0,
+          remaining_days: 0,
+        };
+
+  return {
+    enabled,
+
+    valid,
+
+    until:
+      pharmacy.manual_access_until ??
+      null,
+
+    reason:
+      pharmacy.manual_access_reason ??
+      null,
+
+    granted_by:
+      pharmacy.manual_access_by ??
+      null,
+
+    remaining_ms:
+      remaining.remaining_ms,
+
+    remaining_seconds:
+      remaining.remaining_seconds,
+
+    remaining_minutes:
+      remaining.remaining_minutes,
+
+    remaining_hours:
+      remaining.remaining_hours,
+
+    remaining_days:
+      remaining.remaining_days,
+  };
+}
+
 function buildPharmacyResponse(
   pharmacy: PharmacyRow,
+  nowMs: number,
 ) {
   return {
     id: pharmacy.id,
@@ -306,17 +476,27 @@ function buildPharmacyResponse(
       ),
     owner_id: pharmacy.owner_id,
     status: pharmacy.status,
+
+    manual_access:
+      buildManualAccessResponse(
+        pharmacy,
+        nowMs,
+      ),
   };
 }
+
+/* ==========================================================================
+   GET /api/subscription/status
+   ========================================================================== */
 
 export async function GET() {
   try {
     const supabase =
       await createClient();
 
-    // ============================================================
-    // 1. UTILISATEUR CONNECTÉ
-    // ============================================================
+    /* ======================================================================
+       1. UTILISATEUR CONNECTÉ
+       ====================================================================== */
 
     const {
       data: authData,
@@ -346,9 +526,9 @@ export async function GET() {
       );
     }
 
-    // ============================================================
-    // 2. PROFIL UTILISATEUR
-    // ============================================================
+    /* ======================================================================
+       2. PROFIL
+       ====================================================================== */
 
     const {
       data: profile,
@@ -357,7 +537,14 @@ export async function GET() {
       await supabase
         .from("profiles")
         .select(
-          "id, full_name, phone, role, pharmacy_id, language",
+          `
+            id,
+            full_name,
+            phone,
+            role,
+            pharmacy_id,
+            language
+          `,
         )
         .eq("id", user.id)
         .maybeSingle();
@@ -396,18 +583,31 @@ export async function GET() {
     const pharmacyId =
       typedProfile.pharmacy_id;
 
-    // ============================================================
-    // 3. LANGUE
-    // ============================================================
+    /* ======================================================================
+       3. DATE SERVEUR
+       ====================================================================== */
+
+    const now =
+      new Date();
+
+    const nowMs =
+      now.getTime();
+
+    const serverTime =
+      now.toISOString();
+
+    /* ======================================================================
+       4. LANGUE
+       ====================================================================== */
 
     const locale =
       normalizeLanguage(
         typedProfile.language,
       );
 
-    // ============================================================
-    // 4. PHARMACIE
-    // ============================================================
+    /* ======================================================================
+       5. PHARMACIE
+       ====================================================================== */
 
     const {
       data: pharmacy,
@@ -424,10 +624,17 @@ export async function GET() {
             city,
             currency_code,
             owner_id,
-            status
+            status,
+            manual_access_enabled,
+            manual_access_until,
+            manual_access_reason,
+            manual_access_by
           `,
         )
-        .eq("id", pharmacyId)
+        .eq(
+          "id",
+          pharmacyId,
+        )
         .maybeSingle();
 
     if (pharmacyError) {
@@ -457,27 +664,53 @@ export async function GET() {
         typedPharmacy.currency_code,
       );
 
-    // ============================================================
-    // 5. PHARMACIE INACTIVE
-    // ============================================================
+    const userResponse =
+      buildUserResponse(
+        typedProfile,
+        locale,
+        pharmacyId,
+      );
+
+    const pharmacyResponse =
+      buildPharmacyResponse(
+        typedPharmacy,
+        nowMs,
+      );
+
+    const manualAccessResponse =
+      buildManualAccessResponse(
+        typedPharmacy,
+        nowMs,
+      );
+
+    /* ======================================================================
+       6. PHARMACIE INACTIVE / SUSPENDUE
+       ====================================================================== */
+
+    /*
+     * L'accès manuel ne permet pas de contourner une suspension
+     * administrative de la pharmacie.
+     */
 
     if (
       !isPharmacyActive(
         typedPharmacy.status,
       )
     ) {
-      const serverTime =
-        new Date().toISOString();
-
       return NextResponse.json({
         success: true,
+
         authenticated: true,
 
         access: {
           allowed: false,
           blocked: true,
+
           reason:
             "pharmacy_inactive" as AccessReason,
+
+          manual_access:
+            manualAccessResponse,
         },
 
         status:
@@ -485,23 +718,11 @@ export async function GET() {
 
         locale,
 
-        user: {
-          id: typedProfile.id,
-          full_name:
-            typedProfile.full_name,
-          phone:
-            typedProfile.phone,
-          role:
-            typedProfile.role,
-          language: locale,
-          pharmacy_id:
-            pharmacyId,
-        },
+        user:
+          userResponse,
 
         pharmacy:
-          buildPharmacyResponse(
-            typedPharmacy,
-          ),
+          pharmacyResponse,
 
         subscription: null,
 
@@ -510,8 +731,11 @@ export async function GET() {
         prices: {
           currency_code:
             pharmacyCurrency,
+
           monthly: null,
+
           yearly: null,
+
           available: false,
         },
 
@@ -521,14 +745,17 @@ export async function GET() {
         expiration:
           buildEmptyExpiration(),
 
+        manual_access:
+          manualAccessResponse,
+
         server_time:
           serverTime,
       });
     }
 
-    // ============================================================
-    // 6. RÉCUPÉRER L'ABONNEMENT ACTUEL
-    // ============================================================
+    /* ======================================================================
+       7. ABONNEMENT
+       ====================================================================== */
 
     const {
       data: subscriptionRows,
@@ -553,9 +780,12 @@ export async function GET() {
           "pharmacy_id",
           pharmacyId,
         )
-        .order("created_at", {
-          ascending: false,
-        })
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          },
+        )
         .limit(10);
 
     if (subscriptionError) {
@@ -579,33 +809,9 @@ export async function GET() {
         ? subscriptions[0]
         : null;
 
-    // ============================================================
-    // 7. DATE SERVEUR
-    // ============================================================
-
-    const now =
-      new Date();
-
-    const nowMs =
-      now.getTime();
-
-    const serverTime =
-      now.toISOString();
-
-    // ============================================================
-    // 8. RÉCUPÉRER LES PLANS MENSUEL ET ANNUEL
-    // ============================================================
-    //
-    // IMPORTANT :
-    // subscription_plans NE possède PAS "description".
-    //
-    // Colonnes réellement utilisées :
-    // id
-    // code
-    // name
-    // duration_days
-    // is_active
-    // ============================================================
+    /* ======================================================================
+       8. PLANS MENSUEL ET ANNUEL
+       ====================================================================== */
 
     let monthlyPlan:
       PlanRow | null = null;
@@ -620,12 +826,21 @@ export async function GET() {
       await supabase
         .from("subscription_plans")
         .select(
-          "id, code, name, duration_days, is_active",
+          `
+            id,
+            code,
+            name,
+            duration_days,
+            is_active
+          `,
         )
-        .in("code", [
-          "monthly",
-          "yearly",
-        ])
+        .in(
+          "code",
+          [
+            "monthly",
+            "yearly",
+          ],
+        )
         .eq(
           "is_active",
           true,
@@ -674,20 +889,9 @@ export async function GET() {
         null;
     }
 
-    // ============================================================
-    // 9. RÉCUPÉRER LES TARIFS DE LA DEVISE
-    // ============================================================
-    //
-    // IMPORTANT :
-    // On utilise uniquement les colonnes confirmées :
-    //
-    // plan_id
-    // currency_code
-    // price
-    //
-    // On ne demande PAS "description".
-    // On ne demande PAS "is_active".
-    // ============================================================
+    /* ======================================================================
+       9. PRIX
+       ====================================================================== */
 
     let planPrices:
       PlanPriceRow[] = [];
@@ -702,7 +906,11 @@ export async function GET() {
             "subscription_plan_prices",
           )
           .select(
-            "plan_id, currency_code, price",
+            `
+              plan_id,
+              currency_code,
+              price
+            `,
           )
           .eq(
             "currency_code",
@@ -721,9 +929,9 @@ export async function GET() {
       }
     }
 
-    // ============================================================
-    // 10. IDENTIFIER LES PRIX MENSUEL / ANNUEL
-    // ============================================================
+    /* ======================================================================
+       10. PRIX MENSUEL / ANNUEL
+       ====================================================================== */
 
     const monthlyPrice =
       monthlyPlan
@@ -743,9 +951,9 @@ export async function GET() {
           ) ?? null
         : null;
 
-    // ============================================================
-    // 11. VALIDATION DES PRIX
-    // ============================================================
+    /* ======================================================================
+       11. VALIDATION DES PRIX
+       ====================================================================== */
 
     const validMonthlyPrice =
       monthlyPrice &&
@@ -773,17 +981,20 @@ export async function GET() {
         ? yearlyPrice
         : null;
 
-    // ============================================================
-    // 12. STRUCTURE DES TARIFS
-    // ============================================================
+    /* ======================================================================
+       12. RÉPONSE DES PRIX
+       ====================================================================== */
 
     const pricesResponse = {
       currency_code:
         pharmacyCurrency,
 
+      /*
+       * Au moins un tarif valide suffit pour rendre les prix disponibles.
+       */
       available:
         Boolean(
-          validMonthlyPrice &&
+          validMonthlyPrice ||
           validYearlyPrice,
         ),
 
@@ -844,20 +1055,93 @@ export async function GET() {
           : null,
     };
 
-    // ============================================================
-    // 13. AUCUN ABONNEMENT
-    // ============================================================
+    /* ======================================================================
+       13. AUCUN ABONNEMENT
+       ====================================================================== */
 
     if (!subscription) {
+      /*
+       * Même sans abonnement, le Super Admin peut avoir accordé
+       * un accès temporaire.
+       */
+
+      const manualAccessValid =
+        hasValidManualAccess(
+          typedPharmacy,
+          nowMs,
+        );
+
+      if (
+        manualAccessValid
+      ) {
+        return NextResponse.json({
+          success: true,
+
+          authenticated: true,
+
+          access: {
+            allowed: true,
+            blocked: false,
+
+            reason:
+              "manual_access" as AccessReason,
+
+            manual_access:
+              manualAccessResponse,
+          },
+
+          status:
+            "expired" as SubscriptionStatus,
+
+          locale,
+
+          user:
+            userResponse,
+
+          pharmacy:
+            pharmacyResponse,
+
+          subscription: null,
+
+          plan: null,
+
+          prices:
+            pricesResponse,
+
+          trial:
+            buildEmptyTrial(100),
+
+          expiration:
+            buildEmptyExpiration(),
+
+          manual_access:
+            manualAccessResponse,
+
+          server_time:
+            serverTime,
+        });
+      }
+
       return NextResponse.json({
         success: true,
+
         authenticated: true,
 
         access: {
           allowed: false,
           blocked: true,
+
           reason:
-            "no_subscription" as AccessReason,
+            typedPharmacy.manual_access_enabled
+              ? (
+                  "manual_access_expired" as AccessReason
+                )
+              : (
+                  "no_subscription" as AccessReason
+                ),
+
+          manual_access:
+            manualAccessResponse,
         },
 
         status:
@@ -865,23 +1149,11 @@ export async function GET() {
 
         locale,
 
-        user: {
-          id: typedProfile.id,
-          full_name:
-            typedProfile.full_name,
-          phone:
-            typedProfile.phone,
-          role:
-            typedProfile.role,
-          language: locale,
-          pharmacy_id:
-            pharmacyId,
-        },
+        user:
+          userResponse,
 
         pharmacy:
-          buildPharmacyResponse(
-            typedPharmacy,
-          ),
+          pharmacyResponse,
 
         subscription: null,
 
@@ -896,14 +1168,17 @@ export async function GET() {
         expiration:
           buildEmptyExpiration(),
 
+        manual_access:
+          manualAccessResponse,
+
         server_time:
           serverTime,
       });
     }
 
-    // ============================================================
-    // 14. PLAN DE L'ABONNEMENT ACTUEL
-    // ============================================================
+    /* ======================================================================
+       14. PLAN ACTUEL
+       ====================================================================== */
 
     const {
       data: currentPlanData,
@@ -912,7 +1187,13 @@ export async function GET() {
       await supabase
         .from("subscription_plans")
         .select(
-          "id, name, code, duration_days, is_active",
+          `
+            id,
+            name,
+            code,
+            duration_days,
+            is_active
+          `,
         )
         .eq(
           "id",
@@ -929,21 +1210,23 @@ export async function GET() {
 
     const currentPlan =
       currentPlanData
-        ? (currentPlanData as PlanRow)
+        ? (
+            currentPlanData as PlanRow
+          )
         : null;
 
-    // ============================================================
-    // 15. STATUT
-    // ============================================================
+    /* ======================================================================
+       15. STATUT
+       ====================================================================== */
 
     const status =
       normalizeSubscriptionStatus(
         subscription.status,
       );
 
-    // ============================================================
-    // 16. TEMPS RESTANT
-    // ============================================================
+    /* ======================================================================
+       16. TEMPS RESTANT
+       ====================================================================== */
 
     const trialRemaining =
       calculateRemaining(
@@ -964,9 +1247,9 @@ export async function GET() {
         nowMs,
       );
 
-    // ============================================================
-    // 17. VALIDATION DES DATES DU TRIAL
-    // ============================================================
+    /* ======================================================================
+       17. VALIDATION DES DATES DU TRIAL
+       ====================================================================== */
 
     const trialStartedMs =
       subscription.trial_started_at
@@ -992,9 +1275,9 @@ export async function GET() {
       trialEndsMs >
         trialStartedMs;
 
-    // ============================================================
-    // 18. ESSAI GRATUIT
-    // ============================================================
+    /* ======================================================================
+       18. TRIAL
+       ====================================================================== */
 
     const trialStillValid =
       status === "trial" &&
@@ -1002,10 +1285,16 @@ export async function GET() {
       nowMs <
         trialEndsMs;
 
-    // ============================================================
-    // 19. ABONNEMENT PAYÉ
-    // ============================================================
+    /* ======================================================================
+       19. ABONNEMENT PAYÉ
+       ====================================================================== */
 
+    /*
+     * Dans ton schéma actuel, le statut payé valide est "active".
+     *
+     * L'abonnement doit également avoir une date d'expiration
+     * située dans le futur.
+     */
     const paidSubscriptionStillValid =
       status === "active" &&
       Boolean(
@@ -1014,58 +1303,125 @@ export async function GET() {
       expiration.remaining_ms >
         0;
 
-    // ============================================================
-    // 20. DÉCISION D'ACCÈS
-    // ============================================================
+    /* ======================================================================
+       20. ACCÈS MANUEL
+       ====================================================================== */
 
-    let allowed =
-      false;
+    const manualAccessValid =
+      hasValidManualAccess(
+        typedPharmacy,
+        nowMs,
+      );
 
-    let blocked =
-      true;
+    /* ======================================================================
+       21. DÉCISION FINALE D'ACCÈS
+       ====================================================================== */
+
+    let allowed = false;
+
+    let blocked = true;
 
     let reason: AccessReason =
       "expired";
 
+    /*
+     * PRIORITÉ 1 :
+     * Trial encore valide.
+     */
     if (
       trialStillValid
     ) {
       allowed = true;
       blocked = false;
       reason = "trial";
-    } else if (
+    }
+
+    /*
+     * PRIORITÉ 2 :
+     * Abonnement payé encore valide.
+     */
+    else if (
       paidSubscriptionStillValid
     ) {
       allowed = true;
       blocked = false;
       reason = "active";
-    } else if (
+    }
+
+    /*
+     * PRIORITÉ 3 :
+     * Accès manuel accordé par le Super Admin.
+     */
+    else if (
+      manualAccessValid
+    ) {
+      allowed = true;
+      blocked = false;
+      reason =
+        "manual_access";
+    }
+
+    /*
+     * Accès manuel activé mais date dépassée.
+     */
+    else if (
+      typedPharmacy.manual_access_enabled
+    ) {
+      allowed = false;
+      blocked = true;
+      reason =
+        "manual_access_expired";
+    }
+
+    /*
+     * Paiement en retard.
+     */
+    else if (
       status === "past_due"
     ) {
       allowed = false;
       blocked = true;
-      reason = "past_due";
-    } else if (
+      reason =
+        "past_due";
+    }
+
+    /*
+     * Abonnement suspendu.
+     */
+    else if (
       status === "suspended"
     ) {
       allowed = false;
       blocked = true;
-      reason = "suspended";
-    } else if (
+      reason =
+        "suspended";
+    }
+
+    /*
+     * Abonnement annulé.
+     */
+    else if (
       status === "cancelled"
     ) {
       allowed = false;
       blocked = true;
-      reason = "cancelled";
-    } else {
-      allowed = false;
-      blocked = true;
-      reason = "expired";
+      reason =
+        "cancelled";
     }
 
-    // ============================================================
-    // 21. POURCENTAGE DU TRIAL
-    // ============================================================
+    /*
+     * Expiration normale.
+     */
+    else {
+      allowed = false;
+      blocked = true;
+      reason =
+        "expired";
+    }
+
+    /* ======================================================================
+       22. POURCENTAGE DU TRIAL
+       ====================================================================== */
 
     let finalTrialPercent =
       0;
@@ -1082,9 +1438,9 @@ export async function GET() {
         100;
     }
 
-    // ============================================================
-    // 22. RÉPONSE TRIAL
-    // ============================================================
+    /* ======================================================================
+       23. RÉPONSE TRIAL
+       ====================================================================== */
 
     const trialResponse = {
       active:
@@ -1125,9 +1481,9 @@ export async function GET() {
         finalTrialPercent,
     };
 
-    // ============================================================
-    // 23. EXPIRATION
-    // ============================================================
+    /* ======================================================================
+       24. EXPIRATION
+       ====================================================================== */
 
     const expirationResponse = {
       expired:
@@ -1154,9 +1510,9 @@ export async function GET() {
         expiration.remaining_days,
     };
 
-    // ============================================================
-    // 24. RÉPONSE FINALE
-    // ============================================================
+    /* ======================================================================
+       25. RÉPONSE FINALE
+       ====================================================================== */
 
     return NextResponse.json({
       success: true,
@@ -1165,37 +1521,24 @@ export async function GET() {
 
       access: {
         allowed,
+
         blocked,
+
         reason,
+
+        manual_access:
+          manualAccessResponse,
       },
 
       status,
 
       locale,
 
-      user: {
-        id: typedProfile.id,
-
-        full_name:
-          typedProfile.full_name,
-
-        phone:
-          typedProfile.phone,
-
-        role:
-          typedProfile.role,
-
-        language:
-          locale,
-
-        pharmacy_id:
-          pharmacyId,
-      },
+      user:
+        userResponse,
 
       pharmacy:
-        buildPharmacyResponse(
-          typedPharmacy,
-        ),
+        pharmacyResponse,
 
       subscription: {
         id:
@@ -1262,6 +1605,9 @@ export async function GET() {
       expiration:
         expirationResponse,
 
+      manual_access:
+        manualAccessResponse,
+
       server_time:
         serverTime,
     });
@@ -1274,7 +1620,9 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
+
         authenticated: false,
+
         message:
           error instanceof Error
             ? error.message
