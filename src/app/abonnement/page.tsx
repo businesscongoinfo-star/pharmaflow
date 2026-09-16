@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -324,6 +325,21 @@ const TEXT = {
 
     subscriptionPrice:
       "Prix de l'abonnement",
+
+    paymentConfirmed:
+      "Paiement confirmé. Votre accès est en cours de réactivation...",
+
+    waitingPayment:
+      "Paiement en attente de confirmation. Votre abonnement sera activé automatiquement après confirmation.",
+
+    returnToSpace:
+      "Retour à votre espace...",
+
+    paymentFailed:
+      "Le paiement n'a pas été confirmé. Votre abonnement n'a pas été activé.",
+
+    noRedirect:
+      "Retourner à mon espace",
   },
 
   en: {
@@ -547,12 +563,70 @@ const TEXT = {
 
     subscriptionPrice:
       "Subscription price",
+
+    paymentConfirmed:
+      "Payment confirmed. Your access is being restored...",
+
+    waitingPayment:
+      "Payment is waiting for confirmation. Your subscription will be activated automatically after confirmation.",
+
+    returnToSpace:
+      "Returning to your workspace...",
+
+    paymentFailed:
+      "The payment was not confirmed. Your subscription was not activated.",
+
+    noRedirect:
+      "Return to my workspace",
   },
 } as const;
 
+function getSafeRedirect(
+  value: string | null,
+): string {
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//")
+  ) {
+    return "/dashboard";
+  }
+
+  return value;
+}
+
 export default function SubscriptionPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams =
+    useSearchParams();
+
+  /*
+   * IMPORTANT :
+   *
+   * On conserve la destination d'origine.
+   *
+   * Exemple :
+   *
+   * /abonnement?redirect=/dashboard
+   *
+   * ou :
+   *
+   * /abonnement?redirect=/pharmacien
+   */
+  const redirectPath = useMemo(
+    () =>
+      getSafeRedirect(
+        searchParams.get(
+          "redirect",
+        ),
+      ),
+    [searchParams],
+  );
+
+  const reason =
+    searchParams.get(
+      "reason",
+    );
 
   const [data, setData] =
     useState<SubscriptionStatusResponse | null>(
@@ -569,10 +643,14 @@ export default function SubscriptionPage() {
     useState<Locale>("fr");
 
   const [billingCycle, setBillingCycle] =
-    useState<BillingCycle>("monthly");
+    useState<BillingCycle>(
+      "monthly",
+    );
 
   const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod | null>(null);
+    useState<PaymentMethod | null>(
+      null,
+    );
 
   const [
     showPaymentMethods,
@@ -585,117 +663,313 @@ export default function SubscriptionPage() {
   const [paymentMessage, setPaymentMessage] =
     useState("");
 
-  // ============================================================
-  // CHARGEMENT DU STATUT
-  // ============================================================
+  const [
+    redirecting,
+    setRedirecting,
+  ] = useState(false);
+
+  /*
+   * Empêche plusieurs redirections
+   * simultanées.
+   */
+  const redirectStarted =
+    useRef(false);
+
+  /*
+   * ============================================================
+   * CHARGEMENT DU STATUT
+   * ============================================================
+   */
 
   const loadSubscription =
-    useCallback(async () => {
-      try {
-        setLoading(true);
-        setError("");
+    useCallback(
+      async (
+        options?: {
+          silent?: boolean;
+          redirectIfAllowed?: boolean;
+        },
+      ) => {
+        const silent =
+          options?.silent === true;
 
-        const response =
-          await fetch(
-            "/api/subscription/status",
-            {
-              method: "GET",
-              cache: "no-store",
-              headers: {
-                Accept:
-                  "application/json",
+        const redirectIfAllowed =
+          options?.redirectIfAllowed ===
+          true;
+
+        try {
+          if (!silent) {
+            setLoading(true);
+          }
+
+          setError("");
+
+          const response =
+            await fetch(
+              "/api/subscription/status",
+              {
+                method: "GET",
+                cache: "no-store",
+                headers: {
+                  Accept:
+                    "application/json",
+                },
               },
-            },
+            );
+
+          const result =
+            (await response.json()) as SubscriptionStatusResponse;
+
+          /*
+           * Session absente :
+           * on revient au login.
+           */
+          if (
+            response.status === 401 ||
+            !result.authenticated
+          ) {
+            router.replace(
+              `/login?redirect=${encodeURIComponent(
+                "/abonnement",
+              )}`,
+            );
+
+            return null;
+          }
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+                "Impossible de vérifier votre abonnement.",
+            );
+          }
+
+          setData(result);
+
+          if (
+            result.locale === "en" ||
+            result.locale === "fr"
+          ) {
+            setLocale(
+              result.locale,
+            );
+          }
+
+          /*
+           * ======================================================
+           * IMPORTANT
+           *
+           * On ne redirige vers le dashboard QUE si le serveur
+           * confirme réellement que l'accès est autorisé.
+           *
+           * Donc :
+           *
+           * access.allowed === false
+           *      ↓
+           * RESTER sur /abonnement
+           *
+           * access.allowed === true
+           *      ↓
+           * RETOUR vers l'espace demandé
+           * ======================================================
+           */
+
+          if (
+            redirectIfAllowed &&
+            result.access?.allowed ===
+              true &&
+            !redirectStarted.current
+          ) {
+            redirectStarted.current =
+              true;
+
+            setRedirecting(
+              true,
+            );
+
+            /*
+             * Petit délai pour laisser
+             * l'utilisateur voir que
+             * son accès est restauré.
+             */
+            window.setTimeout(
+              () => {
+                router.replace(
+                  redirectPath,
+                );
+              },
+              700,
+            );
+          }
+
+          return result;
+        } catch (err) {
+          console.error(
+            "PharmaFlow subscription page:",
+            err,
           );
 
-        const result =
-          (await response.json()) as SubscriptionStatusResponse;
-
-        if (
-          response.status === 401 ||
-          !result.authenticated
-        ) {
-          router.replace(
-            "/login?redirect=/abonnement",
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Impossible de charger votre abonnement.",
           );
-          return;
+
+          return null;
+        } finally {
+          if (!silent) {
+            setLoading(false);
+          }
         }
-
-        if (
-          !response.ok ||
-          !result.success
-        ) {
-          throw new Error(
-            result.message ||
-              "Impossible de vérifier votre abonnement.",
-          );
-        }
-
-        setData(result);
-
-        if (
-          result.locale === "en" ||
-          result.locale === "fr"
-        ) {
-          setLocale(
-            result.locale,
-          );
-        }
-      } catch (err) {
-        console.error(
-          "PharmaFlow subscription page:",
-          err,
-        );
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Impossible de charger votre abonnement.",
-        );
-      } finally {
-        setLoading(false);
-      }
-    }, [router]);
+      },
+      [
+        redirectPath,
+        router,
+      ],
+    );
 
   useEffect(() => {
-    loadSubscription();
+    void loadSubscription();
   }, [loadSubscription]);
 
-  const t = TEXT[locale];
+  const t =
+    TEXT[locale];
 
-  // ============================================================
-  // PARAMÈTRES URL
-  // ============================================================
+  /*
+   * ============================================================
+   * MESSAGE SELON LE MOTIF DE REDIRECTION
+   * ============================================================
+   */
 
   useEffect(() => {
-    const reason =
-      searchParams.get("reason");
-
-    if (reason === "expired") {
+    if (
+      reason === "expired"
+    ) {
       setPaymentMessage(
         locale === "fr"
           ? "Votre abonnement a expiré. Choisissez un forfait pour continuer."
           : "Your subscription has expired. Choose a plan to continue.",
       );
+
+      return;
+    }
+
+    if (
+      reason === "no_subscription"
+    ) {
+      setPaymentMessage(
+        locale === "fr"
+          ? "Aucun abonnement actif n'a été trouvé. Choisissez un forfait pour continuer."
+          : "No active subscription was found. Choose a plan to continue.",
+      );
+
+      return;
+    }
+
+    if (
+      reason === "verification"
+    ) {
+      setPaymentMessage(
+        locale === "fr"
+          ? "Nous devons vérifier votre abonnement avant de rétablir l'accès."
+          : "We need to verify your subscription before restoring access.",
+      );
     }
   }, [
-    searchParams,
+    reason,
     locale,
   ]);
 
-  // ============================================================
-  // COMPTE À REBOURS
-  // ============================================================
+  /*
+   * ============================================================
+   * RETOUR MANUEL VERS L'ESPACE
+   *
+   * IMPORTANT :
+   *
+   * Même le bouton de retour vérifie d'abord
+   * que l'abonnement est réellement actif.
+   * ============================================================
+   */
 
-  const [remainingMs, setRemainingMs] =
-    useState(0);
+  const handleReturnToWorkspace =
+    useCallback(
+      async () => {
+        if (
+          redirectStarted.current
+        ) {
+          return;
+        }
+
+        setProcessing(
+          true,
+        );
+        setPaymentMessage("");
+
+        const result =
+          await loadSubscription(
+            {
+              silent: true,
+            },
+          );
+
+        setProcessing(
+          false,
+        );
+
+        if (
+          result?.access
+            ?.allowed === true
+        ) {
+          redirectStarted.current =
+            true;
+
+          setRedirecting(
+            true,
+          );
+
+          router.replace(
+            redirectPath,
+          );
+
+          return;
+        }
+
+        setPaymentMessage(
+          locale === "fr"
+            ? "Votre abonnement n'est pas encore actif. Vous devez d'abord finaliser votre abonnement."
+            : "Your subscription is not active yet. You must complete your subscription first.",
+        );
+      },
+      [
+        loadSubscription,
+        locale,
+        redirectPath,
+        router,
+      ],
+    );
+
+  /*
+   * ============================================================
+   * COMPTE À REBOURS
+   * ============================================================
+   */
+
+  const [
+    remainingMs,
+    setRemainingMs,
+  ] = useState(0);
 
   useEffect(() => {
     const initial =
-      data?.trial?.remaining_ms ??
+      data?.trial
+        ?.remaining_ms ??
       0;
 
-    setRemainingMs(initial);
+    setRemainingMs(
+      initial,
+    );
   }, [data]);
 
   useEffect(() => {
@@ -707,15 +981,19 @@ export default function SubscriptionPage() {
     }
 
     const timer =
-      window.setInterval(() => {
-        setRemainingMs(
-          (current) =>
-            Math.max(
-              current - 1000,
-              0,
-            ),
-        );
-      }, 1000);
+      window.setInterval(
+        () => {
+          setRemainingMs(
+            (current) =>
+              Math.max(
+                current -
+                  1000,
+                0,
+              ),
+          );
+        },
+        1000,
+      );
 
     return () => {
       window.clearInterval(
@@ -727,49 +1005,53 @@ export default function SubscriptionPage() {
     remainingMs,
   ]);
 
-  const countdown = useMemo(() => {
-    const totalSeconds =
-      Math.floor(
-        Math.max(
-          remainingMs,
-          0,
-        ) / 1000,
-      );
+  const countdown =
+    useMemo(() => {
+      const totalSeconds =
+        Math.floor(
+          Math.max(
+            remainingMs,
+            0,
+          ) / 1000,
+        );
 
-    const days =
-      Math.floor(
-        totalSeconds /
-          86400,
-      );
+      const days =
+        Math.floor(
+          totalSeconds /
+            86400,
+        );
 
-    const hours =
-      Math.floor(
-        (totalSeconds %
-          86400) /
-          3600,
-      );
+      const hours =
+        Math.floor(
+          (totalSeconds %
+            86400) /
+            3600,
+        );
 
-    const minutes =
-      Math.floor(
-        (totalSeconds %
-          3600) /
-          60,
-      );
+      const minutes =
+        Math.floor(
+          (totalSeconds %
+            3600) /
+            60,
+        );
 
-    const seconds =
-      totalSeconds % 60;
+      const seconds =
+        totalSeconds %
+        60;
 
-    return {
-      days,
-      hours,
-      minutes,
-      seconds,
-    };
-  }, [remainingMs]);
+      return {
+        days,
+        hours,
+        minutes,
+        seconds,
+      };
+    }, [remainingMs]);
 
-  // ============================================================
-  // DEVISE
-  // ============================================================
+  /*
+   * ============================================================
+   * DEVISE
+   * ============================================================
+   */
 
   const currency =
     (
@@ -787,16 +1069,20 @@ export default function SubscriptionPage() {
       currency,
     );
 
-  // ============================================================
-  // TARIFS
-  // ============================================================
+  /*
+   * ============================================================
+   * TARIFS
+   * ============================================================
+   */
 
   const monthlyPrice =
-    data?.prices?.monthly ??
+    data?.prices
+      ?.monthly ??
     null;
 
   const yearlyPrice =
-    data?.prices?.yearly ??
+    data?.prices
+      ?.yearly ??
     null;
 
   const monthlyAvailable =
@@ -826,7 +1112,8 @@ export default function SubscriptionPage() {
     );
 
   const pricesAvailable =
-    data?.prices?.available ===
+    data?.prices
+      ?.available ===
       true &&
     (monthlyAvailable ||
       yearlyAvailable);
@@ -850,8 +1137,10 @@ export default function SubscriptionPage() {
           | undefined,
       ) => {
         if (
-          price === null ||
-          price === undefined ||
+          price ===
+            null ||
+          price ===
+            undefined ||
           !Number.isFinite(
             Number(price),
           )
@@ -873,31 +1162,38 @@ export default function SubscriptionPage() {
             code,
           )
         ) {
-          return String(price);
+          return String(
+            price,
+          );
         }
 
         try {
           return new Intl.NumberFormat(
-            locale === "en"
+            locale ===
+              "en"
               ? "en-US"
               : "fr-FR",
             {
               style:
                 "currency",
-              currency: code,
+              currency:
+                code,
               currencyDisplay:
                 "code",
               maximumFractionDigits:
                 2,
             },
           ).format(
-            Number(price),
+            Number(
+              price,
+            ),
           );
         } catch {
           return `${Number(
             price,
           ).toLocaleString(
-            locale === "en"
+            locale ===
+              "en"
               ? "en-US"
               : "fr-FR",
           )} ${code}`;
@@ -926,21 +1222,25 @@ export default function SubscriptionPage() {
         )
       : t.yearlyPriceUnavailable;
 
-  // ============================================================
-  // CHOIX DU FORFAIT
-  // ============================================================
+  /*
+   * ============================================================
+   * CHOIX DU FORFAIT
+   * ============================================================
+   */
 
   function choosePlan(
     cycle: BillingCycle,
   ) {
     const available =
-      cycle === "monthly"
+      cycle ===
+      "monthly"
         ? monthlyAvailable
         : yearlyAvailable;
 
     if (!available) {
       setPaymentMessage(
-        cycle === "monthly"
+        cycle ===
+          "monthly"
           ? t.monthlyPriceUnavailable
           : t.yearlyPriceUnavailable,
       );
@@ -965,58 +1265,79 @@ export default function SubscriptionPage() {
     );
   }
 
-  // ============================================================
-  // PAIEMENT RÉEL
-  // ============================================================
+  /*
+   * ============================================================
+   * PAIEMENT RÉEL
+   * ============================================================
+   */
 
   async function startPayment() {
-    if (!billingCycle) {
+    if (
+      !billingCycle
+    ) {
       setPaymentMessage(
         t.selectPlan,
       );
+
       return;
     }
 
-    if (!selectedPlanAvailable) {
+    if (
+      !selectedPlanAvailable
+    ) {
       setPaymentMessage(
         billingCycle ===
           "monthly"
           ? t.monthlyPriceUnavailable
           : t.yearlyPriceUnavailable,
       );
-      return;
-    }
 
-    if (!paymentMethod) {
-      setPaymentMessage(
-        t.selectPaymentMethod,
-      );
-      return;
-    }
-
-    if (!hasCurrency) {
-      setPaymentMessage(
-        t.currencyNotConfigured,
-      );
       return;
     }
 
     if (
-      data?.prices?.available !==
+      !paymentMethod
+    ) {
+      setPaymentMessage(
+        t.selectPaymentMethod,
+      );
+
+      return;
+    }
+
+    if (
+      !hasCurrency
+    ) {
+      setPaymentMessage(
+        t.currencyNotConfigured,
+      );
+
+      return;
+    }
+
+    if (
+      data?.prices
+        ?.available !==
       true
     ) {
       setPaymentMessage(
         t.paymentUnavailable,
       );
+
       return;
     }
 
     try {
-      setProcessing(true);
-      setPaymentMessage("");
+      setProcessing(
+        true,
+      );
+
+      setPaymentMessage(
+        "",
+      );
 
       /*
-       * IMPORTANT
+       * IMPORTANT :
        *
        * Le navigateur n'envoie PAS :
        *
@@ -1027,12 +1348,8 @@ export default function SubscriptionPage() {
        * - la date d'expiration
        * - les bonus
        *
-       * Le serveur détermine toutes ces informations.
-       *
-       * Le seul choix transmis ici est :
-       *
-       * - billingCycle
-       * - paymentMethod
+       * Le serveur détermine toutes
+       * ces informations.
        */
 
       const response =
@@ -1059,15 +1376,30 @@ export default function SubscriptionPage() {
         );
 
       const result =
-        await response.json();
+        (await response.json()) as {
+          success?: boolean;
+          message?: string;
+          checkoutUrl?: string | null;
+          redirectUrl?: string | null;
+          paymentUrl?: string | null;
+          status?: string;
+          providerTransactionId?: string | null;
+          merchantReference?: string | null;
+        };
 
+      /*
+       * Session expirée.
+       */
       if (
         response.status ===
         401
       ) {
         router.replace(
-          "/login?redirect=/abonnement",
+          `/login?redirect=${encodeURIComponent(
+            "/abonnement",
+          )}`,
         );
+
         return;
       }
 
@@ -1082,14 +1414,9 @@ export default function SubscriptionPage() {
       }
 
       /*
-       * PAIEMENT CARTE
-       *
-       * Moko Afrika peut renvoyer une
-       * URL Hosted Checkout.
-       *
-       * Le client est alors envoyé
-       * directement vers le paiement
-       * sécurisé du provider.
+       * ======================================================
+       * CARTE / HOSTED CHECKOUT
+       * ======================================================
        */
 
       if (
@@ -1100,16 +1427,6 @@ export default function SubscriptionPage() {
 
         return;
       }
-
-      /*
-       * Certains providers peuvent
-       * utiliser un autre nom pour
-       * l'URL de paiement.
-       *
-       * On accepte également ces
-       * propriétés si elles existent
-       * dans la réponse du backend.
-       */
 
       if (
         result.redirectUrl
@@ -1130,31 +1447,103 @@ export default function SubscriptionPage() {
       }
 
       /*
+       * ======================================================
        * MOBILE MONEY
        *
-       * Le provider peut demander au
-       * client de confirmer la transaction
-       * sur son téléphone.
+       * Le paiement n'est PAS considéré comme terminé
+       * simplement parce que /api/payments/create répond
+       * avec success=true.
        *
-       * L'abonnement ne doit PAS être
-       * activé par le navigateur.
-       *
-       * L'activation reste serveur-side
-       * après confirmation réelle.
+       * Il faut attendre la confirmation réelle côté serveur.
+       * ======================================================
        */
 
       setPaymentMessage(
         result.message ||
-          t.paymentComing,
+          t.waitingPayment,
       );
 
       /*
-       * On recharge le statut afin de
-       * récupérer immédiatement une
-       * éventuelle mise à jour.
+       * On vérifie plusieurs fois le statut.
+       *
+       * Le serveur reste la source de vérité.
+       *
+       * Si l'abonnement devient actif :
+       *
+       *      → retour automatique vers redirectPath
+       *
+       * Sinon :
+       *
+       *      → l'utilisateur reste sur /abonnement
        */
-      await loadSubscription();
 
+      const maxAttempts =
+        12;
+
+      for (
+        let attempt = 0;
+        attempt <
+          maxAttempts;
+        attempt += 1
+      ) {
+        await new Promise(
+          (resolve) =>
+            window.setTimeout(
+              resolve,
+              2500,
+            ),
+        );
+
+        const refreshed =
+          await loadSubscription(
+            {
+              silent: true,
+            },
+          );
+
+        if (
+          !refreshed
+        ) {
+          break;
+        }
+
+        if (
+          refreshed.access
+            ?.allowed ===
+          true
+        ) {
+          setPaymentMessage(
+            t.paymentConfirmed,
+          );
+
+          if (
+            !redirectStarted.current
+          ) {
+            redirectStarted.current =
+              true;
+
+            setRedirecting(
+              true,
+            );
+
+            window.setTimeout(
+              () => {
+                router.replace(
+                  redirectPath,
+                );
+              },
+              700,
+            );
+          }
+
+          break;
+        }
+      }
+
+      /*
+       * Si après les vérifications le paiement n'est toujours
+       * pas confirmé, on ne donne PAS l'accès.
+       */
     } catch (err) {
       console.error(
         "PharmaFlow payment creation:",
@@ -1167,35 +1556,60 @@ export default function SubscriptionPage() {
           : t.paymentError,
       );
     } finally {
-      setProcessing(false);
+      setProcessing(
+        false,
+      );
     }
   }
 
-  // ============================================================
-  // DÉCONNEXION
-  // ============================================================
+  /*
+   * ============================================================
+   * DÉCONNEXION
+   * ============================================================
+   */
 
   async function handleLogout() {
     try {
+      /*
+       * On utilise l'endpoint existant.
+       *
+       * Aucun signOut automatique n'est effectué parce que
+       * l'abonnement est expiré.
+       *
+       * Ici seulement, l'utilisateur demande explicitement
+       * à se déconnecter.
+       */
+
       await fetch(
         "/api/auth/logout",
         {
           method: "POST",
+          headers: {
+            Accept:
+              "application/json",
+          },
         },
       );
-    } catch {
-      // La session pourra également
-      // être nettoyée côté navigateur.
+    } catch (logoutError) {
+      console.error(
+        "PharmaFlow logout:",
+        logoutError,
+      );
     }
 
+    /*
+     * On retourne toujours au login.
+     */
     router.replace(
       "/login",
     );
   }
 
-  // ============================================================
-  // ÉTAT ABONNEMENT
-  // ============================================================
+  /*
+   * ============================================================
+   * ÉTAT ABONNEMENT
+   * ============================================================
+   */
 
   const trialActive =
     data?.trial?.active ===
@@ -1214,31 +1628,55 @@ export default function SubscriptionPage() {
     trialActive &&
     countdown.days <= 3;
 
-  // ============================================================
-  // CHARGEMENT
-  // ============================================================
+  /*
+   * ============================================================
+   * REDIRECTION APRÈS ABONNEMENT DÉJÀ ACTIF
+   *
+   * Si quelqu'un arrive sur /abonnement alors qu'il a déjà
+   * un abonnement valide, on peut lui proposer de retourner
+   * dans son espace.
+   *
+   * On ne fait PAS une redirection automatique ici pour éviter
+   * les boucles.
+   * ============================================================
+   */
 
-  if (loading) {
+  /*
+   * ============================================================
+   * CHARGEMENT
+   * ============================================================
+   */
+
+  if (
+    loading ||
+    redirecting
+  ) {
     return (
       <main className="pf-subscription-page">
         <div className="pf-subscription-loading">
           <div className="pf-subscription-spinner" />
 
           <h1>
-            {t.loading}
+            {redirecting
+              ? t.returnToSpace
+              : t.loading}
           </h1>
 
           <p>
-            {t.loadingDescription}
+            {redirecting
+              ? t.paymentConfirmed
+              : t.loadingDescription}
           </p>
         </div>
       </main>
     );
   }
 
-  // ============================================================
-  // ERREUR
-  // ============================================================
+  /*
+   * ============================================================
+   * ERREUR
+   * ============================================================
+   */
 
   if (
     error ||
@@ -1269,8 +1707,8 @@ export default function SubscriptionPage() {
           <button
             type="button"
             className="pf-btn pf-btn-primary"
-            onClick={
-              loadSubscription
+            onClick={() =>
+              void loadSubscription()
             }
           >
             {locale ===
@@ -1318,6 +1756,10 @@ export default function SubscriptionPage() {
                   : "fr",
               )
             }
+            disabled={
+              processing ||
+              redirecting
+            }
           >
             {locale ===
             "fr"
@@ -1330,6 +1772,10 @@ export default function SubscriptionPage() {
             className="pf-subscription-logout"
             onClick={
               handleLogout
+            }
+            disabled={
+              processing ||
+              redirecting
             }
           >
             {t.logout}
@@ -1646,6 +2092,7 @@ export default function SubscriptionPage() {
                 }
                 disabled={
                   processing ||
+                  redirecting ||
                   !monthlyAvailable
                 }
               >
@@ -1716,6 +2163,7 @@ export default function SubscriptionPage() {
                 }
                 disabled={
                   processing ||
+                  redirecting ||
                   !yearlyAvailable
                 }
               >
@@ -1810,6 +2258,7 @@ export default function SubscriptionPage() {
                 }
                 disabled={
                   processing ||
+                  redirecting ||
                   !hasCurrency ||
                   !selectedPlanAvailable
                 }
@@ -1859,6 +2308,7 @@ export default function SubscriptionPage() {
                 }
                 disabled={
                   processing ||
+                  redirecting ||
                   !hasCurrency ||
                   !selectedPlanAvailable
                 }
@@ -1917,7 +2367,8 @@ export default function SubscriptionPage() {
                   );
                 }}
                 disabled={
-                  processing
+                  processing ||
+                  redirecting
                 }
               >
                 {t.back}
@@ -1931,6 +2382,7 @@ export default function SubscriptionPage() {
                 }
                 disabled={
                   processing ||
+                  redirecting ||
                   !paymentMethod ||
                   !selectedPlanAvailable
                 }
@@ -1966,6 +2418,28 @@ export default function SubscriptionPage() {
                 </small>
               </div>
             </div>
+          </section>
+        )}
+
+        {/* ======================================================
+            RETOUR VERS L'ESPACE
+        ======================================================= */}
+
+        {accessAllowed && (
+          <section className="pf-subscription-return-section">
+            <button
+              type="button"
+              className="pf-btn pf-btn-primary"
+              onClick={
+                handleReturnToWorkspace
+              }
+              disabled={
+                processing ||
+                redirecting
+              }
+            >
+              {t.noRedirect}
+            </button>
           </section>
         )}
 
