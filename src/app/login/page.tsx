@@ -70,6 +70,7 @@ type SubscriptionStatusResponse = {
 const TEXT = {
   fr: {
     brand: "PharmaFlow",
+
     subtitle:
       "Gestion intelligente des pharmacies",
 
@@ -158,6 +159,12 @@ const TEXT = {
 
     hidePassword:
       "Masquer le mot de passe",
+
+    languageFrench:
+      "Français",
+
+    languageEnglish:
+      "English",
   },
 
   en: {
@@ -255,6 +262,12 @@ const TEXT = {
 
     hidePassword:
       "Hide password",
+
+    languageFrench:
+      "Français",
+
+    languageEnglish:
+      "English",
   },
 } as const;
 
@@ -448,6 +461,32 @@ export default function LoginPage() {
 
   const [showPassword, setShowPassword] =
     useState(false);
+
+  /* ==========================================================
+     CHANGEMENT DE LANGUE
+  ========================================================== */
+
+  function changeLanguage(
+    newLocale: Locale,
+  ) {
+    if (
+      newLocale ===
+      currentLocale
+    ) {
+      return;
+    }
+
+    setLocaleCookie(
+      newLocale,
+    );
+
+    /*
+     * Recharge la page avec la nouvelle langue.
+     * Cela permet à next-intl de reprendre immédiatement
+     * le nouveau locale.
+     */
+    window.location.reload();
+  }
 
   /* ==========================================================
      SESSION EXISTANTE
@@ -706,13 +745,6 @@ export default function LoginPage() {
             password,
           },
         );
-
-      /*
-       * IMPORTANT :
-       *
-       * Si le compte n'existe pas ou si le mot de passe
-       * est incorrect, on arrête immédiatement le chargement.
-       */
 
       if (
         authError ||
@@ -1032,13 +1064,8 @@ export default function LoginPage() {
             ?.blocked === true;
 
         /*
-         * Aucun accès si :
-         *
-         * - abonnement absent
-         * - abonnement expiré
-         * - abonnement bloqué
-         * - période d'essai terminée
-         * - statut non autorisé
+         * Si l'abonnement est expiré, absent ou bloqué,
+         * la session Supabase reste volontairement active.
          */
 
         if (
@@ -1048,31 +1075,18 @@ export default function LoginPage() {
           const reason =
             subscription.access
               ?.reason ??
-            null;
-
-          await supabase.auth.signOut();
+            "subscription_required";
 
           setSyncing(false);
           setLoading(false);
 
-          const reasonMessage =
-            getSubscriptionReasonMessage(
-              reason,
-              pharmacyLanguage,
-            );
-
-          setError(
-            reasonMessage ||
-              t.subscriptionRequired,
-          );
-
           /*
-           * Redirection vers l'espace abonnement.
+           * Redirection automatique vers l'espace
+           * d'achat / renouvellement de l'abonnement.
            */
           window.location.assign(
             `/abonnement?reason=${encodeURIComponent(
-              reason ??
-                "subscription_required",
+              reason,
             )}`,
           );
 
@@ -1164,8 +1178,6 @@ export default function LoginPage() {
 
           <section className="pf-auth-card">
 
-            {/* LOGO */}
-
             <div className="pf-auth-logo">
 
               <div className="pf-auth-logo-icon">
@@ -1190,8 +1202,6 @@ export default function LoginPage() {
 
             </div>
 
-            {/* CHARGEMENT */}
-
             <div className="pf-auth-loading">
 
               <span className="pf-spinner" />
@@ -1205,8 +1215,6 @@ export default function LoginPage() {
               </p>
 
             </div>
-
-            {/* SÉCURITÉ */}
 
             <div className="pf-auth-security">
 
@@ -1252,10 +1260,6 @@ export default function LoginPage() {
   return (
     <main className="pf-auth-page">
 
-      {/* ======================================================
-          ARRIÈRE-PLAN
-      ====================================================== */}
-
       <div className="pf-auth-background">
 
         <div className="pf-auth-orb pf-auth-orb-one" />
@@ -1263,10 +1267,6 @@ export default function LoginPage() {
         <div className="pf-auth-orb pf-auth-orb-two" />
 
       </div>
-
-      {/* ======================================================
-          CONTENEUR
-      ====================================================== */}
 
       <div className="pf-auth-container">
 
@@ -1276,32 +1276,154 @@ export default function LoginPage() {
               LOGO
           ================================================== */}
 
-          <Link
-            href="/"
-            className="pf-auth-logo"
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "16px",
+            }}
           >
 
-            <div className="pf-auth-logo-icon">
+            <Link
+              href="/"
+              className="pf-auth-logo"
+            >
 
-              <span>
-                ✚
-              </span>
+              <div className="pf-auth-logo-icon">
+
+                <span>
+                  ✚
+                </span>
+
+              </div>
+
+              <div>
+
+                <div className="pf-auth-logo-name">
+                  {t.brand}
+                </div>
+
+                <div className="pf-auth-logo-subtitle">
+                  {t.subtitle}
+                </div>
+
+              </div>
+
+            </Link>
+
+            {/* =================================================
+                SÉLECTEUR DE LANGUE
+            ================================================== */}
+
+            <div
+              role="group"
+              aria-label="Language selector"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "4px",
+                borderRadius: "12px",
+                background:
+                  "rgba(241, 245, 249, 0.9)",
+                border:
+                  "1px solid rgba(226, 232, 240, 0.9)",
+                flexShrink: 0,
+              }}
+            >
+
+              <button
+                type="button"
+                onClick={() =>
+                  changeLanguage("fr")
+                }
+                aria-pressed={
+                  currentLocale === "fr"
+                }
+                title={
+                  t.languageFrench
+                }
+                style={{
+                  border: "none",
+                  cursor:
+                    currentLocale === "fr"
+                      ? "default"
+                      : "pointer",
+                  borderRadius: "9px",
+                  padding:
+                    "7px 9px",
+                  background:
+                    currentLocale === "fr"
+                      ? "#ffffff"
+                      : "transparent",
+                  color:
+                    currentLocale === "fr"
+                      ? "#0f172a"
+                      : "#64748b",
+                  fontSize: "13px",
+                  fontWeight:
+                    currentLocale === "fr"
+                      ? 700
+                      : 500,
+                  boxShadow:
+                    currentLocale === "fr"
+                      ? "0 1px 4px rgba(15, 23, 42, 0.10)"
+                      : "none",
+                  transition:
+                    "all 0.2s ease",
+                }}
+              >
+                🇫🇷 FR
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  changeLanguage("en")
+                }
+                aria-pressed={
+                  currentLocale === "en"
+                }
+                title={
+                  t.languageEnglish
+                }
+                style={{
+                  border: "none",
+                  cursor:
+                    currentLocale === "en"
+                      ? "default"
+                      : "pointer",
+                  borderRadius: "9px",
+                  padding:
+                    "7px 9px",
+                  background:
+                    currentLocale === "en"
+                      ? "#ffffff"
+                      : "transparent",
+                  color:
+                    currentLocale === "en"
+                      ? "#0f172a"
+                      : "#64748b",
+                  fontSize: "13px",
+                  fontWeight:
+                    currentLocale === "en"
+                      ? 700
+                      : 500,
+                  boxShadow:
+                    currentLocale === "en"
+                      ? "0 1px 4px rgba(15, 23, 42, 0.10)"
+                      : "none",
+                  transition:
+                    "all 0.2s ease",
+                }}
+              >
+                🇬🇧 EN
+              </button>
 
             </div>
 
-            <div>
-
-              <div className="pf-auth-logo-name">
-                {t.brand}
-              </div>
-
-              <div className="pf-auth-logo-subtitle">
-                {t.subtitle}
-              </div>
-
-            </div>
-
-          </Link>
+          </div>
 
           {/* =================================================
               HEADER

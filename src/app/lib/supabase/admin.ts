@@ -22,6 +22,12 @@ import { createClient } from "@supabase/supabase-js";
  * ============================================================
  */
 
+/**
+ * ============================================================
+ * RÉCUPÉRATION DES VARIABLES D'ENVIRONNEMENT
+ * ============================================================
+ */
+
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -29,8 +35,11 @@ const supabaseSecretKey =
   process.env.SUPABASE_SECRET_KEY;
 
 /**
- * Vérification de la configuration.
+ * ============================================================
+ * VALIDATION DE LA CONFIGURATION
+ * ============================================================
  */
+
 if (!supabaseUrl) {
   throw new Error(
     "NEXT_PUBLIC_SUPABASE_URL est manquante dans .env.local.",
@@ -45,6 +54,28 @@ if (!supabaseSecretKey) {
 
 /**
  * ============================================================
+ * VALEURS VALIDÉES
+ * ============================================================
+ *
+ * Ces constantes permettent à TypeScript de savoir
+ * explicitement qu'il s'agit bien de chaînes de caractères.
+ *
+ * Cela évite l'erreur :
+ *
+ * string | undefined
+ *       ↓
+ * string
+ * ============================================================
+ */
+
+const validatedSupabaseUrl: string =
+  supabaseUrl;
+
+const validatedSupabaseSecretKey: string =
+  supabaseSecretKey;
+
+/**
+ * ============================================================
  * CRÉATION DU CLIENT ADMIN
  * ============================================================
  *
@@ -53,14 +84,15 @@ if (!supabaseSecretKey) {
  */
 export function createAdminClient() {
   return createClient(
-    supabaseUrl,
-    supabaseSecretKey,
+    validatedSupabaseUrl,
+    validatedSupabaseSecretKey,
     {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
         detectSessionInUrl: false,
       },
+
       global: {
         headers: {
           "x-application-name":
@@ -76,7 +108,7 @@ export function createAdminClient() {
  * CLIENT ADMIN PARTAGÉ
  * ============================================================
  *
- * Utilisation possible dans les routes serveur :
+ * Utilisation dans les routes serveur :
  *
  * import {
  *   supabaseAdmin,

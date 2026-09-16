@@ -253,10 +253,37 @@ export async function POST(
       );
     }
 
-    const webhookResult =
-      yabetooProvider.parseWebhook(
-        payload,
+    /*
+     * parseWebhook est optionnel dans
+     * PaymentProviderAdapter.
+     *
+     * On vérifie donc explicitement que
+     * Yabétoo fournit bien cette fonction
+     * avant de l'appeler.
+     */
+    const parseWebhook =
+      yabetooProvider.parseWebhook;
+
+    if (
+      typeof parseWebhook !==
+      "function"
+    ) {
+      console.error(
+        "[Yabétoo webhook] parseWebhook n'est pas configuré sur le provider.",
       );
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Le parser webhook Yabétoo n'est pas configuré.",
+        },
+        500,
+      );
+    }
+
+    const webhookResult =
+      parseWebhook(payload);
 
     if (!webhookResult) {
       console.error(
@@ -461,8 +488,8 @@ export async function POST(
 
     /*
      * Si le paiement est déjà successful,
-     * on demande quand même à la fonction SQL de
-     * vérifier l'état d'activation.
+     * on demande quand même à la fonction SQL
+     * de vérifier l'état d'activation.
      */
     if (
       isSuccessfulPaymentStatus(
@@ -504,6 +531,7 @@ export async function POST(
           null,
       });
     }
+
     /*
      * Vérification du montant.
      */

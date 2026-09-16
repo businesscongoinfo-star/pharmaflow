@@ -625,7 +625,7 @@ export default function PharmacienPage() {
 
   const firstName =
     getFirstName(
-      profile?.full_name,
+      profile?.full_name ?? null,
     );
 
   const initials =
