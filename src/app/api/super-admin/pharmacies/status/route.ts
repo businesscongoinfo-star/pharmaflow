@@ -1,7 +1,38 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-import { requireSuperAdminApi } from "@/app/lib/super-admin/auth";
 import { createAdminClient } from "@/app/lib/supabase/admin";
+import {
+  requireSuperAdminApi,
+} from "@/app/lib/super-admin/auth";
+
+/**
+ * ============================================================
+ * PHARMAFLOW
+ * SUPER ADMIN — CHANGEMENT DU STATUT D'UNE PHARMACIE
+ * ============================================================
+ *
+ * Statuts autorisés :
+ *
+ *   active
+ *   inactive
+ *   suspended
+ *
+ * Cette route est la source officielle pour modifier :
+ *
+ *   pharmacies.status
+ *
+ * Elle enregistre également chaque modification dans :
+ *
+ *   pharmacy_admin_actions
+ *
+ * IMPORTANT :
+ *
+ * Cette route ne déconnecte aucun utilisateur.
+ *
+ * Elle modifie uniquement le statut administratif
+ * de la pharmacie.
+ * ============================================================
+ */
 
 type PharmacyStatus =
   | "active"
@@ -14,37 +45,61 @@ type RequestBody = {
   reason?: unknown;
 };
 
-function normalizeText(value: unknown): string {
-  return String(value ?? "").trim();
+/**
+ * ============================================================
+ * NORMALISER LE STATUT
+ * ============================================================
+ */
+
+function normalizeStatus(
+  value: unknown,
+): PharmacyStatus | null {
+  if (
+    typeof value !== "string"
+  ) {
+    return null;
+  }
+
+  const status =
+    value
+      .trim()
+      .toLowerCase();
+
+  if (
+    status === "active" ||
+    status === "inactive" ||
+    status === "suspended"
+  ) {
+    return status;
+  }
+
+  return null;
 }
 
-function isValidStatus(
-  value: string,
-): value is PharmacyStatus {
-  return (
-    value === "active" ||
-    value === "inactive" ||
-    value === "suspended"
-  );
-}
+/**
+ * ============================================================
+ * POST
+ * ============================================================
+ */
 
 export async function POST(
-  request: NextRequest,
+  request: Request,
 ) {
-  /*
-   * ============================================================
+  /**
+   * ==========================================================
    * 1. VÉRIFICATION SUPER ADMIN
-   * ============================================================
+   * ==========================================================
    */
 
-  const admin =
+  const superAdmin =
     await requireSuperAdminApi();
 
-  if (!admin) {
+  if (!superAdmin) {
     return NextResponse.json(
       {
         success: false,
-        error: "Accès non autorisé.",
+        error:
+          "Accès refusé. Vous devez être Super Admin.",
       },
       {
         status: 401,
@@ -52,10 +107,10 @@ export async function POST(
     );
   }
 
-  /*
-   * ============================================================
-   * 2. LECTURE DE LA REQUÊTE
-   * ============================================================
+  /**
+   * ==========================================================
+   * 2. LECTURE DU BODY
+   * ==========================================================
    */
 
   let body: RequestBody;
@@ -67,7 +122,8 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
-        error: "Données JSON invalides.",
+        error:
+          "Le corps de la requête est invalide.",
       },
       {
         status: 400,
@@ -75,28 +131,17 @@ export async function POST(
     );
   }
 
-  const pharmacyId =
-    normalizeText(
-      body.pharmacyId,
-    );
-
-  const newStatus =
-    normalizeText(
-      body.status,
-    ).toLowerCase();
-
-  const reason =
-    normalizeText(
-      body.reason,
-    );
-
-  /*
-   * ============================================================
-   * 3. VALIDATION
-   * ============================================================
+  /**
+   * ==========================================================
+   * 3. PHARMACY ID
+   * ==========================================================
    */
 
-  if (!pharmacyId) {
+  if (
+    typeof body.pharmacyId !==
+      "string" ||
+    !body.pharmacyId.trim()
+  ) {
     return NextResponse.json(
       {
         success: false,
@@ -109,12 +154,26 @@ export async function POST(
     );
   }
 
-  if (!isValidStatus(newStatus)) {
+  const pharmacyId =
+    body.pharmacyId.trim();
+
+  /**
+   * ==========================================================
+   * 4. STATUT
+   * ==========================================================
+   */
+
+  const status =
+    normalizeStatus(
+      body.status,
+    );
+
+  if (!status) {
     return NextResponse.json(
       {
         success: false,
         error:
-          "Le statut demandé est invalide.",
+          "Statut invalide. Les valeurs autorisées sont : active, inactive, suspended.",
       },
       {
         status: 400,
@@ -122,54 +181,54 @@ export async function POST(
     );
   }
 
-  /*
-   * ============================================================
-   * 4. CLIENT ADMIN SUPABASE
-   * ============================================================
+  /**
+   * ==========================================================
+   * 5. MOTIF
+   * ==========================================================
    */
 
-  let supabaseAdmin;
+  const reasonFromRequest =
+    typeof body.reason ===
+    "string"
+      ? body.reason.trim()
+      : "";
 
-  try {
-    supabaseAdmin =
-      createAdminClient();
-  } catch (error) {
-    console.error(
-      "SUPER ADMIN STATUS - ADMIN CLIENT:",
-      error,
+  const reason =
+    reasonFromRequest ||
+    getDefaultReason(
+      status,
     );
 
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "La configuration serveur Supabase est incomplète.",
-      },
-      {
-        status: 500,
-      },
-    );
-  }
+  /**
+   * ==========================================================
+   * 6. CLIENT ADMIN SUPABASE
+   * ==========================================================
+   *
+   * Le client admin est utilisé ici parce que cette opération
+   * est une opération Super Admin.
+   */
 
-  /*
-   * ============================================================
-   * 5. RÉCUPÉRATION DE LA PHARMACIE
-   * ============================================================
+  const supabase =
+    createAdminClient();
+
+  /**
+   * ==========================================================
+   * 7. RÉCUPÉRER LA PHARMACIE
+   * ==========================================================
    */
 
   const {
     data: pharmacy,
-    error: pharmacyError,
+    error:
+      pharmacyFetchError,
   } =
-    await supabaseAdmin
+    await supabase
       .from("pharmacies")
       .select(
         `
           id,
           name,
-          status,
-          manual_access_enabled,
-          manual_access_until
+          status
         `,
       )
       .eq(
@@ -178,10 +237,12 @@ export async function POST(
       )
       .maybeSingle();
 
-  if (pharmacyError) {
+  if (
+    pharmacyFetchError
+  ) {
     console.error(
-      "SUPER ADMIN STATUS - FETCH:",
-      pharmacyError,
+      "PharmaFlow — erreur récupération pharmacie :",
+      pharmacyFetchError,
     );
 
     return NextResponse.json(
@@ -189,12 +250,20 @@ export async function POST(
         success: false,
         error:
           "Impossible de récupérer la pharmacie.",
+        details:
+          pharmacyFetchError.message,
       },
       {
         status: 500,
       },
     );
   }
+
+  /**
+   * ==========================================================
+   * 8. PHARMACIE INTROUVABLE
+   * ==========================================================
+   */
 
   if (!pharmacy) {
     return NextResponse.json(
@@ -209,30 +278,42 @@ export async function POST(
     );
   }
 
+  /**
+   * ==========================================================
+   * 9. ANCIEN STATUT
+   * ==========================================================
+   */
+
   const oldStatus =
     String(
-      pharmacy.status ?? "",
-    ).trim();
+      pharmacy.status || "",
+    )
+      .trim()
+      .toLowerCase();
 
-  /*
-   * ============================================================
-   * 6. ÉVITER UNE MODIFICATION INUTILE
-   * ============================================================
+  /**
+   * ==========================================================
+   * 10. AUCUN CHANGEMENT
+   * ==========================================================
+   *
+   * Si la pharmacie est déjà dans le statut demandé,
+   * inutile de refaire une modification SQL.
    */
 
   if (
-    oldStatus === newStatus
+    oldStatus === status
   ) {
     return NextResponse.json(
       {
         success: true,
         message:
-          "La pharmacie possède déjà ce statut.",
+          `La pharmacie "${pharmacy.name}" est déjà dans le statut "${status}".`,
         pharmacy: {
           id: pharmacy.id,
           name: pharmacy.name,
-          status: newStatus,
+          status,
         },
+        changed: false,
       },
       {
         status: 200,
@@ -240,20 +321,22 @@ export async function POST(
     );
   }
 
-  /*
-   * ============================================================
-   * 7. MISE À JOUR DU STATUT
-   * ============================================================
+  /**
+   * ==========================================================
+   * 11. MODIFIER LE STATUT
+   * ==========================================================
    */
 
   const {
-    data: updatedPharmacy,
-    error: updateError,
+    data:
+      updatedPharmacy,
+    error:
+      updateError,
   } =
-    await supabaseAdmin
+    await supabase
       .from("pharmacies")
       .update({
-        status: newStatus,
+        status,
         updated_at:
           new Date().toISOString(),
       })
@@ -266,24 +349,60 @@ export async function POST(
           id,
           name,
           status,
-          manual_access_enabled,
-          manual_access_until,
           updated_at
         `,
       )
       .single();
 
-  if (updateError) {
+  /**
+   * ==========================================================
+   * 12. ERREUR DE MODIFICATION
+   * ==========================================================
+   */
+
+  if (
+    updateError ||
+    !updatedPharmacy
+  ) {
     console.error(
-      "SUPER ADMIN STATUS - UPDATE:",
+      "PharmaFlow — erreur modification statut :",
       updateError,
     );
+
+    /**
+     * Message spécifique si la contrainte SQL existe encore.
+     */
+    const message =
+      updateError?.message ||
+      "";
+
+    if (
+      message.includes(
+        "pharmacies_status_check",
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "La base de données refuse ce statut. Vérifiez la contrainte pharmacies_status_check dans Supabase.",
+          details:
+            message,
+        },
+        {
+          status: 409,
+        },
+      );
+    }
 
     return NextResponse.json(
       {
         success: false,
         error:
           "Impossible de modifier le statut de la pharmacie.",
+        details:
+          message ||
+          "Erreur inconnue.",
       },
       {
         status: 500,
@@ -291,16 +410,17 @@ export async function POST(
     );
   }
 
-  /*
-   * ============================================================
-   * 8. HISTORIQUE SUPER ADMIN
-   * ============================================================
+  /**
+   * ==========================================================
+   * 13. ENREGISTRER L'ACTION ADMIN
+   * ==========================================================
    */
 
   const {
-    error: historyError,
+    error:
+      auditError,
   } =
-    await supabaseAdmin
+    await supabase
       .from(
         "pharmacy_admin_actions",
       )
@@ -309,45 +429,103 @@ export async function POST(
           pharmacyId,
 
         admin_user_id:
-          admin.user_id,
+          superAdmin.user_id,
 
         action:
-          `status_${newStatus}`,
+          getAuditAction(
+            status,
+          ),
 
-        reason:
-          reason || null,
+        reason,
 
         old_status:
           oldStatus || null,
 
         new_status:
-          newStatus,
+          status,
 
         manual_access_enabled:
-          pharmacy.manual_access_enabled ??
-          false,
+          null,
 
         manual_access_until:
-          pharmacy.manual_access_until ??
           null,
       });
 
-  /*
-   * L'historique ne doit pas annuler une modification
-   * déjà effectuée avec succès.
+  /**
+   * ==========================================================
+   * 14. ERREUR AUDIT
+   * ==========================================================
+   *
+   * La modification du statut a déjà été effectuée.
+   *
+   * Nous essayons donc de restaurer l'ancien statut afin
+   * d'éviter une modification sans trace administrative.
    */
 
-  if (historyError) {
+  if (auditError) {
     console.error(
-      "SUPER ADMIN STATUS - HISTORY:",
-      historyError,
+      "PharmaFlow — erreur audit statut :",
+      auditError,
+    );
+
+    /**
+     * Tentative de rollback.
+     */
+    if (
+      oldStatus ===
+        "active" ||
+      oldStatus ===
+        "inactive" ||
+      oldStatus ===
+        "suspended"
+    ) {
+      const {
+        error:
+          rollbackError,
+      } =
+        await supabase
+          .from(
+            "pharmacies",
+          )
+          .update({
+            status:
+              oldStatus,
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            "id",
+            pharmacyId,
+          );
+
+      if (
+        rollbackError
+      ) {
+        console.error(
+          "PharmaFlow — erreur rollback statut :",
+          rollbackError,
+        );
+      }
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Le statut n'a pas pu être enregistré correctement dans l'historique administrateur.",
+        details:
+          auditError.message,
+      },
+      {
+        status: 500,
+      },
     );
   }
 
-  /*
-   * ============================================================
-   * 9. RÉPONSE
-   * ============================================================
+  /**
+   * ==========================================================
+   * 15. RÉPONSE FINALE
+   * ==========================================================
    */
 
   return NextResponse.json(
@@ -355,11 +533,11 @@ export async function POST(
       success: true,
 
       message:
-        newStatus === "active"
-          ? "La pharmacie a été activée."
-          : newStatus === "inactive"
-            ? "La pharmacie a été désactivée."
-            : "La pharmacie a été suspendue.",
+        getSuccessMessage(
+          status,
+        ),
+
+      changed: true,
 
       pharmacy: {
         id:
@@ -371,18 +549,93 @@ export async function POST(
         status:
           updatedPharmacy.status,
 
-        manual_access_enabled:
-          updatedPharmacy.manual_access_enabled,
-
-        manual_access_until:
-          updatedPharmacy.manual_access_until,
-
         updated_at:
           updatedPharmacy.updated_at,
+      },
+
+      audit: {
+        action:
+          getAuditAction(
+            status,
+          ),
+
+        old_status:
+          oldStatus || null,
+
+        new_status:
+          status,
+
+        reason,
+
+        admin_user_id:
+          superAdmin.user_id,
       },
     },
     {
       status: 200,
     },
   );
+}
+
+/**
+ * ============================================================
+ * MOTIF PAR DÉFAUT
+ * ============================================================
+ */
+
+function getDefaultReason(
+  status: PharmacyStatus,
+): string {
+  switch (status) {
+    case "active":
+      return "Pharmacie activée depuis le panneau Super Admin.";
+
+    case "inactive":
+      return "Pharmacie désactivée depuis le panneau Super Admin.";
+
+    case "suspended":
+      return "Pharmacie suspendue depuis le panneau Super Admin.";
+  }
+}
+
+/**
+ * ============================================================
+ * ACTION D'AUDIT
+ * ============================================================
+ */
+
+function getAuditAction(
+  status: PharmacyStatus,
+): string {
+  switch (status) {
+    case "active":
+      return "pharmacy_activated";
+
+    case "inactive":
+      return "pharmacy_deactivated";
+
+    case "suspended":
+      return "pharmacy_suspended";
+  }
+}
+
+/**
+ * ============================================================
+ * MESSAGE UTILISATEUR
+ * ============================================================
+ */
+
+function getSuccessMessage(
+  status: PharmacyStatus,
+): string {
+  switch (status) {
+    case "active":
+      return "La pharmacie a été activée avec succès.";
+
+    case "inactive":
+      return "La pharmacie a été désactivée avec succès.";
+
+    case "suspended":
+      return "La pharmacie a été suspendue avec succès.";
+  }
 }

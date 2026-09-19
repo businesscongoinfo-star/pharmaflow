@@ -1,25 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-import { requireSuperAdminApi } from "@/app/lib/super-admin/auth";
-import { createAdminClient } from "@/app/lib/supabase/admin";
+import {
+  requireSuperAdminApi,
+} from "@/app/lib/super-admin/auth";
 
-type RequestBody = {
+import {
+  createAdminClient,
+} from "@/app/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
+
+type ManualAccessBody = {
   pharmacyId?: unknown;
   enabled?: unknown;
   until?: unknown;
   reason?: unknown;
 };
 
-function normalizeText(value: unknown): string {
-  return String(value ?? "").trim();
-}
-
-function normalizeBoolean(value: unknown): boolean {
-  return value === true || value === "true";
-}
-
 export async function POST(
-  request: NextRequest,
+  request: Request,
 ) {
   /*
    * ============================================================
@@ -33,31 +32,31 @@ export async function POST(
   if (!admin) {
     return NextResponse.json(
       {
-        success: false,
-        error: "Accès non autorisé.",
+        error:
+          "Accès refusé. Vous devez être Super Admin.",
       },
       {
-        status: 401,
+        status: 403,
       },
     );
   }
 
   /*
    * ============================================================
-   * 2. LECTURE DE LA REQUÊTE
+   * 2. LECTURE DU BODY
    * ============================================================
    */
 
-  let body: RequestBody;
+  let body: ManualAccessBody;
 
   try {
     body =
-      (await request.json()) as RequestBody;
+      (await request.json()) as ManualAccessBody;
   } catch {
     return NextResponse.json(
       {
-        success: false,
-        error: "Données JSON invalides.",
+        error:
+          "Le corps de la requête est invalide.",
       },
       {
         status: 400,
@@ -65,36 +64,33 @@ export async function POST(
     );
   }
 
-  const pharmacyId =
-    normalizeText(
-      body.pharmacyId,
-    );
-
-  const enabled =
-    normalizeBoolean(
-      body.enabled,
-    );
-
-  const until =
-    normalizeText(
-      body.until,
-    );
-
-  const reason =
-    normalizeText(
-      body.reason,
-    );
-
   /*
    * ============================================================
    * 3. VALIDATION
    * ============================================================
    */
 
+  const pharmacyId =
+    typeof body.pharmacyId === "string"
+      ? body.pharmacyId.trim()
+      : "";
+
+  const enabled =
+    body.enabled === true;
+
+  const until =
+    typeof body.until === "string"
+      ? body.until.trim()
+      : "";
+
+  const reason =
+    typeof body.reason === "string"
+      ? body.reason.trim()
+      : "";
+
   if (!pharmacyId) {
     return NextResponse.json(
       {
-        success: false,
         error:
           "L'identifiant de la pharmacie est obligatoire.",
       },
@@ -105,60 +101,36 @@ export async function POST(
   }
 
   /*
-   * Si on active l'accès manuel, une date de fin
-   * et un motif sont obligatoires.
-   */
-
-  if (enabled && !until) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Une date de fin est obligatoire pour l'accès manuel.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  if (enabled && !reason) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "Le motif de l'activation manuelle est obligatoire.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  /*
    * ============================================================
-   * 4. VALIDATION DE LA DATE
+   * 4. VALIDATION ACTIVATION
    * ============================================================
    */
-
-  let manualAccessUntil:
-    | string
-    | null = null;
 
   if (enabled) {
-    const parsedDate =
+    if (!until) {
+      return NextResponse.json(
+        {
+          error:
+            "La date d'expiration est obligatoire.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    const expirationDate =
       new Date(until);
 
     if (
       Number.isNaN(
-        parsedDate.getTime(),
+        expirationDate.getTime(),
       )
     ) {
       return NextResponse.json(
         {
-          success: false,
           error:
-            "La date de fin de l'accès manuel est invalide.",
+            "La date d'expiration est invalide.",
         },
         {
           status: 400,
@@ -166,19 +138,14 @@ export async function POST(
       );
     }
 
-    /*
-     * L'accès manuel doit toujours être dans le futur.
-     */
-
     if (
-      parsedDate.getTime() <=
+      expirationDate.getTime() <=
       Date.now()
     ) {
       return NextResponse.json(
         {
-          success: false,
           error:
-            "La date de fin doit être dans le futur.",
+            "La date d'expiration doit être dans le futur.",
         },
         {
           status: 400,
@@ -186,8 +153,17 @@ export async function POST(
       );
     }
 
-    manualAccessUntil =
-      parsedDate.toISOString();
+    if (!reason) {
+      return NextResponse.json(
+        {
+          error:
+            "Le motif de l'accès manuel est obligatoire.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
   }
 
   /*
@@ -209,9 +185,8 @@ export async function POST(
 
     return NextResponse.json(
       {
-        success: false,
         error:
-          "La configuration serveur Supabase est incomplète.",
+          "Le client Admin Supabase ne peut pas être initialisé.",
       },
       {
         status: 500,
@@ -221,44 +196,40 @@ export async function POST(
 
   /*
    * ============================================================
-   * 6. RÉCUPÉRATION DE LA PHARMACIE
+   * 6. VÉRIFICATION PHARMACIE
    * ============================================================
    */
 
   const {
     data: pharmacy,
     error: pharmacyError,
-  } =
-    await supabaseAdmin
-      .from("pharmacies")
-      .select(
-        `
-          id,
-          name,
-          status,
-          manual_access_enabled,
-          manual_access_until,
-          manual_access_reason,
-          manual_access_by
-        `,
-      )
-      .eq(
-        "id",
-        pharmacyId,
-      )
-      .maybeSingle();
+  } = await supabaseAdmin
+    .from("pharmacies")
+    .select(
+      `
+        id,
+        name,
+        status,
+        manual_access_enabled,
+        manual_access_until,
+        manual_access_reason
+      `,
+    )
+    .eq("id", pharmacyId)
+    .maybeSingle();
 
   if (pharmacyError) {
     console.error(
-      "SUPER ADMIN MANUAL ACCESS - FETCH:",
+      "SUPER ADMIN MANUAL ACCESS - PHARMACY READ:",
       pharmacyError,
     );
 
     return NextResponse.json(
       {
-        success: false,
         error:
           "Impossible de récupérer la pharmacie.",
+        details:
+          pharmacyError.message,
       },
       {
         status: 500,
@@ -269,7 +240,6 @@ export async function POST(
   if (!pharmacy) {
     return NextResponse.json(
       {
-        success: false,
         error:
           "Pharmacie introuvable.",
       },
@@ -281,7 +251,7 @@ export async function POST(
 
   /*
    * ============================================================
-   * 7. ANCIEN ÉTAT
+   * 7. ANCIENNES VALEURS
    * ============================================================
    */
 
@@ -296,70 +266,59 @@ export async function POST(
 
   /*
    * ============================================================
-   * 8. NOUVEL ÉTAT
+   * 8. NOUVELLES VALEURS
    * ============================================================
    */
 
-  const newEnabled =
-    enabled;
-
   const newUntil =
-    enabled
-      ? manualAccessUntil
-      : null;
+    enabled ? until : null;
 
   const newReason =
-    enabled
-      ? reason
-      : null;
+    enabled ? reason : reason || null;
 
   /*
    * ============================================================
-   * 9. MISE À JOUR DE LA PHARMACIE
+   * 9. MISE À JOUR PHARMACIE
    * ============================================================
    */
 
   const {
     data: updatedPharmacy,
     error: updateError,
-  } =
-    await supabaseAdmin
-      .from("pharmacies")
-      .update({
-        manual_access_enabled:
-          newEnabled,
+  } = await supabaseAdmin
+    .from("pharmacies")
+    .update({
+      manual_access_enabled:
+        enabled,
 
-        manual_access_until:
-          newUntil,
+      manual_access_until:
+        newUntil,
 
-        manual_access_reason:
-          newReason,
+      manual_access_reason:
+        newReason,
 
-        manual_access_by:
-          newEnabled
-            ? admin.user_id
-            : null,
+      manual_access_by:
+        enabled
+          ? admin.user_id
+          : null,
 
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        pharmacyId,
-      )
-      .select(
-        `
-          id,
-          name,
-          status,
-          manual_access_enabled,
-          manual_access_until,
-          manual_access_reason,
-          manual_access_by,
-          updated_at
-        `,
-      )
-      .single();
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq("id", pharmacyId)
+    .select(
+      `
+        id,
+        name,
+        status,
+        manual_access_enabled,
+        manual_access_until,
+        manual_access_reason,
+        manual_access_by,
+        updated_at
+      `,
+    )
+    .single();
 
   if (updateError) {
     console.error(
@@ -369,9 +328,12 @@ export async function POST(
 
     return NextResponse.json(
       {
-        success: false,
         error:
           "Impossible de modifier l'accès manuel.",
+        details:
+          updateError.message,
+        code:
+          updateError.code ?? null,
       },
       {
         status: 500,
@@ -381,64 +343,54 @@ export async function POST(
 
   /*
    * ============================================================
-   * 10. HISTORIQUE
+   * 10. JOURNAL D'AUDIT
    * ============================================================
    */
 
   const action =
-    newEnabled
+    enabled
       ? "manual_access_enabled"
       : "manual_access_disabled";
 
-  const historyReason =
-    newEnabled
-      ? newReason
-      : reason ||
-        "Accès manuel désactivé par le Super Admin.";
-
   const {
-    error: historyError,
-  } =
-    await supabaseAdmin
-      .from(
-        "pharmacy_admin_actions",
-      )
-      .insert({
-        pharmacy_id:
-          pharmacyId,
+    error: auditError,
+  } = await supabaseAdmin
+    .from("pharmacy_admin_actions")
+    .insert({
+      pharmacy_id:
+        pharmacyId,
 
-        admin_user_id:
-          admin.user_id,
+      admin_user_id:
+        admin.user_id,
 
-        action,
+      action,
 
-        reason:
-          historyReason,
+      reason:
+        newReason,
 
-        old_status:
-          pharmacy.status ??
-          null,
+      old_status:
+        pharmacy.status ?? null,
 
-        new_status:
-          pharmacy.status ??
-          null,
+      new_status:
+        pharmacy.status ?? null,
 
-        manual_access_enabled:
-          newEnabled,
+      manual_access_enabled:
+        enabled,
 
-        manual_access_until:
-          newUntil,
-      });
+      manual_access_until:
+        newUntil,
+    });
 
-  /*
-   * L'écriture de l'historique ne doit pas annuler
-   * l'action principale si elle a déjà réussi.
-   */
+  if (auditError) {
+    /*
+     * La modification principale a déjà
+     * réussi. On journalise l'erreur mais
+     * on ne revient pas en arrière.
+     */
 
-  if (historyError) {
     console.error(
-      "SUPER ADMIN MANUAL ACCESS - HISTORY:",
-      historyError,
+      "SUPER ADMIN MANUAL ACCESS - AUDIT:",
+      auditError,
     );
   }
 
@@ -452,36 +404,12 @@ export async function POST(
     {
       success: true,
 
-      message:
-        newEnabled
-          ? "L'accès manuel a été activé."
-          : "L'accès manuel a été désactivé.",
+      message: enabled
+        ? "Accès manuel activé avec succès."
+        : "Accès manuel désactivé avec succès.",
 
-      pharmacy: {
-        id:
-          updatedPharmacy.id,
-
-        name:
-          updatedPharmacy.name,
-
-        status:
-          updatedPharmacy.status,
-
-        manual_access_enabled:
-          updatedPharmacy.manual_access_enabled,
-
-        manual_access_until:
-          updatedPharmacy.manual_access_until,
-
-        manual_access_reason:
-          updatedPharmacy.manual_access_reason,
-
-        manual_access_by:
-          updatedPharmacy.manual_access_by,
-
-        updated_at:
-          updatedPharmacy.updated_at,
-      },
+      pharmacy:
+        updatedPharmacy,
 
       previous: {
         manual_access_enabled:

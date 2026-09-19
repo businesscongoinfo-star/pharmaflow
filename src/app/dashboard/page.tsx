@@ -1168,6 +1168,32 @@ export default function DashboardPage() {
   }
 
   /* ==========================================================
+     AJOUT SUPPORT & RÉCLAMATIONS
+  ========================================================== */
+
+  function openNewReclamation() {
+    closeMobileMenu();
+
+    router.push(
+      "/support/reclamations",
+    );
+  }
+
+  function openMyReclamations() {
+    closeMobileMenu();
+
+    router.push(
+      "/support/reclamations/mes-demandes",
+    );
+  }
+
+  function openSupportCenter() {
+    closeMobileMenu();
+
+    router.push("/support");
+  }
+
+  /* ==========================================================
      CHARGEMENT / REDIRECTION
   ========================================================== */
 
@@ -1399,34 +1425,53 @@ export default function DashboardPage() {
 
         {/* SUPPORT */}
 
-        <button
-          type="button"
-          className="pf-sidebar-support"
-          onClick={() => {
-            closeMobileMenu();
-            router.push("/support");
-          }}
-        >
+        <div className="pf-sidebar-support">
 
-          <div className="pf-support-icon">
-            ?
-          </div>
+          <button
+            type="button"
+            className="pf-sidebar-support-main"
+            onClick={openSupportCenter}
+          >
 
-          <div>
-            <strong>
-              {tDashboard(
-                "needHelp",
-              )}
-            </strong>
+            <div className="pf-support-icon">
+              ?
+            </div>
 
-            <span>
-              {tDashboard(
-                "supportAvailable",
-              )}
-            </span>
-          </div>
+            <div>
+              <strong>
+                {tDashboard(
+                  "needHelp",
+                )}
+              </strong>
 
-        </button>
+              <span>
+                {tDashboard(
+                  "supportAvailable",
+                )}
+              </span>
+            </div>
+
+          </button>
+
+          {/* AJOUT : RÉCLAMATIONS */}
+
+          <button
+            type="button"
+            onClick={openNewReclamation}
+            className="pf-sidebar-reclamation-button"
+          >
+            ✉️ Nouvelle réclamation
+          </button>
+
+          <button
+            type="button"
+            onClick={openMyReclamations}
+            className="pf-sidebar-reclamation-button"
+          >
+            📋 Mes réclamations
+          </button>
+
+        </div>
 
         {/* UTILISATEUR */}
 
@@ -1549,16 +1594,10 @@ export default function DashboardPage() {
             <button
               type="button"
               className="pf-header-icon-button pf-notification-button"
-              title={tDashboard(
-                "notifications",
-              )}
-              aria-label={tDashboard(
-                "notifications",
-              )}
-              onClick={() =>
-                router.push(
-                  "/support",
-                )
+              title="Mes réclamations"
+              aria-label="Mes réclamations"
+              onClick={
+                openMyReclamations
               }
             >
               ♧
@@ -1775,6 +1814,58 @@ export default function DashboardPage() {
 
           </section>
 
+          {/* AJOUT SUPPORT : CARTE SUPPORT */}
+
+          <section className="pf-support-dashboard-card">
+
+            <div className="pf-support-dashboard-icon">
+              🛟
+            </div>
+
+            <div className="pf-support-dashboard-content">
+
+              <span>
+                SUPPORT PHARMAFLOW
+              </span>
+
+              <h3>
+                Besoin d’aide ou une réclamation ?
+              </h3>
+
+              <p>
+                Contactez notre équipe et suivez
+                l’évolution de vos demandes depuis
+                votre espace.
+              </p>
+
+            </div>
+
+            <div className="pf-support-dashboard-actions">
+
+              <button
+                type="button"
+                className="pf-secondary-button"
+                onClick={
+                  openNewReclamation
+                }
+              >
+                ✉️ Nouvelle réclamation
+              </button>
+
+              <button
+                type="button"
+                className="pf-primary-button"
+                onClick={
+                  openMyReclamations
+                }
+              >
+                📋 Mes réclamations
+              </button>
+
+            </div>
+
+          </section>
+
           {/* ABONNEMENT */}
 
           <section
@@ -1868,7 +1959,6 @@ export default function DashboardPage() {
             </div>
 
           </section>
-
           {/* INDICATEURS PRINCIPAUX */}
 
           <section className="pf-kpi-grid">
@@ -2411,6 +2501,61 @@ export default function DashboardPage() {
 
           </section>
 
+          {/* ==================================================
+              AJOUT SUPPORT & RÉCLAMATIONS
+          ================================================== */}
+
+          <section className="pf-dashboard-support-card">
+
+            <div className="pf-dashboard-support-icon">
+              🛟
+            </div>
+
+            <div className="pf-dashboard-support-content">
+
+              <span>
+                SUPPORT & RÉCLAMATIONS
+              </span>
+
+              <h3>
+                Une question ou un problème ?
+              </h3>
+
+              <p>
+                Contactez l’équipe PharmaFlow,
+                envoyez une réclamation et suivez
+                l’évolution de vos demandes depuis
+                votre espace.
+              </p>
+
+            </div>
+
+            <div className="pf-dashboard-support-actions">
+
+              <button
+                type="button"
+                className="pf-secondary-button"
+                onClick={
+                  openNewReclamation
+                }
+              >
+                ✉️ Nouvelle réclamation
+              </button>
+
+              <button
+                type="button"
+                className="pf-primary-button"
+                onClick={
+                  openMyReclamations
+                }
+              >
+                📋 Mes réclamations
+              </button>
+
+            </div>
+
+          </section>
+
           {/* ACTIONS RAPIDES */}
 
           <section className="pf-quick-section">
@@ -2482,6 +2627,15 @@ export default function DashboardPage() {
                 href="/rapports"
               />
 
+              {/* AJOUT SUPPORT */}
+
+              <QuickAction
+                icon="🛟"
+                title="Support & Réclamations"
+                description="Contacter PharmaFlow et suivre vos demandes"
+                href="/support/reclamations"
+              />
+
             </div>
 
           </section>
@@ -2519,6 +2673,179 @@ export default function DashboardPage() {
         </div>
 
       </section>
+
+      {/* ======================================================
+          AJOUT SUPPORT : STYLE LOCAL
+      ====================================================== */}
+
+      <style jsx>{`
+
+        .pf-sidebar-support {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .pf-sidebar-support-main {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          border: 0;
+          background: transparent;
+          padding: 0;
+          color: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .pf-sidebar-reclamation-button {
+          width: 100%;
+          min-height: 34px;
+          padding: 8px 10px;
+          border: 1px solid rgba(148, 163, 184, 0.25);
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.05);
+          color: inherit;
+          font-size: 12px;
+          font-weight: 600;
+          text-align: left;
+          cursor: pointer;
+          transition:
+            background 0.2s ease,
+            border-color 0.2s ease,
+            transform 0.2s ease;
+        }
+
+        .pf-sidebar-reclamation-button:hover {
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
+          transform: translateY(-1px);
+        }
+
+        .pf-dashboard-support-card {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          margin: 24px 0;
+          padding: 22px;
+          border: 1px solid #dfe7ef;
+          border-radius: 16px;
+          background: linear-gradient(
+            135deg,
+            #ffffff,
+            #f7fbff
+          );
+          box-shadow:
+            0 8px 25px
+            rgba(15, 23, 42, 0.05);
+        }
+
+        .pf-dashboard-support-icon {
+          width: 54px;
+          height: 54px;
+          min-width: 54px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 14px;
+          background: #eef6ff;
+          font-size: 25px;
+        }
+
+        .pf-dashboard-support-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .pf-dashboard-support-content > span {
+          display: block;
+          margin-bottom: 5px;
+          color: #2563eb;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+        }
+
+        .pf-dashboard-support-content h3 {
+          margin: 0 0 6px;
+          color: #172033;
+          font-size: 18px;
+          font-weight: 800;
+        }
+
+        .pf-dashboard-support-content p {
+          margin: 0;
+          color: #667085;
+          font-size: 13px;
+          line-height: 1.55;
+        }
+
+        .pf-dashboard-support-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .pf-dashboard-support-actions
+          .pf-secondary-button,
+        .pf-dashboard-support-actions
+          .pf-primary-button {
+          white-space: nowrap;
+        }
+
+        @media (max-width: 900px) {
+
+          .pf-dashboard-support-card {
+            align-items: flex-start;
+            flex-wrap: wrap;
+          }
+
+          .pf-dashboard-support-content {
+            flex: 1 1 calc(100% - 80px);
+          }
+
+          .pf-dashboard-support-actions {
+            width: 100%;
+          }
+
+        }
+
+        @media (max-width: 600px) {
+
+          .pf-dashboard-support-card {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 18px;
+          }
+
+          .pf-dashboard-support-icon {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+          }
+
+          .pf-dashboard-support-content h3 {
+            font-size: 16px;
+          }
+
+          .pf-dashboard-support-actions {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .pf-dashboard-support-actions
+            .pf-secondary-button,
+          .pf-dashboard-support-actions
+            .pf-primary-button {
+            width: 100%;
+            justify-content: center;
+          }
+
+        }
+
+      `}</style>
 
     </main>
   );

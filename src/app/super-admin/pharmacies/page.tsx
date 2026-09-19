@@ -1,1266 +1,1114 @@
 import Link from "next/link";
 
-import { requireSuperAdmin } from "@/app/lib/super-admin/auth";
-import { createAdminClient } from "@/app/lib/supabase/admin";
-import ManualAccessActions from "./ManualAccessActions";
+import {
+  requireSuperAdmin,
+} from "@/app/lib/super-admin/auth";
 
-export const dynamic = "force-dynamic";
+import {
+  createAdminClient,
+} from "@/app/lib/supabase/admin";
+
+import PharmacyActions from "./PharmacyActions";
 
 type Pharmacy = {
   id: string;
-  name: string | null;
+  name: string;
+  country_code: string;
+  city: string;
   address: string | null;
-  country_code: string | null;
-  city: string | null;
-  currency_code: string | null;
+  currency_code: string;
   owner_id: string | null;
-  status: string | null;
-  created_at: string | null;
-
-  manual_access_enabled: boolean;
+  status: string;
+  language: string;
+  created_at: string;
+  updated_at: string;
+  manual_access_enabled: boolean | null;
   manual_access_until: string | null;
   manual_access_reason: string | null;
+  manual_access_by: string | null;
 };
 
-function formatDate(value: string | null) {
+function getStatusLabel(
+  status: string,
+) {
+  switch (
+    String(status)
+      .trim()
+      .toLowerCase()
+  ) {
+    case "active":
+      return "Active";
+
+    case "inactive":
+      return "Inactive";
+
+    case "suspended":
+      return "Suspendue";
+
+    default:
+      return status || "Inconnu";
+  }
+}
+
+function getStatusClass(
+  status: string,
+) {
+  switch (
+    String(status)
+      .trim()
+      .toLowerCase()
+  ) {
+    case "active":
+      return "status-active";
+
+    case "inactive":
+      return "status-inactive";
+
+    case "suspended":
+      return "status-suspended";
+
+    default:
+      return "status-unknown";
+  }
+}
+
+function formatDate(
+  value: string | null,
+) {
   if (!value) {
     return "—";
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return "—";
   }
 
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return date.toLocaleDateString(
+    "fr-FR",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    },
+  );
 }
 
-function getStatus(status: string | null) {
-  const value = String(status ?? "")
-    .trim()
-    .toLowerCase();
-
-  switch (value) {
-    case "active":
-      return {
-        label: "Active",
-        className: "active",
-      };
-
-    case "inactive":
-      return {
-        label: "Inactive",
-        className: "inactive",
-      };
-
-    case "suspended":
-      return {
-        label: "Suspendue",
-        className: "suspended",
-      };
-
-    case "pending":
-      return {
-        label: "En attente",
-        className: "pending",
-      };
-
-    case "trial":
-      return {
-        label: "Essai",
-        className: "trial",
-      };
-
-    default:
-      return {
-        label: status || "Inconnu",
-        className: "unknown",
-      };
-  }
-}
-
-function isManualAccessValid(
+function manualAccessIsActive(
   pharmacy: Pharmacy,
 ) {
-  if (!pharmacy.manual_access_enabled) {
-    return false;
-  }
-
-  if (!pharmacy.manual_access_until) {
-    return false;
-  }
-
-  const timestamp = new Date(
-    pharmacy.manual_access_until,
-  ).getTime();
-
   return (
-    Number.isFinite(timestamp) &&
-    timestamp > Date.now()
+    pharmacy.manual_access_enabled ===
+      true &&
+    !!pharmacy.manual_access_until &&
+    new Date(
+      pharmacy.manual_access_until,
+    ).getTime() > Date.now()
   );
 }
 
 export default async function SuperAdminPharmaciesPage() {
-  /*
-   * ============================================================
-   * 1. VÉRIFICATION SUPER ADMIN
-   * ============================================================
-   */
-
   await requireSuperAdmin();
 
-  /*
-   * ============================================================
-   * 2. CLIENT ADMIN SUPABASE
-   * ============================================================
-   */
-
-  let supabaseAdmin: ReturnType<
-    typeof createAdminClient
-  >;
-
-  try {
-    supabaseAdmin =
-      createAdminClient();
-  } catch (error) {
-    console.error(
-      "SUPER ADMIN PHARMACIES - ADMIN CLIENT:",
-      error,
-    );
-
-    return (
-      <main className="page">
-        <div className="container">
-          <section className="errorCard">
-            <div className="errorIcon">
-              !
-            </div>
-
-            <div>
-              <h2>
-                Configuration serveur
-                incomplète
-              </h2>
-
-              <p>
-                Le client Admin Supabase ne
-                peut pas être initialisé.
-                Vérifiez les variables
-                d'environnement du serveur.
-              </p>
-            </div>
-          </section>
-        </div>
-
-        <style>{styles}</style>
-      </main>
-    );
-  }
-
-  /*
-   * ============================================================
-   * 3. RÉCUPÉRATION DES PHARMACIES
-   * ============================================================
-   */
+  const supabase =
+    createAdminClient();
 
   const {
-    data,
+    data: pharmacies,
     error,
-  } = await supabaseAdmin
+  } = await supabase
     .from("pharmacies")
     .select(
       `
         id,
         name,
-        address,
         country_code,
         city,
+        address,
         currency_code,
         owner_id,
         status,
+        language,
         created_at,
+        updated_at,
         manual_access_enabled,
         manual_access_until,
-        manual_access_reason
+        manual_access_reason,
+        manual_access_by
       `,
     )
-    .order("created_at", {
-      ascending: false,
-    });
-
-  /*
-   * ============================================================
-   * 4. GESTION ERREUR
-   * ============================================================
-   */
+    .order(
+      "created_at",
+      {
+        ascending: false,
+      },
+    );
 
   if (error) {
-    console.error(
-      "SUPER ADMIN PHARMACIES - DATABASE:",
-      error,
+    throw new Error(
+      `Impossible de récupérer les pharmacies : ${error.message}`,
     );
   }
 
-  const pharmacies =
-    (data ?? []) as Pharmacy[];
+  const pharmacyList =
+    (pharmacies ||
+      []) as Pharmacy[];
 
-  /*
-   * ============================================================
-   * 5. STATISTIQUES
-   * ============================================================
-   */
+  const total =
+    pharmacyList.length;
 
-  const totalCount =
-    pharmacies.length;
-
-  const activeCount =
-    pharmacies.filter(
+  const active =
+    pharmacyList.filter(
       (pharmacy) =>
         String(
-          pharmacy.status ?? "",
-        )
-          .trim()
-          .toLowerCase() === "active",
+          pharmacy.status,
+        ).toLowerCase() ===
+        "active",
     ).length;
 
-  const inactiveCount =
-    pharmacies.filter(
+  const inactive =
+    pharmacyList.filter(
       (pharmacy) =>
         String(
-          pharmacy.status ?? "",
-        )
-          .trim()
-          .toLowerCase() === "inactive",
+          pharmacy.status,
+        ).toLowerCase() ===
+        "inactive",
     ).length;
 
-  const pendingCount =
-    pharmacies.filter(
+  const suspended =
+    pharmacyList.filter(
       (pharmacy) =>
         String(
-          pharmacy.status ?? "",
-        )
-          .trim()
-          .toLowerCase() === "pending",
+          pharmacy.status,
+        ).toLowerCase() ===
+        "suspended",
     ).length;
 
-  const manualAccessCount =
-    pharmacies.filter(
-      (pharmacy) =>
-        isManualAccessValid(
-          pharmacy,
-        ),
+  const manualAccess =
+    pharmacyList.filter(
+      manualAccessIsActive,
     ).length;
 
   return (
-    <main className="page">
-      <div className="container">
+    <main className="pharmacies-page">
+      <div className="page-container">
 
-        {/* ======================================================
-            HEADER
-        ====================================================== */}
+        {/* ====================================================== */}
+        {/* HEADER */}
+        {/* ====================================================== */}
 
-        <header className="header">
-          <div className="headerContent">
+        <header className="page-header">
+          <div>
+            <div className="breadcrumb">
+              <Link href="/super-admin">
+                Super Admin
+              </Link>
 
-            <div className="eyebrow">
-              PHARMAFLOW · SUPER ADMIN
+              <span>/</span>
+
+              <span>
+                Pharmacies
+              </span>
             </div>
 
             <h1>
-              Pharmacies
+              Gestion des pharmacies
             </h1>
 
             <p>
-              Gérez et consultez toutes les
-              pharmacies enregistrées sur la
-              plateforme PharmaFlow.
+              Gérez les comptes pharmacies,
+              leurs statuts et leurs accès
+              à la plateforme.
             </p>
-
           </div>
 
-          <Link
-            href="/super-admin"
-            className="backButton"
-          >
-            <span>
-              ←
-            </span>
-
-            Tableau de bord
-          </Link>
+          <div className="header-actions">
+            <Link
+              href="/super-admin"
+              className="back-button"
+            >
+              ← Super Admin
+            </Link>
+          </div>
         </header>
 
-        {/* ======================================================
-            ERREUR BASE DE DONNÉES
-        ====================================================== */}
+        {/* ====================================================== */}
+        {/* STATISTIQUES */}
+        {/* ====================================================== */}
 
-        {error ? (
-          <section className="errorCard">
+        <section className="stats-grid">
 
-            <div className="errorIcon">
-              !
+          <div className="stat-card">
+            <div className="stat-icon">
+              🏥
             </div>
 
             <div>
+              <span>
+                Total
+              </span>
+
+              <strong>
+                {total}
+              </strong>
+
+              <small>
+                pharmacies
+              </small>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon success">
+              🟢
+            </div>
+
+            <div>
+              <span>
+                Actives
+              </span>
+
+              <strong>
+                {active}
+              </strong>
+
+              <small>
+                accessibles
+              </small>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon danger">
+              🔴
+            </div>
+
+            <div>
+              <span>
+                Inactives
+              </span>
+
+              <strong>
+                {inactive}
+              </strong>
+
+              <small>
+                désactivées
+              </small>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon warning">
+              ⏸️
+            </div>
+
+            <div>
+              <span>
+                Suspendues
+              </span>
+
+              <strong>
+                {suspended}
+              </strong>
+
+              <small>
+                temporairement
+              </small>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon manual">
+              🔑
+            </div>
+
+            <div>
+              <span>
+                Accès manuel
+              </span>
+
+              <strong>
+                {manualAccess}
+              </strong>
+
+              <small>
+                actuellement actifs
+              </small>
+            </div>
+          </div>
+
+        </section>
+
+        {/* ====================================================== */}
+        {/* TABLEAU */}
+        {/* ====================================================== */}
+
+        <section className="table-card">
+
+          <div className="table-header">
+            <div>
               <h2>
-                Impossible de charger
-                les pharmacies
+                Toutes les pharmacies
               </h2>
 
               <p>
-                {error.message}
+                {total} pharmacie
+                {total > 1
+                  ? "s"
+                  : ""} enregistrée
+                {total > 1
+                  ? "s"
+                  : ""}
               </p>
             </div>
 
-          </section>
-        ) : (
-          <>
+            <Link
+              href="/super-admin/pharmacies/new"
+              className="new-button"
+            >
+              + Nouvelle pharmacie
+            </Link>
+          </div>
 
-            {/* ==================================================
-                STATISTIQUES
-            ================================================== */}
-
-            <section className="statsGrid">
-
-              <div className="statCard">
-                <div className="statIcon">
-                  🏥
-                </div>
-
-                <div>
-                  <span>
-                    Total pharmacies
-                  </span>
-
-                  <strong>
-                    {totalCount}
-                  </strong>
-                </div>
+          {pharmacyList.length ===
+          0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">
+                🏥
               </div>
 
-              <div className="statCard">
-                <div className="statIcon green">
-                  ✓
-                </div>
+              <h3>
+                Aucune pharmacie
+              </h3>
 
-                <div>
-                  <span>
-                    Pharmacies actives
-                  </span>
+              <p>
+                Aucune pharmacie
+                n'est encore
+                enregistrée sur la
+                plateforme.
+              </p>
 
-                  <strong>
-                    {activeCount}
-                  </strong>
-                </div>
-              </div>
+              <Link
+                href="/super-admin/pharmacies/new"
+                className="new-button"
+              >
+                Créer une pharmacie
+              </Link>
+            </div>
+          ) : (
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      Pharmacie
+                    </th>
 
-              <div className="statCard">
-                <div className="statIcon orange">
-                  ⏳
-                </div>
+                    <th>
+                      Localisation
+                    </th>
 
-                <div>
-                  <span>
-                    En attente
-                  </span>
+                    <th>
+                      Devise
+                    </th>
 
-                  <strong>
-                    {pendingCount}
-                  </strong>
-                </div>
-              </div>
+                    <th>
+                      Statut
+                    </th>
 
-              <div className="statCard">
-                <div className="statIcon red">
-                  ×
-                </div>
+                    <th>
+                      Accès plateforme
+                    </th>
 
-                <div>
-                  <span>
-                    Inactives
-                  </span>
+                    <th>
+                      Création
+                    </th>
 
-                  <strong>
-                    {inactiveCount}
-                  </strong>
-                </div>
-              </div>
+                    <th className="actions-column">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
 
-            </section>
+                <tbody>
+                  {pharmacyList.map(
+                    (
+                      pharmacy,
+                    ) => {
+                      const hasManualAccess =
+                        manualAccessIsActive(
+                          pharmacy,
+                        );
 
-            {/* ==================================================
-                ACCÈS MANUEL
-            ================================================== */}
+                      return (
+                        <tr
+                          key={
+                            pharmacy.id
+                          }
+                        >
+                          {/* ================================== */}
+                          {/* PHARMACIE */}
+                          {/* ================================== */}
 
-            <section className="manualAccessSummary">
+                          <td>
+                            <div className="pharmacy-cell">
+                              <div className="pharmacy-avatar">
+                                {pharmacy.name
+                                  .charAt(
+                                    0,
+                                  )
+                                  .toUpperCase()}
+                              </div>
 
-              <div className="manualAccessIcon">
-                🔓
-              </div>
+                              <div>
+                                <strong>
+                                  {
+                                    pharmacy.name
+                                  }
+                                </strong>
 
-              <div className="manualAccessContent">
+                                <span>
+                                  {
+                                    pharmacy.country_code
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                          </td>
 
-                <strong>
-                  Accès manuel actifs
-                </strong>
+                          {/* ================================== */}
+                          {/* LOCALISATION */}
+                          {/* ================================== */}
 
-                <span>
-                  {manualAccessCount} pharmacie
-                  {manualAccessCount !== 1
-                    ? "s"
-                    : ""}{" "}
-                  bénéficient actuellement
-                  d'un accès manuel valide.
-                </span>
+                          <td>
+                            <div className="location-cell">
+                              <strong>
+                                {
+                                  pharmacy.city
+                                }
+                              </strong>
 
-              </div>
+                              <span>
+                                {pharmacy.address ||
+                                  "Adresse non renseignée"}
+                              </span>
+                            </div>
+                          </td>
 
-            </section>
+                          {/* ================================== */}
+                          {/* DEVISE */}
+                          {/* ================================== */}
 
-            {/* ==================================================
-                LISTE DES PHARMACIES
-            ================================================== */}
+                          <td>
+                            <span className="currency">
+                              {
+                                pharmacy.currency_code
+                              }
+                            </span>
+                          </td>
 
-            <section className="card">
+                          {/* ================================== */}
+                          {/* STATUT */}
+                          {/* ================================== */}
 
-              <div className="cardHeader">
-
-                <div>
-                  <h2>
-                    Liste des pharmacies
-                  </h2>
-
-                  <p>
-                    Toutes les pharmacies
-                    enregistrées sur PharmaFlow.
-                  </p>
-                </div>
-
-                <div className="totalBadge">
-                  {totalCount}
-                </div>
-
-              </div>
-
-              {pharmacies.length === 0 ? (
-
-                <div className="emptyState">
-
-                  <div className="emptyIcon">
-                    🏥
-                  </div>
-
-                  <h3>
-                    Aucune pharmacie
-                  </h3>
-
-                  <p>
-                    Aucune pharmacie n'est
-                    actuellement enregistrée
-                    sur la plateforme.
-                  </p>
-
-                </div>
-
-              ) : (
-
-                <div className="tableWrapper">
-
-                  <table>
-
-                    <thead>
-                      <tr>
-
-                        <th>
-                          Pharmacie
-                        </th>
-
-                        <th>
-                          Ville
-                        </th>
-
-                        <th>
-                          Pays
-                        </th>
-
-                        <th>
-                          Devise
-                        </th>
-
-                        <th>
-                          Statut
-                        </th>
-
-                        <th>
-                          Accès manuel
-                        </th>
-
-                        <th>
-                          Inscription
-                        </th>
-
-                        <th>
-                          Actions
-                        </th>
-
-                      </tr>
-                    </thead>
-
-                    <tbody>
-
-                      {pharmacies.map(
-                        (pharmacy) => {
-
-                          const status =
-                            getStatus(
-                              pharmacy.status,
-                            );
-
-                          const manualAccess =
-                            isManualAccessValid(
-                              pharmacy,
-                            );
-
-                          const initial =
-                            (
-                              pharmacy.name ||
-                              "P"
-                            )
-                              .trim()
-                              .charAt(0)
-                              .toUpperCase();
-
-                          return (
-                            <tr
-                              key={pharmacy.id}
+                          <td>
+                            <span
+                              className={`status-badge ${getStatusClass(
+                                pharmacy.status,
+                              )}`}
                             >
+                              <span className="status-dot" />
 
-                              {/* PHARMACIE */}
+                              {getStatusLabel(
+                                pharmacy.status,
+                              )}
+                            </span>
+                          </td>
 
-                              <td>
-                                <div className="pharmacyCell">
+                          {/* ================================== */}
+                          {/* ACCÈS */}
+                          {/* ================================== */}
 
-                                  <div className="avatar">
-                                    {initial}
-                                  </div>
-
-                                  <div className="pharmacyInfo">
-
-                                    <strong>
-                                      {pharmacy.name ||
-                                        "Pharmacie sans nom"}
-                                    </strong>
-
-                                    <small>
-                                      ID :{" "}
-                                      {pharmacy.id}
-                                    </small>
-
-                                  </div>
-
-                                </div>
-                              </td>
-
-                              {/* VILLE */}
-
-                              <td>
-                                {pharmacy.city ||
-                                  "—"}
-                              </td>
-
-                              {/* PAYS */}
-
-                              <td>
-                                <span className="countryBadge">
-                                  {pharmacy.country_code ||
-                                    "—"}
+                          <td>
+                            {hasManualAccess ? (
+                              <div className="access-badge active">
+                                <span>
+                                  🔑
                                 </span>
-                              </td>
 
-                              {/* DEVISE */}
+                                <div>
+                                  <strong>
+                                    Accès manuel
+                                  </strong>
 
-                              <td>
-                                {pharmacy.currency_code ||
-                                  "—"}
-                              </td>
-
-                              {/* STATUT */}
-
-                              <td>
-                                <span
-                                  className={`statusBadge ${status.className}`}
-                                >
-                                  <span className="statusDot" />
-
-                                  {status.label}
-                                </span>
-                              </td>
-
-                              {/* ACCÈS MANUEL */}
-
-                              <td>
-
-                                {manualAccess ? (
-
-                                  <div className="manualStatus">
-
-                                    <span className="manualBadge active">
-                                      <span className="manualDot" />
-                                      Actif
-                                    </span>
-
-                                    <small>
-                                      Jusqu'au{" "}
-                                      {formatDate(
-                                        pharmacy.manual_access_until,
-                                      )}
-                                    </small>
-
-                                  </div>
-
-                                ) : pharmacy.manual_access_enabled ? (
-
-                                  <div className="manualStatus">
-
-                                    <span className="manualBadge expired">
-                                      <span className="manualDot" />
-                                      Expiré
-                                    </span>
-
-                                    {pharmacy.manual_access_until && (
-                                      <small>
-                                        Expiré le{" "}
-                                        {formatDate(
-                                          pharmacy.manual_access_until,
-                                        )}
-                                      </small>
+                                  <small>
+                                    Jusqu'au{" "}
+                                    {formatDate(
+                                      pharmacy.manual_access_until,
                                     )}
+                                  </small>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="access-badge none">
+                                <span>
+                                  🔒
+                                </span>
 
-                                  </div>
+                                <div>
+                                  <strong>
+                                    Standard
+                                  </strong>
 
-                                ) : (
+                                  <small>
+                                    Selon abonnement
+                                  </small>
+                                </div>
+                              </div>
+                            )}
+                          </td>
 
-                                  <span className="manualBadge">
-                                    <span className="manualDot" />
-                                    Aucun
-                                  </span>
+                          {/* ================================== */}
+                          {/* DATE */}
+                          {/* ================================== */}
 
-                                )}
+                          <td>
+                            <span className="date">
+                              {formatDate(
+                                pharmacy.created_at,
+                              )}
+                            </span>
+                          </td>
 
-                              </td>
+                          {/* ================================== */}
+                          {/* ACTIONS */}
+                          {/* ================================== */}
 
-                              {/* INSCRIPTION */}
-
-                              <td>
-                                {formatDate(
-                                  pharmacy.created_at,
-                                )}
-                              </td>
-
-                              {/* ACTIONS */}
-
-                              <td>
-
-                                <ManualAccessActions
-                                  pharmacyId={
-                                    pharmacy.id
-                                  }
-                                  pharmacyName={
-                                    pharmacy.name ||
-                                    "Pharmacie"
-                                  }
-                                  manualAccessEnabled={
-                                    pharmacy.manual_access_enabled
-                                  }
-                                  manualAccessUntil={
-                                    pharmacy.manual_access_until
-                                  }
-                                  manualAccessReason={
-                                    pharmacy.manual_access_reason
-                                  }
-                                  manualAccessActive={
-                                    manualAccess
-                                  }
-                                />
-
-                              </td>
-
-                            </tr>
-                          );
-                        },
-                      )}
-
-                    </tbody>
-
-                  </table>
-
-                </div>
-              )}
-
-            </section>
-
-          </>
-        )}
-
+                          <td className="actions-column">
+                            <PharmacyActions
+                              pharmacy={{
+                                id:
+                                  pharmacy.id,
+                                name:
+                                  pharmacy.name,
+                                status:
+                                  pharmacy.status,
+                                manual_access_enabled:
+                                  pharmacy.manual_access_enabled,
+                                manual_access_until:
+                                  pharmacy.manual_access_until,
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    },
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
 
-      <style>{styles}</style>
+      <style>{`
+        .pharmacies-page {
+          min-height: 100vh;
+          background: #f6f8fb;
+          padding: 32px;
+        }
+
+        .page-container {
+          width: 100%;
+          max-width: 1500px;
+          margin: 0 auto;
+        }
+
+        .page-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 24px;
+          margin-bottom: 28px;
+        }
+
+        .breadcrumb {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 9px;
+          color: #8a94a6;
+          font-size: 12px;
+        }
+
+        .breadcrumb a {
+          color: #2563eb;
+          text-decoration: none;
+          font-weight: 700;
+        }
+
+        .page-header h1 {
+          margin: 0;
+          color: #111827;
+          font-size: 30px;
+          line-height: 1.15;
+          font-weight: 850;
+          letter-spacing: -0.5px;
+        }
+
+        .page-header p {
+          margin: 9px 0 0;
+          color: #6b7687;
+          font-size: 14px;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .back-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 42px;
+          padding: 0 15px;
+          border: 1px solid #dbe2ea;
+          border-radius: 10px;
+          background: #ffffff;
+          color: #344054;
+          text-decoration: none;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .back-button:hover {
+          background: #f8fafc;
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(5, minmax(0, 1fr));
+          gap: 14px;
+          margin-bottom: 22px;
+        }
+
+        .stat-card {
+          min-height: 108px;
+          display: flex;
+          align-items: center;
+          gap: 13px;
+          padding: 17px;
+          border: 1px solid #e5eaf0;
+          border-radius: 15px;
+          background: #ffffff;
+          box-shadow:
+            0 2px 10px rgba(
+              15,
+              23,
+              42,
+              0.035
+            );
+        }
+
+        .stat-icon {
+          width: 44px;
+          height: 44px;
+          flex: 0 0 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 12px;
+          background: #eef2ff;
+          font-size: 19px;
+        }
+
+        .stat-icon.success {
+          background: #ecfdf3;
+        }
+
+        .stat-icon.danger {
+          background: #fef2f2;
+        }
+
+        .stat-icon.warning {
+          background: #fffbeb;
+        }
+
+        .stat-icon.manual {
+          background: #eff6ff;
+        }
+
+        .stat-card span {
+          display: block;
+          color: #7b8797;
+          font-size: 11px;
+          font-weight: 650;
+        }
+
+        .stat-card strong {
+          display: inline-block;
+          margin-top: 2px;
+          color: #172033;
+          font-size: 25px;
+          line-height: 1;
+          font-weight: 850;
+        }
+
+        .stat-card small {
+          display: block;
+          margin-top: 4px;
+          color: #9aa4b2;
+          font-size: 10px;
+        }
+
+        .table-card {
+          overflow: visible;
+          border: 1px solid #e3e8ef;
+          border-radius: 16px;
+          background: #ffffff;
+          box-shadow:
+            0 3px 14px rgba(
+              15,
+              23,
+              42,
+              0.035
+            );
+        }
+
+        .table-header {
+          min-height: 78px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 17px 20px;
+          border-bottom: 1px solid #edf0f4;
+        }
+
+        .table-header h2 {
+          margin: 0;
+          color: #172033;
+          font-size: 17px;
+          font-weight: 800;
+        }
+
+        .table-header p {
+          margin: 4px 0 0;
+          color: #8a94a6;
+          font-size: 11px;
+        }
+
+        .new-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 40px;
+          padding: 0 15px;
+          border-radius: 10px;
+          background: #2563eb;
+          color: #ffffff;
+          text-decoration: none;
+          font-size: 12px;
+          font-weight: 750;
+          box-shadow:
+            0 4px 10px rgba(
+              37,
+              99,
+              235,
+              0.18
+            );
+        }
+
+        .new-button:hover {
+          background: #1d4ed8;
+        }
+
+        .table-wrapper {
+          width: 100%;
+          overflow-x: auto;
+          overflow-y: visible;
+        }
+
+        table {
+          width: 100%;
+          min-width: 1120px;
+          border-collapse: separate;
+          border-spacing: 0;
+        }
+
+        th {
+          height: 45px;
+          padding: 0 14px;
+          border-bottom: 1px solid #edf0f4;
+          background: #fbfcfd;
+          color: #7d8898;
+          text-align: left;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        td {
+          height: 78px;
+          padding: 10px 14px;
+          border-bottom: 1px solid #f0f2f5;
+          vertical-align: middle;
+          color: #344054;
+          font-size: 12px;
+        }
+
+        tbody tr:last-child td {
+          border-bottom: 0;
+        }
+
+        tbody tr:hover td {
+          background: #fcfdff;
+        }
+
+        .pharmacy-cell {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          min-width: 180px;
+        }
+
+        .pharmacy-avatar {
+          width: 38px;
+          height: 38px;
+          flex: 0 0 38px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 11px;
+          background: #eef2ff;
+          color: #3656c9;
+          font-size: 14px;
+          font-weight: 850;
+        }
+
+        .pharmacy-cell strong {
+          display: block;
+          color: #202b3c;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .pharmacy-cell span {
+          display: block;
+          margin-top: 3px;
+          color: #8d98a8;
+          font-size: 10px;
+          font-weight: 600;
+        }
+
+        .location-cell {
+          max-width: 190px;
+        }
+
+        .location-cell strong {
+          display: block;
+          color: #3a4658;
+          font-size: 11px;
+          font-weight: 750;
+        }
+
+        .location-cell span {
+          display: block;
+          margin-top: 3px;
+          overflow: hidden;
+          color: #9aa4b2;
+          font-size: 10px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .currency {
+          display: inline-flex;
+          padding: 5px 8px;
+          border-radius: 7px;
+          background: #f3f5f8;
+          color: #596579;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .status-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 9px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 750;
+          white-space: nowrap;
+        }
+
+        .status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: currentColor;
+        }
+
+        .status-active {
+          background: #ecfdf3;
+          color: #16804e;
+        }
+
+        .status-inactive {
+          background: #fef2f2;
+          color: #c53030;
+        }
+
+        .status-suspended {
+          background: #fffbeb;
+          color: #a16207;
+        }
+
+        .status-unknown {
+          background: #f3f4f6;
+          color: #6b7280;
+        }
+
+        .access-badge {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          min-width: 125px;
+        }
+
+        .access-badge > span {
+          width: 27px;
+          height: 27px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          background: #f3f5f8;
+          font-size: 12px;
+        }
+
+        .access-badge strong {
+          display: block;
+          font-size: 10px;
+          font-weight: 750;
+        }
+
+        .access-badge small {
+          display: block;
+          margin-top: 2px;
+          color: #98a1af;
+          font-size: 9px;
+        }
+
+        .access-badge.active > span {
+          background: #ecfdf3;
+        }
+
+        .access-badge.active strong {
+          color: #16804e;
+        }
+
+        .access-badge.none strong {
+          color: #687386;
+        }
+
+        .date {
+          color: #7f8999;
+          font-size: 10px;
+          white-space: nowrap;
+        }
+
+        .actions-column {
+          width: 145px;
+          min-width: 145px;
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        .empty-state {
+          padding: 70px 20px;
+          text-align: center;
+        }
+
+        .empty-icon {
+          width: 64px;
+          height: 64px;
+          margin: 0 auto 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 18px;
+          background: #f1f5f9;
+          font-size: 27px;
+        }
+
+        .empty-state h3 {
+          margin: 0;
+          color: #263244;
+          font-size: 17px;
+        }
+
+        .empty-state p {
+          max-width: 400px;
+          margin: 7px auto 18px;
+          color: #8a94a6;
+          font-size: 12px;
+        }
+
+        @media (max-width: 1100px) {
+          .stats-grid {
+            grid-template-columns:
+              repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 720px) {
+          .pharmacies-page {
+            padding: 18px 12px;
+          }
+
+          .page-header {
+            flex-direction: column;
+          }
+
+          .stats-grid {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .table-header {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .new-button {
+            width: 100%;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .page-header h1 {
+            font-size: 25px;
+          }
+        }
+      `}</style>
     </main>
   );
 }
-
-const styles = `
-  * {
-    box-sizing: border-box;
-  }
-
-  .page {
-    min-height: 100vh;
-    padding: 32px;
-    background: #f5f7fb;
-    color: #0f172a;
-  }
-
-  .container {
-    width: 100%;
-    max-width: 1500px;
-    margin: 0 auto;
-  }
-
-  .header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 28px;
-  }
-
-  .headerContent {
-    min-width: 0;
-  }
-
-  .eyebrow {
-    margin-bottom: 8px;
-    color: #2563eb;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .14em;
-  }
-
-  h1 {
-    margin: 0;
-    color: #0f172a;
-    font-size: 40px;
-    line-height: 1.1;
-    font-weight: 800;
-    letter-spacing: -.04em;
-  }
-
-  .header p {
-    max-width: 650px;
-    margin: 10px 0 0;
-    color: #64748b;
-    font-size: 15px;
-    line-height: 1.6;
-  }
-
-  .backButton {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-height: 44px;
-    padding: 0 18px;
-    border: 1px solid #dbe3ef;
-    border-radius: 12px;
-    background: #fff;
-    color: #1e293b;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 700;
-    white-space: nowrap;
-    box-shadow: 0 5px 18px rgba(15,23,42,.05);
-  }
-
-  .backButton:hover {
-    background: #f8fafc;
-  }
-
-  .statsGrid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
-    margin-bottom: 22px;
-  }
-
-  .statCard {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    min-height: 112px;
-    padding: 20px;
-    border: 1px solid #e5eaf2;
-    border-radius: 18px;
-    background: #fff;
-    box-shadow: 0 8px 25px rgba(15,23,42,.05);
-  }
-
-  .statIcon {
-    width: 48px;
-    height: 48px;
-    display: grid;
-    flex: 0 0 48px;
-    place-items: center;
-    border-radius: 14px;
-    background: #eff6ff;
-    color: #2563eb;
-    font-size: 21px;
-    font-weight: 800;
-  }
-
-  .statIcon.green {
-    background: #ecfdf5;
-    color: #059669;
-  }
-
-  .statIcon.orange {
-    background: #fff7ed;
-    color: #ea580c;
-  }
-
-  .statIcon.red {
-    background: #fef2f2;
-    color: #dc2626;
-  }
-
-  .statCard span {
-    display: block;
-    margin-bottom: 6px;
-    color: #64748b;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .statCard strong {
-    display: block;
-    color: #0f172a;
-    font-size: 29px;
-    line-height: 1;
-    font-weight: 800;
-  }
-
-  .manualAccessSummary {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 22px;
-    padding: 16px 20px;
-    border: 1px solid #bfdbfe;
-    border-radius: 16px;
-    background: #eff6ff;
-  }
-
-  .manualAccessIcon {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    flex: 0 0 42px;
-    place-items: center;
-    border-radius: 12px;
-    background: #fff;
-    font-size: 19px;
-  }
-
-  .manualAccessContent strong {
-    display: block;
-    margin-bottom: 3px;
-    color: #1e3a8a;
-    font-size: 14px;
-    font-weight: 800;
-  }
-
-  .manualAccessContent span {
-    display: block;
-    color: #475569;
-    font-size: 13px;
-  }
-
-  .card {
-    overflow: hidden;
-    border: 1px solid #e5eaf2;
-    border-radius: 20px;
-    background: #fff;
-    box-shadow: 0 12px 35px rgba(15,23,42,.06);
-  }
-
-  .cardHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 22px 24px;
-    border-bottom: 1px solid #edf1f6;
-  }
-
-  .cardHeader h2 {
-    margin: 0;
-    color: #0f172a;
-    font-size: 18px;
-    font-weight: 800;
-  }
-
-  .cardHeader p {
-    margin: 6px 0 0;
-    color: #64748b;
-    font-size: 13px;
-  }
-
-  .totalBadge {
-    min-width: 40px;
-    height: 40px;
-    display: grid;
-    place-items: center;
-    padding: 0 10px;
-    border-radius: 12px;
-    background: #eff6ff;
-    color: #2563eb;
-    font-size: 14px;
-    font-weight: 800;
-  }
-
-  .tableWrapper {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  table {
-    width: 100%;
-    min-width: 1250px;
-    border-collapse: collapse;
-  }
-
-  thead {
-    background: #f8fafc;
-  }
-
-  th {
-    padding: 14px 20px;
-    border-bottom: 1px solid #e5eaf2;
-    color: #64748b;
-    text-align: left;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 17px 20px;
-    border-bottom: 1px solid #eef2f7;
-    color: #334155;
-    font-size: 14px;
-    vertical-align: middle;
-  }
-
-  tbody tr:hover {
-    background: #f8fbff;
-  }
-
-  tbody tr:last-child td {
-    border-bottom: 0;
-  }
-
-  .pharmacyCell {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 245px;
-  }
-
-  .avatar {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    flex: 0 0 42px;
-    place-items: center;
-    border-radius: 12px;
-    background: #2563eb;
-    color: #fff;
-    font-size: 16px;
-    font-weight: 800;
-  }
-
-  .pharmacyInfo {
-    min-width: 0;
-  }
-
-  .pharmacyInfo strong {
-    display: block;
-    margin-bottom: 4px;
-    overflow: hidden;
-    color: #0f172a;
-    font-size: 14px;
-    font-weight: 750;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .pharmacyInfo small {
-    display: block;
-    max-width: 230px;
-    overflow: hidden;
-    color: #94a3b8;
-    font-size: 10px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .countryBadge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 42px;
-    padding: 5px 8px;
-    border-radius: 7px;
-    background: #f1f5f9;
-    color: #475569;
-    font-size: 11px;
-    font-weight: 800;
-  }
-
-  .statusBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
-    white-space: nowrap;
-  }
-
-  .statusDot {
-    width: 7px;
-    height: 7px;
-    flex: 0 0 7px;
-    border-radius: 50%;
-  }
-
-  .statusBadge.active {
-    background: #ecfdf5;
-    color: #047857;
-  }
-
-  .statusBadge.active .statusDot {
-    background: #10b981;
-  }
-
-  .statusBadge.inactive {
-    background: #fef2f2;
-    color: #b91c1c;
-  }
-
-  .statusBadge.inactive .statusDot {
-    background: #ef4444;
-  }
-
-  .statusBadge.suspended {
-    background: #fff7ed;
-    color: #c2410c;
-  }
-
-  .statusBadge.suspended .statusDot {
-    background: #f97316;
-  }
-
-  .statusBadge.pending {
-    background: #fffbeb;
-    color: #b45309;
-  }
-
-  .statusBadge.pending .statusDot {
-    background: #f59e0b;
-  }
-
-  .statusBadge.trial {
-    background: #eef2ff;
-    color: #4338ca;
-  }
-
-  .statusBadge.trial .statusDot {
-    background: #6366f1;
-  }
-
-  .statusBadge.unknown {
-    background: #f1f5f9;
-    color: #475569;
-  }
-
-  .statusBadge.unknown .statusDot {
-    background: #94a3b8;
-  }
-
-  .manualStatus {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .manualStatus small {
-    color: #64748b;
-    font-size: 10px;
-    white-space: nowrap;
-  }
-
-  .manualBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #f1f5f9;
-    color: #64748b;
-    font-size: 11px;
-    font-weight: 800;
-    white-space: nowrap;
-  }
-
-  .manualBadge.active {
-    background: #ecfdf5;
-    color: #047857;
-  }
-
-  .manualBadge.expired {
-    background: #fff7ed;
-    color: #c2410c;
-  }
-
-  .manualDot {
-    width: 7px;
-    height: 7px;
-    flex: 0 0 7px;
-    border-radius: 50%;
-    background: #94a3b8;
-  }
-
-  .manualBadge.active .manualDot {
-    background: #10b981;
-  }
-
-  .manualBadge.expired .manualDot {
-    background: #f97316;
-  }
-
-  .errorCard {
-    display: flex;
-    align-items: flex-start;
-    gap: 15px;
-    padding: 24px;
-    border: 1px solid #fecaca;
-    border-radius: 18px;
-    background: #fff7f7;
-  }
-
-  .errorIcon {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    flex: 0 0 42px;
-    place-items: center;
-    border-radius: 12px;
-    background: #fee2e2;
-    color: #dc2626;
-    font-size: 20px;
-    font-weight: 900;
-  }
-
-  .errorCard h2 {
-    margin: 0 0 7px;
-    color: #991b1b;
-    font-size: 17px;
-    font-weight: 800;
-  }
-
-  .errorCard p {
-    margin: 0;
-    color: #7f1d1d;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-
-  .emptyState {
-    padding: 80px 24px;
-    text-align: center;
-  }
-
-  .emptyIcon {
-    width: 64px;
-    height: 64px;
-    display: grid;
-    place-items: center;
-    margin: 0 auto 16px;
-    border-radius: 18px;
-    background: #eff6ff;
-    font-size: 28px;
-  }
-
-  .emptyState h3 {
-    margin: 0 0 8px;
-    color: #0f172a;
-    font-size: 18px;
-    font-weight: 800;
-  }
-
-  .emptyState p {
-    max-width: 500px;
-    margin: 0 auto;
-    color: #64748b;
-    font-size: 14px;
-    line-height: 1.6;
-  }
-
-  @media (max-width: 1050px) {
-    .statsGrid {
-      grid-template-columns: repeat(
-        2,
-        minmax(0, 1fr)
-      );
-    }
-  }
-
-  @media (max-width: 700px) {
-    .page {
-      padding: 18px 12px;
-    }
-
-    .header {
-      flex-direction: column;
-    }
-
-    .backButton {
-      width: 100%;
-    }
-
-    h1 {
-      font-size: 32px;
-    }
-
-    .statsGrid {
-      grid-template-columns: 1fr;
-    }
-
-    .cardHeader {
-      align-items: flex-start;
-    }
-
-    .manualAccessSummary {
-      align-items: flex-start;
-    }
-  }
-`;
