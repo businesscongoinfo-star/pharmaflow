@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 
 import {
+  getIntegrationConfig,
   normalizeIntegrationProvider,
 } from "@/app/lib/integrations/config";
 
@@ -36,10 +37,7 @@ function getEncryptionKey(): Buffer {
 }
 
 function encryptConfig(
-  config: Record<
-    string,
-    unknown
-  >,
+  config: Record<string, unknown>,
 ): {
   encrypted: string;
 } {
@@ -59,9 +57,7 @@ function encryptConfig(
   const encrypted =
     Buffer.concat([
       cipher.update(
-        JSON.stringify(
-          config,
-        ),
+        JSON.stringify(config),
         "utf8",
       ),
       cipher.final(),
@@ -77,6 +73,187 @@ function encryptConfig(
       encrypted.toString("hex"),
     ].join("."),
   };
+}
+
+/*
+|--------------------------------------------------------------------------
+| NORMALISATION DES VALEURS
+|--------------------------------------------------------------------------
+|
+| Le formulaire peut envoyer des noms historiques comme :
+|
+| MOKO_AFRIKA_MERCHANT_ID
+|
+| tandis que le Payment Engine utilise :
+|
+| merchantId
+|
+| On conserve les deux possibilités mais on enregistre
+| les clés canoniques utilisées par les adapters.
+|--------------------------------------------------------------------------
+*/
+
+function normalizeConfigKey(
+  provider: string,
+  key: string,
+): string {
+  const normalized =
+    key.trim();
+
+  if (provider === "moko_afrika") {
+    const mokoAliases: Record<
+      string,
+      string
+    > = {
+      MOKO_AFRIKA_MODE:
+        "mode",
+
+      MOKO_AFRIKA_BASE_URL:
+        "baseUrl",
+
+      MOKO_AFRIKA_MERCHANT_ID:
+        "merchantId",
+
+      MOKO_AFRIKA_MERCHANT_SECRET:
+        "merchantSecret",
+
+      MOKO_AFRIKA_CALLBACK_URL:
+        "callbackUrl",
+
+      MOKO_AFRIKA_WEBHOOK_AES_KEY:
+        "webhookAesKey",
+
+      MOKO_AFRIKA_WEBHOOK_HMAC_KEY:
+        "webhookHmacKey",
+
+      MOKO_AFRIKA_CARD_BASE_URL:
+        "cardBaseUrl",
+
+      MOKO_AFRIKA_CARD_API_URL:
+        "cardBaseUrl",
+
+      MOKO_AFRIKA_CARD_API_KEY:
+        "cardApiKey",
+
+      MOKO_AFRIKA_CARD_API_SECRET:
+        "cardApiSecret",
+
+      MOKO_AFRIKA_CARD_CALLBACK_SECRET:
+        "cardCallbackSecret",
+
+      MOKO_AFRIKA_CARD_CALLBACK_URL:
+        "cardCallbackUrl",
+
+      MOKO_AFRIKA_CARD_RETURN_URL:
+        "cardReturnUrl",
+
+      MOKO_AFRIKA_CARD_CANCEL_URL:
+        "cardCancelUrl",
+    };
+
+    return (
+      mokoAliases[normalized] ??
+      normalized
+    );
+  }
+
+  if (provider === "yabetoo") {
+    const aliases: Record<
+      string,
+      string
+    > = {
+      YABETOO_MODE:
+        "mode",
+
+      YABETOO_BASE_URL:
+        "baseUrl",
+
+      YABETOO_API_KEY:
+        "apiKey",
+
+      YABETOO_SECRET_KEY:
+        "secretKey",
+
+      YABETOO_CALLBACK_URL:
+        "callbackUrl",
+    };
+
+    return (
+      aliases[normalized] ??
+      normalized
+    );
+  }
+
+  if (provider === "gofreshpay") {
+    const aliases: Record<
+      string,
+      string
+    > = {
+      GOFRESHPAY_MODE:
+        "mode",
+
+      GOFRESHPAY_BASE_URL:
+        "baseUrl",
+
+      GOFRESHPAY_MERCHANT_ID:
+        "merchantId",
+
+      GOFRESHPAY_MERCHANT_SECRET:
+        "merchantSecret",
+
+      GOFRESHPAY_CALLBACK_URL:
+        "callbackUrl",
+
+      FRESHPAY_SECRET_KEY:
+        "secretKey",
+
+      FRESHPAY_HMAC_KEY:
+        "hmacKey",
+    };
+
+    return (
+      aliases[normalized] ??
+      normalized
+    );
+  }
+
+  if (provider === "supabase") {
+    const aliases: Record<
+      string,
+      string
+    > = {
+      NEXT_PUBLIC_SUPABASE_URL:
+        "supabaseUrl",
+
+      NEXT_PUBLIC_SUPABASE_ANON_KEY:
+        "supabaseAnonKey",
+
+      SUPABASE_SERVICE_ROLE_KEY:
+        "supabaseServiceRoleKey",
+    };
+
+    return (
+      aliases[normalized] ??
+      normalized
+    );
+  }
+
+  if (provider === "nextjs") {
+    const aliases: Record<
+      string,
+      string
+    > = {
+      NEXT_PUBLIC_APP_URL:
+        "appUrl",
+    };
+
+    return (
+      aliases[normalized] ??
+      normalized
+    );
+  }
+
+  return normalized;
 }
 
 /*
@@ -133,12 +310,16 @@ export async function POST(
         rawProvider,
       );
 
-    const environment =
+    const environmentValue =
       String(
         formData.get(
           "environment",
         ) ?? "sandbox",
-      ) === "production"
+      ).trim();
+
+    const environment =
+      environmentValue ===
+      "production"
         ? "production"
         : "sandbox";
 
@@ -176,15 +357,51 @@ export async function POST(
     }
 
     /*
-     * Toutes les autres valeurs du formulaire
-     * deviennent la configuration du provider.
-     *
-     * Les valeurs sont stockées chiffrées.
-     */
-    const config: Record<
+    |--------------------------------------------------------------------------
+    | RÉCUPÉRATION DE LA CONFIGURATION EXISTANTE
+    |--------------------------------------------------------------------------
+    |
+    | Important :
+    | si le Super Admin modifie uniquement la Card API Key,
+    | on ne doit pas supprimer le Merchant Secret déjà enregistré.
+    |
+    */
+
+    let existingConfig: Record<
       string,
       unknown
     > = {};
+
+    try {
+      const existing =
+        await getIntegrationConfig(
+          provider,
+        );
+
+      if (existing) {
+        existingConfig = {
+          ...existing.config,
+        };
+      }
+    } catch (error) {
+      console.warn(
+        "[IntegrationConfig] Impossible de récupérer la configuration existante.",
+        error,
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CONSTRUCTION DE LA CONFIGURATION
+    |--------------------------------------------------------------------------
+    */
+
+    const config: Record<
+      string,
+      unknown
+    > = {
+      ...existingConfig,
+    };
 
     for (
       const [
@@ -207,15 +424,33 @@ export async function POST(
         continue;
       }
 
-      config[key] =
+      /*
+       * Un champ secret laissé vide signifie :
+       * "conserver l'ancienne valeur".
+       */
+      if (
+        !value.trim()
+      ) {
+        continue;
+      }
+
+      const normalizedKey =
+        normalizeConfigKey(
+          provider,
+          key,
+        );
+
+      config[
+        normalizedKey
+      ] =
         value.trim();
     }
 
     /*
-     * Conversion des noms utilisés par
-     * les formulaires existants vers les noms
-     * utilisés par les adapters.
-     */
+    |--------------------------------------------------------------------------
+    | COMPATIBILITÉ DES ANCIENNES CLÉS
+    |--------------------------------------------------------------------------
+    */
 
     if (
       config.merchant_id &&
@@ -231,14 +466,6 @@ export async function POST(
     ) {
       config.merchantSecret =
         config.merchant_secret;
-    }
-
-    if (
-      config.secret_key &&
-      !config.secretKey
-    ) {
-      config.secretKey =
-        config.secret_key;
     }
 
     if (
@@ -274,33 +501,69 @@ export async function POST(
     }
 
     if (
-      config.client_id &&
-      !config.clientId
+      config.card_api_key &&
+      !config.cardApiKey
     ) {
-      config.clientId =
-        config.client_id;
+      config.cardApiKey =
+        config.card_api_key;
     }
 
     if (
-      config.client_secret &&
-      !config.clientSecret
+      config.card_api_secret &&
+      !config.cardApiSecret
     ) {
-      config.clientSecret =
-        config.client_secret;
+      config.cardApiSecret =
+        config.card_api_secret;
     }
 
     if (
-      config.webhook_id &&
-      !config.webhookId
+      config.card_callback_secret &&
+      !config.cardCallbackSecret
     ) {
-      config.webhookId =
-        config.webhook_id;
+      config.cardCallbackSecret =
+        config.card_callback_secret;
     }
+
+    if (
+      config.card_callback_url &&
+      !config.cardCallbackUrl
+    ) {
+      config.cardCallbackUrl =
+        config.card_callback_url;
+    }
+
+    if (
+      config.card_return_url &&
+      !config.cardReturnUrl
+    ) {
+      config.cardReturnUrl =
+        config.card_return_url;
+    }
+
+    if (
+      config.card_cancel_url &&
+      !config.cardCancelUrl
+    ) {
+      config.cardCancelUrl =
+        config.card_cancel_url;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHIFFREMENT
+    |--------------------------------------------------------------------------
+    */
 
     const encryptedConfig =
       encryptConfig(
         config,
       );
+
+    /*
+    |--------------------------------------------------------------------------
+    | ENREGISTREMENT SUPABASE
+    |--------------------------------------------------------------------------
+    */
 
     const supabase =
       createAdminClient();
