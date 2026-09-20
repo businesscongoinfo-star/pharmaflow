@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 
 import { requireSuperAdminApi } from "@/app/lib/super-admin/auth";
 import { createAdminClient } from "@/app/lib/supabase/admin";
@@ -85,17 +86,18 @@ function getDefaultPermissions(role: TeamRole) {
   return permissions;
 }
 
-function getSiteUrl(request: NextRequest) {
-  const configuredUrl =
-    process.env.NEXT_PUBLIC_SITE_URL?.trim();
+/**
+ * Génère un mot de passe temporaire suffisamment long
+ * et difficile à deviner.
+ *
+ * Le mot de passe n'est jamais enregistré dans la base
+ * de données. Il est uniquement retourné au Super Admin
+ * lors de la création.
+ */
+function generateTemporaryPassword() {
+  const randomPart = randomBytes(18).toString("hex");
 
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/+$/, "");
-  }
-
-  const origin = request.nextUrl.origin;
-
-  return origin.replace(/\/+$/, "");
+  return `PF-${randomPart}-!`;
 }
 
 export async function POST(request: NextRequest) {
@@ -138,6 +140,23 @@ export async function POST(request: NextRequest) {
         ? body.permissions
         : null;
 
+    /*
+     * Deux modes sont maintenant disponibles :
+     *
+     * "temporary_password"
+     * → le Super Admin reçoit un mot de passe temporaire.
+     *
+     * "invitation"
+     * → Supabase envoie une invitation par email.
+     *
+     * Par défaut, on utilise le mot de passe temporaire
+     * afin de conserver le comportement demandé.
+     */
+    const creationMethod =
+      body.creationMethod === "invitation"
+        ? "invitation"
+        : "temporary_password";
+
     if (!fullName) {
       return NextResponse.json(
         {
@@ -174,11 +193,27 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    const { data: existingMember } = await supabase
-      .from("platform_team_members")
-      .select("id,user_id,email,is_active")
-      .eq("email", email)
-      .maybeSingle();
+    /*
+     * Vérification d'un membre existant dans PharmaFlow.
+     */
+    const { data: existingMember, error: existingMemberError } =
+      await supabase
+        .from("platform_team_members")
+        .select("id,user_id,email,is_active")
+        .eq("email", email)
+        .maybeSingle();
+
+    if (existingMemberError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            existingMemberError.message ||
+            "Impossible de vérifier les membres existants.",
+        },
+        { status: 500 },
+      );
+    }
 
     if (existingMember) {
       return NextResponse.json(
@@ -192,28 +227,157 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * L'invitation est envoyée par Supabase Auth.
-     *
-     * Le membre arrivera ensuite sur :
-     *
-     * /invitation
-     *
-     * où il pourra définir son mot de passe.
+     * ============================================================
+     * MODE 1 — MOT DE PASSE TEMPORAIRE
+     * ============================================================
      */
-    const redirectTo =
-      `${getSiteUrl(request)}/invitation`;
+    if (creationMethod === "temporary_password") {
+      const temporaryPassword =
+        generateTemporaryPassword();
 
-    const { data: inviteData, error: inviteError } =
-      await supabase.auth.admin.inviteUserByEmail(
+      const {
+        data: createdUserData,
+        error: createUserError,
+      } = await supabase.auth.admin.createUser({
         email,
-        {
-          data: {
-            full_name: fullName,
-            platform_role: role,
-          },
-          redirectTo,
+        password: temporaryPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fullName,
+          platform_role: role,
         },
+      });
+
+      if (createUserError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              createUserError.message ||
+              "Impossible de créer le compte utilisateur.",
+          },
+          { status: 500 },
+        );
+      }
+
+      const createdUser = createdUserData.user;
+
+      if (!createdUser) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Supabase n'a pas retourné l'utilisateur créé.",
+          },
+          { status: 500 },
+        );
+      }
+
+      /*
+       * Enregistrement du membre dans la table interne.
+       *
+       * Le mot de passe temporaire n'est PAS enregistré.
+       */
+      const { data: member, error: memberError } =
+        await supabase
+          .from("platform_team_members")
+          .insert({
+            user_id: createdUser.id,
+            full_name: fullName,
+            email,
+            phone: phone || null,
+            role,
+            is_active: true,
+            permissions,
+
+            /*
+             * Le membre devra obligatoirement modifier
+             * son mot de passe après sa première connexion.
+             */
+            must_change_password: true,
+
+            created_by: superAdmin.user_id,
+          })
+          .select(
+            `
+              id,
+              user_id,
+              full_name,
+              email,
+              phone,
+              role,
+              is_active,
+              permissions,
+              must_change_password,
+              created_by,
+              created_at,
+              updated_at
+            `,
+          )
+          .single();
+
+      if (memberError) {
+        /*
+         * Rollback :
+         * si l'enregistrement PharmaFlow échoue,
+         * on supprime le compte Supabase Auth créé juste avant.
+         */
+        await supabase.auth.admin.deleteUser(
+          createdUser.id,
+        );
+
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              memberError.message ||
+              "Impossible d'enregistrer le membre de l'équipe.",
+          },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          creationMethod: "temporary_password",
+          message:
+            "Membre créé avec succès. Le mot de passe temporaire doit être communiqué au membre de manière sécurisée.",
+          member,
+          temporaryPassword,
+        },
+        { status: 201 },
       );
+    }
+
+    /*
+     * ============================================================
+     * MODE 2 — INVITATION PAR EMAIL
+     * ============================================================
+     */
+
+    const configuredUrl =
+      process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+    const siteUrl = configuredUrl
+      ? configuredUrl.replace(/\/+$/, "")
+      : request.nextUrl.origin.replace(/\/+$/, "");
+
+    const redirectTo = `${siteUrl}/invitation`;
+
+    const {
+      data: inviteData,
+      error: inviteError,
+    } = await supabase.auth.admin.inviteUserByEmail(
+      email,
+      {
+        data: {
+          full_name: fullName,
+          platform_role: role,
+        },
+        redirectTo,
+      },
+    );
 
     if (inviteError) {
       return NextResponse.json(
@@ -251,19 +415,34 @@ export async function POST(request: NextRequest) {
           role,
           is_active: true,
           permissions,
+
+          /*
+           * L'utilisateur définit lui-même son mot de passe
+           * via le lien d'invitation.
+           */
+          must_change_password: false,
+
           created_by: superAdmin.user_id,
         })
         .select(
-          "id,user_id,full_name,email,phone,role,is_active,permissions,created_by,created_at,updated_at",
+          `
+            id,
+            user_id,
+            full_name,
+            email,
+            phone,
+            role,
+            is_active,
+            permissions,
+            must_change_password,
+            created_by,
+            created_at,
+            updated_at
+          `,
         )
         .single();
 
     if (memberError) {
-      /*
-       * Si l'insertion de l'équipe échoue après la création
-       * du compte Auth, on supprime l'utilisateur Auth afin
-       * d'éviter un compte orphelin.
-       */
       await supabase.auth.admin.deleteUser(
         invitedUser.id,
       );
@@ -282,6 +461,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
+        creationMethod: "invitation",
         message:
           "Invitation envoyée avec succès.",
         member,

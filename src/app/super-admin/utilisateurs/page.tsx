@@ -18,7 +18,8 @@ type TeamMember = {
   phone: string | null;
   role: string;
   is_active: boolean;
-  permissions: Record<string, boolean>;
+  permissions: Record<string, boolean> | null;
+  must_change_password: boolean;
   last_login_at: string | null;
   created_at: string;
   updated_at: string;
@@ -122,6 +123,7 @@ export default async function PlatformUsersPage() {
         role,
         is_active,
         permissions,
+        must_change_password,
         last_login_at,
         created_at,
         updated_at
@@ -163,6 +165,31 @@ export default async function PlatformUsersPage() {
   const technicalCount =
     members.filter(
       (member) => member.role === "technical",
+    ).length;
+
+  const operationsCount =
+    members.filter(
+      (member) => member.role === "operations",
+    ).length;
+
+  const securityCount =
+    members.filter(
+      (member) => member.role === "security",
+    ).length;
+
+  const analystCount =
+    members.filter(
+      (member) => member.role === "analyst",
+    ).length;
+
+  const mustChangePasswordCount =
+    members.filter(
+      (member) => member.must_change_password,
+    ).length;
+
+  const configuredPasswordCount =
+    members.filter(
+      (member) => !member.must_change_password,
     ).length;
 
   const totalPermissions =
@@ -214,8 +241,9 @@ export default async function PlatformUsersPage() {
                 </h1>
 
                 <p>
-                  Gérez les membres de l'équipe
-                  interne de votre plateforme SaaS.
+                  Gérez les membres de l'équipe interne,
+                  leurs rôles, permissions et accès à la
+                  plateforme.
                 </p>
 
               </div>
@@ -238,7 +266,6 @@ export default async function PlatformUsersPage() {
               className="pf-team-primary-button"
             >
               <span>＋</span>
-
               Ajouter un membre
             </Link>
 
@@ -260,7 +287,6 @@ export default async function PlatformUsersPage() {
             </div>
 
             <div>
-
               <span>
                 Membres
               </span>
@@ -268,7 +294,6 @@ export default async function PlatformUsersPage() {
               <strong>
                 {members.length}
               </strong>
-
             </div>
 
           </div>
@@ -281,7 +306,6 @@ export default async function PlatformUsersPage() {
             </div>
 
             <div>
-
               <span>
                 Actifs
               </span>
@@ -289,7 +313,6 @@ export default async function PlatformUsersPage() {
               <strong>
                 {activeCount}
               </strong>
-
             </div>
 
           </div>
@@ -302,7 +325,6 @@ export default async function PlatformUsersPage() {
             </div>
 
             <div>
-
               <span>
                 Inactifs
               </span>
@@ -310,7 +332,6 @@ export default async function PlatformUsersPage() {
               <strong>
                 {inactiveCount}
               </strong>
-
             </div>
 
           </div>
@@ -323,7 +344,6 @@ export default async function PlatformUsersPage() {
             </div>
 
             <div>
-
               <span>
                 Support
               </span>
@@ -331,7 +351,6 @@ export default async function PlatformUsersPage() {
               <strong>
                 {supportCount}
               </strong>
-
             </div>
 
           </div>
@@ -352,7 +371,6 @@ export default async function PlatformUsersPage() {
             </div>
 
             <div>
-
               <span>
                 Finance
               </span>
@@ -360,7 +378,6 @@ export default async function PlatformUsersPage() {
               <strong>
                 {financeCount}
               </strong>
-
             </div>
 
           </div>
@@ -373,7 +390,6 @@ export default async function PlatformUsersPage() {
             </div>
 
             <div>
-
               <span>
                 Technique
               </span>
@@ -381,7 +397,63 @@ export default async function PlatformUsersPage() {
               <strong>
                 {technicalCount}
               </strong>
+            </div>
 
+          </div>
+
+
+          <div className="pf-team-mini-card">
+
+            <div className="pf-team-mini-icon">
+              🏥
+            </div>
+
+            <div>
+              <span>
+                Opérations
+              </span>
+
+              <strong>
+                {operationsCount}
+              </strong>
+            </div>
+
+          </div>
+
+
+          <div className="pf-team-mini-card">
+
+            <div className="pf-team-mini-icon">
+              📊
+            </div>
+
+            <div>
+              <span>
+                Analystes
+              </span>
+
+              <strong>
+                {analystCount}
+              </strong>
+            </div>
+
+          </div>
+
+
+          <div className="pf-team-mini-card">
+
+            <div className="pf-team-mini-icon">
+              🛡️
+            </div>
+
+            <div>
+              <span>
+                Sécurité
+              </span>
+
+              <strong>
+                {securityCount}
+              </strong>
             </div>
 
           </div>
@@ -394,15 +466,13 @@ export default async function PlatformUsersPage() {
             </div>
 
             <div>
-
               <span>
-                Permissions attribuées
+                Permissions
               </span>
 
               <strong>
                 {totalPermissions}
               </strong>
-
             </div>
 
           </div>
@@ -410,20 +480,37 @@ export default async function PlatformUsersPage() {
 
           <div className="pf-team-mini-card">
 
-            <div className="pf-team-mini-icon">
-              🏢
+            <div className="pf-team-mini-icon pf-team-password-warning">
+              ⚠️
             </div>
 
             <div>
-
               <span>
-                Équipe interne
+                Mot de passe à modifier
               </span>
 
               <strong>
-                PharmaFlow
+                {mustChangePasswordCount}
               </strong>
+            </div>
 
+          </div>
+
+
+          <div className="pf-team-mini-card">
+
+            <div className="pf-team-mini-icon pf-team-password-ok">
+              🔒
+            </div>
+
+            <div>
+              <span>
+                Comptes configurés
+              </span>
+
+              <strong>
+                {configuredPasswordCount}
+              </strong>
             </div>
 
           </div>
@@ -432,7 +519,7 @@ export default async function PlatformUsersPage() {
 
 
         {/* =====================================================
-            OUTILS DE RECHERCHE
+            BARRE D'OUTILS
            ===================================================== */}
 
         <section className="pf-team-toolbar">
@@ -447,6 +534,7 @@ export default async function PlatformUsersPage() {
               type="text"
               placeholder="Rechercher un membre..."
               disabled
+              aria-label="Rechercher un membre"
             />
 
           </div>
@@ -456,6 +544,7 @@ export default async function PlatformUsersPage() {
             className="pf-team-filter"
             disabled
             defaultValue=""
+            aria-label="Filtrer par rôle"
           >
 
             <option value="">
@@ -493,6 +582,7 @@ export default async function PlatformUsersPage() {
             className="pf-team-filter"
             disabled
             defaultValue=""
+            aria-label="Filtrer par statut"
           >
 
             <option value="">
@@ -513,7 +603,7 @@ export default async function PlatformUsersPage() {
 
 
         {/* =====================================================
-            TABLE
+            TABLEAU
            ===================================================== */}
 
         <section className="pf-team-card">
@@ -527,8 +617,8 @@ export default async function PlatformUsersPage() {
               </h2>
 
               <p>
-                Administrateurs et agents de la
-                plateforme PharmaFlow.
+                Administrateurs et agents internes
+                de la plateforme PharmaFlow.
               </p>
 
             </div>
@@ -598,6 +688,10 @@ export default async function PlatformUsersPage() {
                     </th>
 
                     <th>
+                      Accès
+                    </th>
+
+                    <th>
                       Dernière connexion
                     </th>
 
@@ -617,156 +711,223 @@ export default async function PlatformUsersPage() {
                 <tbody>
 
                   {members.map(
-                    (member) => (
+                    (member) => {
 
-                      <tr
-                        key={member.id}
-                      >
+                      const permissionCount =
+                        countPermissions(
+                          member.permissions,
+                        );
 
-                        {/* Membre */}
+                      return (
+                        <tr
+                          key={member.id}
+                        >
 
-                        <td>
+                          {/* =================================================
+                              MEMBRE
+                             ================================================= */}
 
-                          <div className="pf-team-member">
+                          <td>
 
-                            <div className="pf-team-avatar">
+                            <div className="pf-team-member">
 
-                              {getInitials(
-                                member.full_name,
-                              )}
+                              <div className="pf-team-avatar">
+                                {getInitials(
+                                  member.full_name,
+                                )}
+                              </div>
+
+                              <div>
+
+                                <strong>
+                                  {member.full_name}
+                                </strong>
+
+                                <span>
+                                  {member.email}
+                                </span>
+
+                                {member.phone && (
+                                  <small>
+                                    📱{" "}
+                                    {member.phone}
+                                  </small>
+                                )}
+
+                              </div>
 
                             </div>
 
-                            <div>
+                          </td>
 
-                              <strong>
-                                {member.full_name}
-                              </strong>
+
+                          {/* =================================================
+                              ROLE
+                             ================================================= */}
+
+                          <td>
+
+                            <span className="pf-team-role">
 
                               <span>
-                                {member.email}
+                                {getRoleIcon(
+                                  member.role,
+                                )}
                               </span>
 
-                              {member.phone && (
-                                <small>
-                                  📱{" "}
-                                  {member.phone}
-                                </small>
-                              )}
-
-                            </div>
-
-                          </div>
-
-                        </td>
-
-
-                        {/* Rôle */}
-
-                        <td>
-
-                          <span className="pf-team-role">
-
-                            <span>
-                              {getRoleIcon(
+                              {getRoleLabel(
                                 member.role,
                               )}
+
                             </span>
 
-                            {getRoleLabel(
-                              member.role,
-                            )}
-
-                          </span>
-
-                        </td>
+                          </td>
 
 
-                        {/* Permissions */}
+                          {/* =================================================
+                              PERMISSIONS
+                             ================================================= */}
 
-                        <td>
+                          <td>
 
-                          <span className="pf-team-permission-count">
+                            <span className="pf-team-permission-count">
 
-                            🔐{" "}
+                              🔐{" "}
 
-                            {countPermissions(
-                              member.permissions,
-                            )}
+                              {permissionCount}
 
-                            {" "}
+                              {" "}
 
-                            permission
-                            {countPermissions(
-                              member.permissions,
-                            ) !== 1
-                              ? "s"
-                              : ""}
+                              permission
+                              {permissionCount !== 1
+                                ? "s"
+                                : ""}
 
-                          </span>
-
-                        </td>
-
-
-                        {/* Dernière connexion */}
-
-                        <td>
-
-                          <span className="pf-team-date">
-
-                            {formatDate(
-                              member.last_login_at,
-                            )}
-
-                          </span>
-
-                        </td>
-
-
-                        {/* Statut */}
-
-                        <td>
-
-                          <span
-                            className={
-                              member.is_active
-                                ? "pf-team-status pf-team-status-active"
-                                : "pf-team-status pf-team-status-inactive"
-                            }
-                          >
-
-                            <span>
-                              ●
                             </span>
 
-                            {member.is_active
-                              ? "Actif"
-                              : "Inactif"}
-
-                          </span>
-
-                        </td>
+                          </td>
 
 
-                        {/* Actions */}
+                          {/* =================================================
+                              ACCÈS / MOT DE PASSE
+                             ================================================= */}
 
-                        <td>
+                          <td>
 
-                          <TeamMemberActions
-                            id={member.id}
-                            fullName={
-                              member.full_name
-                            }
-                            isActive={
-                              member.is_active
-                            }
-                          />
+                            {member.must_change_password ? (
 
-                        </td>
+                              <span className="pf-team-password-status pf-team-password-pending">
 
-                      </tr>
+                                <span className="pf-team-password-dot">
+                                  ●
+                                </span>
 
-                    ),
+                                <span>
+
+                                  <strong>
+                                    À modifier
+                                  </strong>
+
+                                  <small>
+                                    Première connexion
+                                  </small>
+
+                                </span>
+
+                              </span>
+
+                            ) : (
+
+                              <span className="pf-team-password-status pf-team-password-ready">
+
+                                <span className="pf-team-password-dot">
+                                  ●
+                                </span>
+
+                                <span>
+
+                                  <strong>
+                                    Configuré
+                                  </strong>
+
+                                  <small>
+                                    Mot de passe défini
+                                  </small>
+
+                                </span>
+
+                              </span>
+
+                            )}
+
+                          </td>
+
+
+                          {/* =================================================
+                              DERNIÈRE CONNEXION
+                             ================================================= */}
+
+                          <td>
+
+                            <span className="pf-team-date">
+
+                              {formatDate(
+                                member.last_login_at,
+                              )}
+
+                            </span>
+
+                          </td>
+
+
+                          {/* =================================================
+                              STATUT
+                             ================================================= */}
+
+                          <td>
+
+                            <span
+                              className={
+                                member.is_active
+                                  ? "pf-team-status pf-team-status-active"
+                                  : "pf-team-status pf-team-status-inactive"
+                              }
+                            >
+
+                              <span>
+                                ●
+                              </span>
+
+                              {member.is_active
+                                ? "Actif"
+                                : "Inactif"}
+
+                            </span>
+
+                          </td>
+
+
+                          {/* =================================================
+                              ACTIONS
+                             ================================================= */}
+
+                          <td>
+
+                            <TeamMemberActions
+                              id={member.id}
+                              fullName={
+                                member.full_name
+                              }
+                              isActive={
+                                member.is_active
+                              }
+                            />
+
+                          </td>
+
+                        </tr>
+                      );
+                    },
                   )}
 
                 </tbody>
@@ -781,7 +942,85 @@ export default async function PlatformUsersPage() {
 
 
         {/* =====================================================
-            BLOC DES FONCTIONNALITÉS
+            GUIDE DE GESTION DES MOTS DE PASSE
+           ===================================================== */}
+
+        <section className="pf-team-security-grid">
+
+          <div className="pf-team-security-card">
+
+            <div className="pf-team-security-card-icon">
+              🔑
+            </div>
+
+            <div>
+
+              <strong>
+                Mot de passe temporaire
+              </strong>
+
+              <p>
+                Lorsqu'un membre est créé avec un
+                mot de passe temporaire, PharmaFlow
+                marque son compte comme nécessitant
+                un changement de mot de passe.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div className="pf-team-security-card">
+
+            <div className="pf-team-security-card-icon">
+              🔒
+            </div>
+
+            <div>
+
+              <strong>
+                Changement obligatoire
+              </strong>
+
+              <p>
+                Le membre doit définir son propre
+                mot de passe avant de pouvoir utiliser
+                normalement son espace agent.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div className="pf-team-security-card">
+
+            <div className="pf-team-security-card-icon">
+              🛡️
+            </div>
+
+            <div>
+
+              <strong>
+                Accès indépendant
+              </strong>
+
+              <p>
+                Les comptes de l'équipe sont séparés
+                des comptes des pharmacies et sont
+                contrôlés par les autorisations internes.
+              </p>
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* =====================================================
+            FONCTIONNALITÉS
            ===================================================== */}
 
         <section className="pf-team-features">
@@ -799,10 +1038,9 @@ export default async function PlatformUsersPage() {
               </strong>
 
               <p>
-                Les membres de l'équipe PharmaFlow
-                possèdent leurs propres comptes
-                et ne sont pas des utilisateurs
-                de pharmacie.
+                Chaque membre possède son propre
+                compte Supabase Auth et son propre
+                profil interne PharmaFlow.
               </p>
 
             </div>
@@ -825,7 +1063,7 @@ export default async function PlatformUsersPage() {
               <p>
                 Support, Finance, Technique,
                 Opérations, Analyste et Sécurité
-                peuvent disposer de droits différents.
+                disposent de responsabilités distinctes.
               </p>
 
             </div>
@@ -846,9 +1084,9 @@ export default async function PlatformUsersPage() {
               </strong>
 
               <p>
-                Les accès peuvent être attribués
-                individuellement afin de limiter
-                les fonctionnalités disponibles.
+                Les permissions déterminent les
+                fonctionnalités auxquelles chaque
+                agent peut accéder.
               </p>
 
             </div>
@@ -875,12 +1113,17 @@ export default async function PlatformUsersPage() {
             </strong>
 
             <p>
-              Les comptes de l'équipe PharmaFlow
-              sont séparés des comptes des pharmacies.
-              Les modifications sensibles passent par
-              les routes serveur protégées du Super Admin.
-              Les comptes peuvent être activés,
-              désactivés, modifiés ou supprimés.
+              Les opérations sensibles de l'équipe
+              passent par les routes serveur protégées
+              du Super Admin. Les mots de passe ne sont
+              jamais enregistrés dans
+              <code>
+                platform_team_members
+              </code>
+              . Un mot de passe temporaire est uniquement
+              communiqué au Super Admin lors de la création
+              du compte et doit ensuite être remplacé par
+              le membre.
             </p>
 
           </div>
@@ -892,6 +1135,10 @@ export default async function PlatformUsersPage() {
 
       <style>{`
 
+        /* =====================================================
+           PAGE
+           ===================================================== */
+
         .pf-team-page {
           min-height: 100vh;
           background: #f5f7fb;
@@ -901,11 +1148,14 @@ export default async function PlatformUsersPage() {
 
         .pf-team-container {
           width: 100%;
-          max-width: 1500px;
+          max-width: 1550px;
           margin: 0 auto;
         }
 
-        /* HEADER */
+
+        /* =====================================================
+           HEADER
+           ===================================================== */
 
         .pf-team-header {
           display: flex;
@@ -960,6 +1210,7 @@ export default async function PlatformUsersPage() {
           margin: 8px 0 0;
           color: #687386;
           font-size: 15px;
+          line-height: 1.55;
         }
 
         .pf-team-header-actions {
@@ -968,6 +1219,11 @@ export default async function PlatformUsersPage() {
           gap: 10px;
           flex-wrap: wrap;
         }
+
+
+        /* =====================================================
+           BUTTONS
+           ===================================================== */
 
         .pf-team-primary-button,
         .pf-team-secondary-button {
@@ -1009,7 +1265,10 @@ export default async function PlatformUsersPage() {
           background: #f8fafc;
         }
 
-        /* STATS */
+
+        /* =====================================================
+           STATS
+           ===================================================== */
 
         .pf-team-stats {
           display: grid;
@@ -1071,7 +1330,10 @@ export default async function PlatformUsersPage() {
           line-height: 1;
         }
 
-        /* MINI STATS */
+
+        /* =====================================================
+           MINI STATS
+           ===================================================== */
 
         .pf-team-mini-stats {
           display: grid;
@@ -1119,7 +1381,18 @@ export default async function PlatformUsersPage() {
           font-weight: 800;
         }
 
-        /* TOOLBAR */
+        .pf-team-password-warning {
+          background: #fff7ed;
+        }
+
+        .pf-team-password-ok {
+          background: #ecfdf3;
+        }
+
+
+        /* =====================================================
+           TOOLBAR
+           ===================================================== */
 
         .pf-team-toolbar {
           display: flex;
@@ -1165,7 +1438,10 @@ export default async function PlatformUsersPage() {
           font: inherit;
         }
 
-        /* CARD */
+
+        /* =====================================================
+           TABLE CARD
+           ===================================================== */
 
         .pf-team-card {
           overflow: hidden;
@@ -1207,16 +1483,20 @@ export default async function PlatformUsersPage() {
           white-space: nowrap;
         }
 
-        /* TABLE */
+
+        /* =====================================================
+           TABLE
+           ===================================================== */
 
         .pf-team-table-wrapper {
           overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
 
         .pf-team-table {
           width: 100%;
           border-collapse: collapse;
-          min-width: 1050px;
+          min-width: 1250px;
         }
 
         .pf-team-table th {
@@ -1247,13 +1527,16 @@ export default async function PlatformUsersPage() {
           background: #fafcff;
         }
 
-        /* MEMBER */
+
+        /* =====================================================
+           MEMBER
+           ===================================================== */
 
         .pf-team-member {
           display: flex;
           align-items: center;
           gap: 12px;
-          min-width: 240px;
+          min-width: 250px;
         }
 
         .pf-team-avatar {
@@ -1284,7 +1567,10 @@ export default async function PlatformUsersPage() {
           font-size: 11px;
         }
 
-        /* ROLE */
+
+        /* =====================================================
+           ROLE
+           ===================================================== */
 
         .pf-team-role {
           display: inline-flex;
@@ -1299,7 +1585,10 @@ export default async function PlatformUsersPage() {
           white-space: nowrap;
         }
 
-        /* PERMISSIONS */
+
+        /* =====================================================
+           PERMISSIONS
+           ===================================================== */
 
         .pf-team-permission-count {
           color: #526071;
@@ -1307,7 +1596,59 @@ export default async function PlatformUsersPage() {
           white-space: nowrap;
         }
 
-        /* DATE */
+
+        /* =====================================================
+           PASSWORD STATUS
+           ===================================================== */
+
+        .pf-team-password-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 135px;
+          padding: 7px 10px;
+          border-radius: 10px;
+        }
+
+        .pf-team-password-status strong {
+          display: block;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .pf-team-password-status small {
+          display: block;
+          margin-top: 2px;
+          font-size: 9px;
+          line-height: 1.2;
+        }
+
+        .pf-team-password-dot {
+          font-size: 10px;
+        }
+
+        .pf-team-password-pending {
+          background: #fff7ed;
+          color: #c2410c;
+        }
+
+        .pf-team-password-pending small {
+          color: #ea580c;
+        }
+
+        .pf-team-password-ready {
+          background: #ecfdf3;
+          color: #15803d;
+        }
+
+        .pf-team-password-ready small {
+          color: #16a34a;
+        }
+
+
+        /* =====================================================
+           DATE
+           ===================================================== */
 
         .pf-team-date {
           color: #687386;
@@ -1315,7 +1656,10 @@ export default async function PlatformUsersPage() {
           white-space: nowrap;
         }
 
-        /* STATUS */
+
+        /* =====================================================
+           STATUS
+           ===================================================== */
 
         .pf-team-status {
           display: inline-flex;
@@ -1338,41 +1682,59 @@ export default async function PlatformUsersPage() {
           color: #6b7280;
         }
 
-        /* EMPTY */
 
-        .pf-team-empty {
-          padding: 75px 25px;
-          text-align: center;
+        /* =====================================================
+           SECURITY GRID
+           ===================================================== */
+
+        .pf-team-security-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(3, minmax(0, 1fr));
+          gap: 14px;
+          margin-top: 18px;
         }
 
-        .pf-team-empty-icon {
-          width: 68px;
-          height: 68px;
-          margin: 0 auto 16px;
+        .pf-team-security-card {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 17px;
+          border: 1px solid #e5e9ef;
+          border-radius: 14px;
+          background: #fff;
+        }
+
+        .pf-team-security-card-icon {
+          width: 40px;
+          height: 40px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 20px;
+          border-radius: 10px;
           background: #eef4ff;
-          font-size: 30px;
+          font-size: 18px;
+          flex-shrink: 0;
         }
 
-        .pf-team-empty h3 {
-          margin: 0;
-          color: #202733;
-          font-size: 19px;
+        .pf-team-security-card strong {
+          display: block;
+          color: #26303f;
+          font-size: 12px;
           font-weight: 800;
         }
 
-        .pf-team-empty p {
-          max-width: 440px;
-          margin: 8px auto 20px;
+        .pf-team-security-card p {
+          margin: 5px 0 0;
           color: #7b8494;
-          font-size: 13px;
-          line-height: 1.6;
+          font-size: 11px;
+          line-height: 1.55;
         }
 
-        /* FEATURES */
+
+        /* =====================================================
+           FEATURES
+           ===================================================== */
 
         .pf-team-features {
           display: grid;
@@ -1418,7 +1780,10 @@ export default async function PlatformUsersPage() {
           line-height: 1.55;
         }
 
-        /* INFO */
+
+        /* =====================================================
+           INFO
+           ===================================================== */
 
         .pf-team-info {
           display: flex;
@@ -1433,6 +1798,7 @@ export default async function PlatformUsersPage() {
 
         .pf-team-info-icon {
           font-size: 20px;
+          flex-shrink: 0;
         }
 
         .pf-team-info strong {
@@ -1445,10 +1811,74 @@ export default async function PlatformUsersPage() {
           margin: 5px 0 0;
           color: #60708a;
           font-size: 12px;
-          line-height: 1.55;
+          line-height: 1.6;
         }
 
-        /* RESPONSIVE */
+        .pf-team-info code {
+          margin: 0 3px;
+          padding: 2px 5px;
+          border-radius: 5px;
+          background: #e8f0ff;
+          color: #2454a6;
+          font-family: monospace;
+          font-size: 10px;
+        }
+
+
+        /* =====================================================
+           EMPTY
+           ===================================================== */
+
+        .pf-team-empty {
+          padding: 75px 25px;
+          text-align: center;
+        }
+
+        .pf-team-empty-icon {
+          width: 68px;
+          height: 68px;
+          margin: 0 auto 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 20px;
+          background: #eef4ff;
+          font-size: 30px;
+        }
+
+        .pf-team-empty h3 {
+          margin: 0;
+          color: #202733;
+          font-size: 19px;
+          font-weight: 800;
+        }
+
+        .pf-team-empty p {
+          max-width: 440px;
+          margin: 8px auto 20px;
+          color: #7b8494;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+
+        /* =====================================================
+           RESPONSIVE
+           ===================================================== */
+
+        @media (max-width: 1250px) {
+
+          .pf-team-mini-stats {
+            grid-template-columns:
+              repeat(3, minmax(0, 1fr));
+          }
+
+          .pf-team-security-grid {
+            grid-template-columns: 1fr;
+          }
+
+        }
+
 
         @media (max-width: 1150px) {
 
@@ -1472,6 +1902,7 @@ export default async function PlatformUsersPage() {
 
         }
 
+
         @media (max-width: 800px) {
 
           .pf-team-features {
@@ -1492,6 +1923,7 @@ export default async function PlatformUsersPage() {
 
         }
 
+
         @media (max-width: 700px) {
 
           .pf-team-page {
@@ -1510,6 +1942,10 @@ export default async function PlatformUsersPage() {
             width: 50px;
             height: 50px;
             font-size: 24px;
+          }
+
+          .pf-team-title-row {
+            align-items: flex-start;
           }
 
           .pf-team-stats {
@@ -1546,6 +1982,14 @@ export default async function PlatformUsersPage() {
           .pf-team-card-header {
             align-items: flex-start;
             flex-direction: column;
+          }
+
+          .pf-team-security-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .pf-team-info {
+            padding: 15px;
           }
 
         }

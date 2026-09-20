@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { createClient } from "@/app/lib/supabase/server";
+import { requireAgent } from "@/app/lib/agent/auth";
 
 type AgentRole =
   | "support"
@@ -10,21 +9,6 @@ type AgentRole =
   | "operations"
   | "analyst"
   | "security";
-
-type PlatformTeamMember = {
-  id: string;
-  user_id: string;
-  full_name: string;
-  email: string;
-  phone: string | null;
-  role: AgentRole;
-  is_active: boolean;
-  permissions: Record<string, boolean>;
-  created_by: string | null;
-  last_login_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
 
 type AgentCardProps = {
   icon: string;
@@ -52,110 +36,107 @@ const ROLE_ICONS: Record<AgentRole, string> = {
 };
 
 function hasPermission(
-  member: PlatformTeamMember,
+  permissions: Record<string, boolean>,
   permission: string,
 ): boolean {
-  return (
-    member.is_active === true &&
-    member.permissions?.[permission] === true
-  );
+  return permissions?.[permission] === true;
 }
 
 export default async function AgentPage() {
-  const supabase = await createClient();
-
   /*
    * --------------------------------------------------
-   * UTILISATEUR CONNECTÉ
+   * AUTHENTIFICATION + AUTORISATION
    * --------------------------------------------------
+   *
+   * requireAgent() vérifie :
+   *
+   * 1. utilisateur Supabase connecté
+   * 2. membre présent dans platform_team_members
+   * 3. membre actif
+   * 4. mot de passe initial à modifier
+   *
+   * Si must_change_password = true :
+   *
+   * /agent/change-password
+   *
+   * est automatiquement utilisé.
    */
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const member = await requireAgent();
 
-  if (userError || !user) {
-    redirect("/login?redirect=/agent");
-  }
-
-  /*
-   * --------------------------------------------------
-   * MEMBRE DE L'ÉQUIPE PHARMAFLOW
-   * --------------------------------------------------
-   */
-
-  const {
-    data: memberData,
-    error: memberError,
-  } = await supabase
-    .from("platform_team_members")
-    .select(
-      `
-        id,
-        user_id,
-        full_name,
-        email,
-        phone,
-        role,
-        is_active,
-        permissions,
-        created_by,
-        last_login_at,
-        created_at,
-        updated_at
-      `,
-    )
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (
-    memberError ||
-    !memberData ||
-    memberData.is_active !== true
-  ) {
-    redirect("/login?redirect=/agent");
-  }
-
-  /*
-   * --------------------------------------------------
-   * NORMALISATION DU MEMBRE
-   * --------------------------------------------------
-   */
-
-  const member =
-    memberData as PlatformTeamMember;
+  const permissions = member.permissions ?? {};
 
   const role = member.role;
 
+  /*
+   * --------------------------------------------------
+   * PERMISSIONS
+   * --------------------------------------------------
+   */
+
   const canSupport = hasPermission(
-    member,
+    permissions,
     "support.view",
   );
 
+  const canSupportManage = hasPermission(
+    permissions,
+    "support.manage",
+  );
+
   const canPharmacies = hasPermission(
-    member,
+    permissions,
     "pharmacies.view",
   );
 
+  const canPharmaciesManage = hasPermission(
+    permissions,
+    "pharmacies.manage",
+  );
+
   const canSubscriptions = hasPermission(
-    member,
+    permissions,
     "subscriptions.view",
   );
 
+  const canSubscriptionsManage = hasPermission(
+    permissions,
+    "subscriptions.manage",
+  );
+
   const canPayments = hasPermission(
-    member,
+    permissions,
     "payments.view",
   );
 
+  const canPaymentsManage = hasPermission(
+    permissions,
+    "payments.manage",
+  );
+
   const canTechnical = hasPermission(
-    member,
+    permissions,
     "technical.view",
   );
 
+  const canTechnicalManage = hasPermission(
+    permissions,
+    "technical.manage",
+  );
+
   const canAnalytics = hasPermission(
-    member,
+    permissions,
     "analytics.view",
+  );
+
+  const canSecurity = hasPermission(
+    permissions,
+    "security.view",
+  );
+
+  const canSecurityManage = hasPermission(
+    permissions,
+    "security.manage",
   );
 
   const firstName =
@@ -163,13 +144,20 @@ export default async function AgentPage() {
       ?.trim()
       .split(/\s+/)[0] || "Membre";
 
+  /*
+   * --------------------------------------------------
+   * MODULES DISPONIBLES
+   * --------------------------------------------------
+   */
+
   const hasAnyModule =
     canSupport ||
     canPharmacies ||
     canSubscriptions ||
     canPayments ||
     canTechnical ||
-    canAnalytics;
+    canAnalytics ||
+    canSecurity;
 
   return (
     <main className="pf-agent-page">
@@ -245,7 +233,11 @@ export default async function AgentPage() {
               <AgentCard
                 icon="🛟"
                 title="Support & Réclamations"
-                description="Consulter les demandes des pharmacies, répondre aux clients et suivre les réclamations."
+                description={
+                  canSupportManage
+                    ? "Gérer les demandes des pharmacies, répondre aux clients et traiter les réclamations."
+                    : "Consulter les demandes des pharmacies et les réclamations autorisées."
+                }
                 href="/agent/support"
               />
             ) : null}
@@ -254,7 +246,11 @@ export default async function AgentPage() {
               <AgentCard
                 icon="🏥"
                 title="Pharmacies"
-                description="Consulter les pharmacies et effectuer les opérations autorisées."
+                description={
+                  canPharmaciesManage
+                    ? "Consulter et gérer les pharmacies selon les permissions attribuées."
+                    : "Consulter les pharmacies auxquelles votre compte a accès."
+                }
                 href="/agent/pharmacies"
               />
             ) : null}
@@ -263,7 +259,11 @@ export default async function AgentPage() {
               <AgentCard
                 icon="📅"
                 title="Abonnements"
-                description="Consulter les abonnements et leur état."
+                description={
+                  canSubscriptionsManage
+                    ? "Consulter et gérer les abonnements des pharmacies."
+                    : "Consulter l'état des abonnements."
+                }
                 href="/agent/abonnements"
               />
             ) : null}
@@ -272,7 +272,11 @@ export default async function AgentPage() {
               <AgentCard
                 icon="💳"
                 title="Paiements"
-                description="Consulter les paiements et les informations financières autorisées."
+                description={
+                  canPaymentsManage
+                    ? "Consulter et gérer les opérations de paiement autorisées."
+                    : "Consulter les paiements et informations financières autorisées."
+                }
                 href="/agent/paiements"
               />
             ) : null}
@@ -281,7 +285,11 @@ export default async function AgentPage() {
               <AgentCard
                 icon="🛠️"
                 title="Technique"
-                description="Consulter les problèmes techniques et les incidents de la plateforme."
+                description={
+                  canTechnicalManage
+                    ? "Gérer les incidents et problèmes techniques de PharmaFlow."
+                    : "Consulter les incidents et problèmes techniques."
+                }
                 href="/agent/technique"
               />
             ) : null}
@@ -292,6 +300,19 @@ export default async function AgentPage() {
                 title="Analytique"
                 description="Consulter les statistiques et rapports autorisés."
                 href="/agent/analytique"
+              />
+            ) : null}
+
+            {canSecurity ? (
+              <AgentCard
+                icon="🛡️"
+                title="Sécurité"
+                description={
+                  canSecurityManage
+                    ? "Consulter et gérer les éléments de sécurité autorisés."
+                    : "Consulter les informations de sécurité autorisées."
+                }
+                href="/agent/securite"
               />
             ) : null}
           </div>
@@ -317,6 +338,61 @@ export default async function AgentPage() {
             </p>
           </div>
         )}
+
+        <div className="pf-agent-account">
+          <div className="pf-agent-account-icon">
+            👤
+          </div>
+
+          <div className="pf-agent-account-content">
+            <strong>
+              Votre compte
+            </strong>
+
+            <div className="pf-agent-account-grid">
+              <div>
+                <span>
+                  Nom
+                </span>
+
+                <strong>
+                  {member.full_name}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Email
+                </span>
+
+                <strong>
+                  {member.email}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Fonction
+                </span>
+
+                <strong>
+                  {ROLE_ICONS[role]}{" "}
+                  {ROLE_LABELS[role]}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Statut
+                </span>
+
+                <strong className="pf-agent-status">
+                  ● Actif
+                </strong>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="pf-agent-security">
           <div className="pf-agent-security-icon">
@@ -428,7 +504,7 @@ export default async function AgentPage() {
 
         .pf-agent-profile-text strong {
           display: block;
-          max-width: 220px;
+          max-width: 240px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -584,6 +660,73 @@ export default async function AgentPage() {
           line-height: 1.6;
         }
 
+        .pf-agent-account {
+          margin-top: 20px;
+          display: flex;
+          align-items: flex-start;
+          gap: 13px;
+          padding: 18px;
+          background: #ffffff;
+          border: 1px solid #e5eaf0;
+          border-radius: 17px;
+          box-sizing: border-box;
+        }
+
+        .pf-agent-account-icon {
+          width: 40px;
+          height: 40px;
+          flex: 0 0 40px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          background: #eef6ff;
+          font-size: 19px;
+        }
+
+        .pf-agent-account-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .pf-agent-account-content > strong {
+          display: block;
+          color: #273142;
+          font-size: 13px;
+        }
+
+        .pf-agent-account-grid {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 14px;
+        }
+
+        .pf-agent-account-grid > div {
+          min-width: 0;
+        }
+
+        .pf-agent-account-grid span {
+          display: block;
+          color: #8a94a6;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+
+        .pf-agent-account-grid strong {
+          display: block;
+          margin-top: 4px;
+          color: #344054;
+          font-size: 12px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .pf-agent-status {
+          color: #15803d !important;
+        }
+
         .pf-agent-security {
           margin-top: 20px;
           display: flex;
@@ -631,6 +774,10 @@ export default async function AgentPage() {
           .pf-agent-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+
+          .pf-agent-account-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
 
         @media (max-width: 700px) {
@@ -668,6 +815,10 @@ export default async function AgentPage() {
 
         @media (max-width: 560px) {
           .pf-agent-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .pf-agent-account-grid {
             grid-template-columns: 1fr;
           }
 

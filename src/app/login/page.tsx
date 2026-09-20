@@ -2,7 +2,6 @@
 
 import {
   FormEvent,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -49,6 +48,7 @@ type PlatformAccessResponse = {
   redirect?: string;
   success?: boolean;
   error?: string;
+  must_change_password?: boolean;
 };
 
 type SubscriptionStatusResponse = {
@@ -141,14 +141,11 @@ const TEXT = {
     pharmacyInactive:
       "L'accès à cette pharmacie est actuellement désactivé.",
 
+    platformInactive:
+      "L'accès à votre compte PharmaFlow est actuellement désactivé.",
+
     languageError:
       "Impossible de déterminer la langue de votre pharmacie.",
-
-    subscriptionError:
-      "Impossible de vérifier votre abonnement.",
-
-    subscriptionRequired:
-      "Votre abonnement PharmaFlow doit être activé pour accéder à votre espace.",
 
     platformError:
       "Impossible de vérifier les autorisations de la plateforme.",
@@ -244,14 +241,11 @@ const TEXT = {
     pharmacyInactive:
       "Access to this pharmacy is currently disabled.",
 
+    platformInactive:
+      "Access to your PharmaFlow account is currently disabled.",
+
     languageError:
       "Unable to determine your pharmacy language.",
-
-    subscriptionError:
-      "Unable to verify your subscription.",
-
-    subscriptionRequired:
-      "Your PharmaFlow subscription must be active to access your workspace.",
 
     platformError:
       "Unable to verify platform permissions.",
@@ -292,7 +286,7 @@ function setLocaleCookie(
 }
 
 /* ============================================================
-   REDIRECTION PAR RÔLE
+   RÔLE → ESPACE
 ============================================================ */
 
 function getRoleHome(
@@ -324,7 +318,7 @@ function getRoleHome(
 }
 
 /* ============================================================
-   NORMALISATION DU RÔLE
+   NORMALISATION RÔLE
 ============================================================ */
 
 function normalizeRole(
@@ -336,16 +330,8 @@ function normalizeRole(
 }
 
 /* ============================================================
-   VÉRIFICATION REDIRECTION
+   REDIRECTION SÉCURISÉE
 ============================================================ */
-
-/*
- * On ne fait jamais confiance aveuglément au paramètre
- * ?redirect=...
- *
- * Le redirect doit correspondre à l'espace autorisé
- * pour le rôle de l'utilisateur.
- */
 
 function getAllowedDestination(
   role: string | null | undefined,
@@ -367,9 +353,6 @@ function getAllowedDestination(
     return roleHome;
   }
 
-  /*
-   * Le redirect doit être une route interne.
-   */
   if (
     !requestedRedirect.startsWith(
       "/",
@@ -380,10 +363,6 @@ function getAllowedDestination(
   ) {
     return roleHome;
   }
-
-  /*
-   * Routes autorisées par rôle.
-   */
 
   const normalizedRedirect =
     requestedRedirect
@@ -438,15 +417,11 @@ function getAllowedDestination(
     return requestedRedirect;
   }
 
-  /*
-   * Si le redirect demandé ne correspond pas au rôle,
-   * on utilise l'espace officiel du rôle.
-   */
   return roleHome;
 }
 
 /* ============================================================
-   VÉRIFICATION ACCÈS PLATEFORME
+   ACCÈS PLATEFORME
 ============================================================ */
 
 async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
@@ -473,7 +448,7 @@ async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
 }
 
 /* ============================================================
-   VÉRIFICATION ABONNEMENT
+   ABONNEMENT
 ============================================================ */
 
 async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
@@ -490,14 +465,6 @@ async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
       },
     );
 
-  /*
-   * IMPORTANT :
-   *
-   * Un 401 signifie que la session n'existe plus.
-   *
-   * Un autre code HTTP ne doit PAS provoquer un signOut
-   * automatique.
-   */
   if (
     response.status ===
     401
@@ -517,62 +484,7 @@ async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
 }
 
 /* ============================================================
-   MESSAGE SELON LE MOTIF D'ABONNEMENT
-============================================================ */
-
-function getSubscriptionReasonMessage(
-  reason:
-    | string
-    | null
-    | undefined,
-  locale: Locale,
-) {
-  if (
-    locale ===
-    "en"
-  ) {
-    switch (
-      reason
-    ) {
-      case "subscription_required":
-        return "Your PharmaFlow subscription is not active.";
-
-      case "subscription_expired":
-        return "Your PharmaFlow subscription has expired.";
-
-      case "subscription_blocked":
-        return "Access to your PharmaFlow subscription is currently blocked.";
-
-      case "pharmacy_inactive":
-        return "Your pharmacy account is currently inactive.";
-
-      default:
-        return "Your PharmaFlow subscription must be active to continue.";
-    }
-  }
-
-  switch (
-    reason
-  ) {
-    case "subscription_required":
-      return "Votre abonnement PharmaFlow n'est pas actif.";
-
-    case "subscription_expired":
-      return "Votre abonnement PharmaFlow a expiré.";
-
-    case "subscription_blocked":
-      return "L'accès à votre abonnement PharmaFlow est actuellement bloqué.";
-
-    case "pharmacy_inactive":
-      return "Le compte de votre pharmacie est actuellement désactivé.";
-
-    default:
-      return "Votre abonnement PharmaFlow doit être actif pour continuer.";
-  }
-}
-
-/* ============================================================
-   PAGE DE CONNEXION
+   PAGE LOGIN
 ============================================================ */
 
 export default function LoginPage() {
@@ -603,22 +515,10 @@ export default function LoginPage() {
       currentLocale
     ];
 
-  /*
-   * Destination demandée avant l'ouverture
-   * de la page de connexion.
-   *
-   * Exemple :
-   *
-   * /login?redirect=/pharmacien
-   */
   const requestedRedirect =
     searchParams.get(
       "redirect",
     );
-
-  /* ==========================================================
-     ÉTATS
-  ========================================================== */
 
   const [email, setEmail] =
     useState("");
@@ -639,7 +539,7 @@ export default function LoginPage() {
     useState(false);
 
   /* ==========================================================
-     CHANGEMENT DE LANGUE
+     LANGUE
   ========================================================== */
 
   function changeLanguage(
@@ -660,308 +560,7 @@ export default function LoginPage() {
   }
 
   /* ==========================================================
-     SESSION EXISTANTE
-  ========================================================== */
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function checkExistingSession() {
-      try {
-        const {
-          data: {
-            user,
-          },
-        } =
-          await supabase.auth.getUser();
-
-        if (
-          !mounted ||
-          !user
-        ) {
-          return;
-        }
-
-        /* ====================================================
-           1. ACCÈS PLATEFORME
-        ==================================================== */
-
-        try {
-          const platformAccess =
-            await checkPlatformAccess();
-
-          /*
-           * SUPER ADMIN
-           */
-
-          if (
-            mounted &&
-            platformAccess.type ===
-              "super_admin" &&
-            platformAccess.active ===
-              true &&
-            platformAccess.redirect
-          ) {
-            setLocaleCookie(
-              currentLocale,
-            );
-
-            window.location.assign(
-              platformAccess.redirect,
-            );
-
-            return;
-          }
-
-          /*
-           * AGENT PLATEFORME
-           */
-
-          if (
-            mounted &&
-            platformAccess.type ===
-              "agent" &&
-            platformAccess.active ===
-              true &&
-            platformAccess.redirect
-          ) {
-            setLocaleCookie(
-              currentLocale,
-            );
-
-            window.location.assign(
-              platformAccess.redirect,
-            );
-
-            return;
-          }
-        } catch (
-          platformError
-        ) {
-          console.error(
-            "LOGIN EXISTING SESSION PLATFORM:",
-            platformError,
-          );
-        }
-
-        /* ====================================================
-           2. PROFIL
-        ==================================================== */
-
-        const {
-          data: profile,
-          error: profileError,
-        } =
-          await supabase
-            .from("profiles")
-            .select(
-              "role, pharmacy_id",
-            )
-            .eq(
-              "id",
-              user.id,
-            )
-            .maybeSingle();
-
-        if (
-          !mounted ||
-          profileError ||
-          !profile?.pharmacy_id
-        ) {
-          return;
-        }
-
-        const pharmacyId =
-          profile.pharmacy_id;
-
-        /* ====================================================
-           3. PHARMACIE
-        ==================================================== */
-
-        const {
-          data: pharmacy,
-        } =
-          await supabase
-            .from("pharmacies")
-            .select(
-              "language, status",
-            )
-            .eq(
-              "id",
-              pharmacyId,
-            )
-            .maybeSingle();
-
-        if (
-          !mounted ||
-          !pharmacy
-        ) {
-          return;
-        }
-
-        const pharmacyLanguage: Locale =
-          pharmacy.language ===
-          "en"
-            ? "en"
-            : "fr";
-
-        setLocaleCookie(
-          pharmacyLanguage,
-        );
-
-        /* ====================================================
-           4. RÔLE
-        ==================================================== */
-
-        const role =
-          normalizeRole(
-            profile.role,
-          );
-
-        const destination =
-          getAllowedDestination(
-            role,
-            requestedRedirect,
-          );
-
-        if (
-          destination ===
-          "/login"
-        ) {
-          return;
-        }
-
-        /* ====================================================
-           5. VÉRIFICATION ABONNEMENT
-        *
-        * IMPORTANT :
-        *
-        * On vérifie l'abonnement AVANT d'envoyer
-        * l'utilisateur dans son espace.
-        * ====================================================
-        */
-
-        try {
-          const subscription =
-            await checkSubscriptionAccess();
-
-          const allowed =
-            subscription
-              .access
-              ?.allowed ===
-            true;
-
-          /*
-           * PAS D'ABONNEMENT
-           *
-           * On ne déconnecte PAS l'utilisateur.
-           */
-          if (!allowed) {
-            const reason =
-              subscription
-                .access
-                ?.reason ??
-              "subscription_required";
-
-            if (
-              mounted
-            ) {
-              window.location.assign(
-                `/abonnement?reason=${encodeURIComponent(
-                  reason,
-                )}&redirect=${encodeURIComponent(
-                  destination,
-                )}`,
-              );
-            }
-
-            return;
-          }
-        } catch (
-          subscriptionError
-        ) {
-          console.error(
-            "LOGIN EXISTING SESSION SUBSCRIPTION:",
-            subscriptionError,
-          );
-
-          /*
-           * Si la session n'existe plus, retour login.
-           */
-          if (
-            subscriptionError instanceof
-              Error &&
-            subscriptionError.message ===
-              "SUBSCRIPTION_UNAUTHENTICATED"
-          ) {
-            router.replace(
-              `/login?redirect=${encodeURIComponent(
-                destination,
-              )}`,
-            );
-
-            return;
-          }
-
-          /*
-           * En cas d'erreur de vérification,
-           * on ne donne PAS accès au dashboard.
-           *
-           * On envoie vers l'espace abonnement.
-           * La session reste active.
-           */
-          if (
-            mounted
-          ) {
-            window.location.assign(
-              `/abonnement?reason=verification&redirect=${encodeURIComponent(
-                destination,
-              )}`,
-            );
-          }
-
-          return;
-        }
-
-        /* ====================================================
-           6. ABONNEMENT VALIDE
-        *
-        * Seulement maintenant on peut entrer
-        * dans l'espace de travail.
-        * ====================================================
-        */
-
-        if (
-          mounted
-        ) {
-          router.replace(
-            destination,
-          );
-        }
-      } catch (
-        sessionError
-      ) {
-        console.error(
-          "LOGIN EXISTING SESSION:",
-          sessionError,
-        );
-      }
-    }
-
-    void checkExistingSession();
-
-    return () => {
-      mounted = false;
-    };
-  }, [
-    router,
-    supabase,
-    currentLocale,
-    requestedRedirect,
-  ]);
-
-  /* ==========================================================
-     VALIDATION FORMULAIRE
+     VALIDATION
   ========================================================== */
 
   function validateForm() {
@@ -1002,8 +601,8 @@ export default function LoginPage() {
   }
 
   /* ==========================================================
-     CONNEXION
-  ========================================================== */
+     CONNEXION MANUELLE UNIQUEMENT
+     ========================================================== */
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
@@ -1017,7 +616,7 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    setSyncing(false);
+    setSyncing(true);
 
     try {
       const cleanEmail =
@@ -1026,7 +625,7 @@ export default function LoginPage() {
           .toLowerCase();
 
       /* ======================================================
-         1. AUTHENTIFICATION SUPABASE
+         1. SUPABASE AUTH
       ====================================================== */
 
       const {
@@ -1050,24 +649,19 @@ export default function LoginPage() {
           authError,
         );
 
-        setLoading(false);
-        setSyncing(false);
-
         setError(
           t.loginError,
         );
 
+        setLoading(false);
+        setSyncing(false);
+
         return;
       }
 
-      const user =
-        authData.user;
-
       /* ======================================================
-         2. ACCÈS PLATEFORME
+         2. VÉRIFICATION SUPER ADMIN / AGENT
       ====================================================== */
-
-      setSyncing(true);
 
       let platformAccess:
         PlatformAccessResponse;
@@ -1084,20 +678,17 @@ export default function LoginPage() {
         );
 
         /*
-         * Ici il s'agit réellement d'une erreur
-         * d'autorisation de plateforme.
-         *
-         * On conserve le comportement de sécurité
-         * existant.
+         * Impossible de déterminer les droits de plateforme.
+         * On ne laisse pas une session inconnue entrer.
          */
         await supabase.auth.signOut();
-
-        setSyncing(false);
-        setLoading(false);
 
         setError(
           t.platformError,
         );
+
+        setLoading(false);
+        setSyncing(false);
 
         return;
       }
@@ -1108,46 +699,94 @@ export default function LoginPage() {
 
       if (
         platformAccess.type ===
-          "super_admin" &&
-        platformAccess.active ===
-          true &&
-        platformAccess.redirect
+        "super_admin"
       ) {
-        setLocaleCookie(
-          currentLocale,
+        if (
+          platformAccess.active ===
+            true &&
+          platformAccess.redirect
+        ) {
+          setLocaleCookie(
+            currentLocale,
+          );
+
+          window.location.assign(
+            platformAccess.redirect,
+          );
+
+          return;
+        }
+
+        await supabase.auth.signOut();
+
+        setError(
+          t.platformInactive,
         );
 
-        window.location.assign(
-          platformAccess.redirect,
-        );
+        setLoading(false);
+        setSyncing(false);
 
         return;
       }
 
       /* ======================================================
-         AGENT PLATEFORME
+         AGENT CRÉÉ PAR LE SUPER ADMIN
       ====================================================== */
 
       if (
         platformAccess.type ===
-          "agent" &&
-        platformAccess.active ===
-          true &&
-        platformAccess.redirect
+        "agent"
       ) {
-        setLocaleCookie(
-          currentLocale,
+        if (
+          platformAccess.active ===
+            true
+        ) {
+          /*
+           * IMPORTANT :
+           *
+           * Aucun profiles.pharmacy_id n'est demandé.
+           *
+           * Les agents appartiennent à :
+           *
+           * platform_team_members
+           *
+           * et utilisent le même Supabase Auth.
+           */
+
+          setLocaleCookie(
+            currentLocale,
+          );
+
+          /*
+           * /agent utilise requireAgent().
+           *
+           * Si must_change_password = true,
+           * requireAgent() enverra automatiquement
+           * vers /agent/change-password.
+           */
+
+          window.location.assign(
+            platformAccess.redirect ||
+              "/agent",
+          );
+
+          return;
+        }
+
+        await supabase.auth.signOut();
+
+        setError(
+          t.platformInactive,
         );
 
-        window.location.assign(
-          platformAccess.redirect,
-        );
+        setLoading(false);
+        setSyncing(false);
 
         return;
       }
 
       /* ======================================================
-         3. PROFIL UTILISATEUR
+         3. UTILISATEUR PHARMACIE
       ====================================================== */
 
       const {
@@ -1167,7 +806,7 @@ export default function LoginPage() {
           )
           .eq(
             "id",
-            user.id,
+            authData.user.id,
           )
           .maybeSingle();
 
@@ -1181,12 +820,12 @@ export default function LoginPage() {
 
         await supabase.auth.signOut();
 
-        setSyncing(false);
-        setLoading(false);
-
         setError(
           t.profileError,
         );
+
+        setLoading(false);
+        setSyncing(false);
 
         return;
       }
@@ -1196,12 +835,12 @@ export default function LoginPage() {
       ) {
         await supabase.auth.signOut();
 
-        setSyncing(false);
-        setLoading(false);
-
         setError(
           t.profileError,
         );
+
+        setLoading(false);
+        setSyncing(false);
 
         return;
       }
@@ -1210,7 +849,7 @@ export default function LoginPage() {
         profileData as Profile;
 
       /* ======================================================
-         4. PHARMACY_ID
+         4. PHARMACY ID
       ====================================================== */
 
       const pharmacyId =
@@ -1219,12 +858,12 @@ export default function LoginPage() {
       if (!pharmacyId) {
         await supabase.auth.signOut();
 
-        setSyncing(false);
-        setLoading(false);
-
         setError(
           t.pharmacyError,
         );
+
+        setLoading(false);
+        setSyncing(false);
 
         return;
       }
@@ -1257,7 +896,8 @@ export default function LoginPage() {
           .maybeSingle();
 
       if (
-        pharmacyError
+        pharmacyError ||
+        !pharmacyData
       ) {
         console.error(
           "LOGIN PHARMACY:",
@@ -1266,27 +906,12 @@ export default function LoginPage() {
 
         await supabase.auth.signOut();
 
-        setSyncing(false);
-        setLoading(false);
-
         setError(
           t.pharmacyNotFound,
         );
 
-        return;
-      }
-
-      if (
-        !pharmacyData
-      ) {
-        await supabase.auth.signOut();
-
-        setSyncing(false);
         setLoading(false);
-
-        setError(
-          t.pharmacyNotFound,
-        );
+        setSyncing(false);
 
         return;
       }
@@ -1315,64 +940,34 @@ export default function LoginPage() {
           pharmacyStatus,
         )
       ) {
-        /*
-         * Ceci concerne le statut administratif
-         * de la pharmacie, pas son abonnement.
-         *
-         * On conserve donc le signOut ici.
-         */
         await supabase.auth.signOut();
-
-        setSyncing(false);
-        setLoading(false);
 
         setError(
           t.pharmacyInactive,
         );
 
+        setLoading(false);
+        setSyncing(false);
+
         return;
       }
 
       /* ======================================================
-         7. LANGUE PHARMACIE
+         7. LANGUE
       ====================================================== */
 
-      const pharmacyLanguage:
-        | Locale
-        | null =
+      const pharmacyLanguage: Locale =
         pharmacy.language ===
         "en"
           ? "en"
-          : pharmacy.language ===
-              "fr"
-            ? "fr"
-            : null;
-
-      if (
-        !pharmacyLanguage
-      ) {
-        await supabase.auth.signOut();
-
-        setSyncing(false);
-        setLoading(false);
-
-        setError(
-          t.languageError,
-        );
-
-        return;
-      }
-
-      /* ======================================================
-         8. COOKIE LANGUE
-      ====================================================== */
+          : "fr";
 
       setLocaleCookie(
         pharmacyLanguage,
       );
 
       /* ======================================================
-         9. RÔLE + DESTINATION
+         8. RÔLE + DESTINATION
       ====================================================== */
 
       const role =
@@ -1392,18 +987,18 @@ export default function LoginPage() {
       ) {
         await supabase.auth.signOut();
 
-        setSyncing(false);
-        setLoading(false);
-
         setError(
           t.profileError,
         );
+
+        setLoading(false);
+        setSyncing(false);
 
         return;
       }
 
       /* ======================================================
-         10. VÉRIFICATION ABONNEMENT
+         9. ABONNEMENT
       ====================================================== */
 
       try {
@@ -1417,16 +1012,10 @@ export default function LoginPage() {
           true;
 
         /*
-         * ====================================================
-         * PAS D'ABONNEMENT / ABONNEMENT EXPIRÉ
+         * L'abonnement n'est pas actif.
          *
-         * TRÈS IMPORTANT :
-         *
-         * Aucun signOut ici.
-         *
-         * La session reste ouverte afin que l'utilisateur
-         * puisse acheter son abonnement.
-         * ====================================================
+         * IMPORTANT :
+         * NE PAS DÉCONNECTER.
          */
 
         if (
@@ -1437,9 +1026,6 @@ export default function LoginPage() {
               .access
               ?.reason ??
             "subscription_required";
-
-          setSyncing(false);
-          setLoading(false);
 
           window.location.assign(
             `/abonnement?reason=${encodeURIComponent(
@@ -1459,19 +1045,12 @@ export default function LoginPage() {
           subscriptionError,
         );
 
-        /*
-         * Si la session a réellement expiré,
-         * on demande une nouvelle connexion.
-         */
         if (
           subscriptionError instanceof
             Error &&
           subscriptionError.message ===
             "SUBSCRIPTION_UNAUTHENTICATED"
         ) {
-          setSyncing(false);
-          setLoading(false);
-
           router.replace(
             `/login?redirect=${encodeURIComponent(
               destination,
@@ -1482,14 +1061,9 @@ export default function LoginPage() {
         }
 
         /*
-         * Pour une erreur de vérification,
-         * on ne donne pas accès à l'application.
-         *
-         * Mais on ne déconnecte pas l'utilisateur.
+         * On conserve la session afin de permettre
+         * à l'utilisateur de régler son abonnement.
          */
-        setSyncing(false);
-        setLoading(false);
-
         window.location.assign(
           `/abonnement?reason=verification&redirect=${encodeURIComponent(
             destination,
@@ -1500,37 +1074,31 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         11. ABONNEMENT VALIDE
+         10. ACCÈS FINAL
       ====================================================== */
 
-      setSyncing(true);
-
-      /*
-       * Maintenant seulement, l'utilisateur peut
-       * accéder à son espace.
-       */
       window.location.assign(
         destination,
       );
     } catch (
-      err
+      errorObject
     ) {
       console.error(
         "LOGIN:",
-        err,
+        errorObject,
       );
-
-      setSyncing(false);
-      setLoading(false);
 
       setError(
         t.loginError,
       );
+
+      setLoading(false);
+      setSyncing(false);
     }
   }
 
   /* ==========================================================
-     ÉCRAN DE CHARGEMENT / SYNCHRONISATION
+     ÉCRAN DE PRÉPARATION
   ========================================================== */
 
   if (
@@ -1554,15 +1122,12 @@ export default function LoginPage() {
             <div className="pf-auth-logo">
 
               <div className="pf-auth-logo-icon">
-
                 <span>
                   ✚
                 </span>
-
               </div>
 
               <div>
-
                 <div className="pf-auth-logo-name">
                   {t.brand}
                 </div>
@@ -1570,7 +1135,6 @@ export default function LoginPage() {
                 <div className="pf-auth-logo-subtitle">
                   {t.subtitle}
                 </div>
-
               </div>
 
             </div>
@@ -1609,9 +1173,7 @@ export default function LoginPage() {
                       "3px",
                   }}
                 >
-                  {
-                    t.securityDescription
-                  }
+                  {t.securityDescription}
                 </span>
 
               </div>
@@ -1631,7 +1193,7 @@ export default function LoginPage() {
   }
 
   /* ==========================================================
-     PAGE DE CONNEXION
+     INTERFACE LOGIN
   ========================================================== */
 
   return (
@@ -1648,10 +1210,6 @@ export default function LoginPage() {
       <div className="pf-auth-container">
 
         <section className="pf-auth-card">
-
-          {/* =================================================
-              LOGO
-          ================================================== */}
 
           <div
             style={{
@@ -1672,11 +1230,9 @@ export default function LoginPage() {
             >
 
               <div className="pf-auth-logo-icon">
-
                 <span>
                   ✚
                 </span>
-
               </div>
 
               <div>
@@ -1692,10 +1248,6 @@ export default function LoginPage() {
               </div>
 
             </Link>
-
-            {/* =================================================
-                SÉLECTEUR DE LANGUE
-            ================================================== */}
 
             <div
               role="group"
@@ -1834,10 +1386,6 @@ export default function LoginPage() {
 
           </div>
 
-          {/* =================================================
-              HEADER
-          ================================================== */}
-
           <div className="pf-auth-header">
 
             <div className="pf-auth-badge">
@@ -1862,10 +1410,6 @@ export default function LoginPage() {
 
           </div>
 
-          {/* =================================================
-              ERREUR
-          ================================================== */}
-
           {error && (
             <div
               className="pf-alert pf-alert-danger"
@@ -1883,20 +1427,12 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* =================================================
-              FORMULAIRE
-          ================================================== */}
-
           <form
             onSubmit={
               handleSubmit
             }
             className="pf-auth-form"
           >
-
-            {/* =================================================
-                EMAIL
-            ================================================== */}
 
             <div className="pf-form-group">
 
@@ -1958,10 +1494,6 @@ export default function LoginPage() {
 
             </div>
 
-            {/* =================================================
-                MOT DE PASSE
-            ================================================== */}
-
             <div className="pf-form-group">
 
               <div
@@ -1987,18 +1519,14 @@ export default function LoginPage() {
                       0,
                   }}
                 >
-                  {
-                    t.password
-                  }
+                  {t.password}
                 </label>
 
                 <Link
                   href="/forgot-password"
                   className="pf-auth-forgot-link"
                 >
-                  {
-                    t.forgot
-                  }
+                  {t.forgot}
                 </Link>
 
               </div>
@@ -2077,20 +1605,14 @@ export default function LoginPage() {
                       : t.showPassword
                   }
                 >
-
                   {showPassword
                     ? "🙈"
                     : "👁️"}
-
                 </button>
 
               </div>
 
             </div>
-
-            {/* =================================================
-                BOUTON CONNEXION
-            ================================================== */}
 
             <button
               type="submit"
@@ -2104,9 +1626,7 @@ export default function LoginPage() {
                 <>
                   <span className="pf-spinner pf-spinner-small" />
 
-                  {
-                    t.loggingIn
-                  }
+                  {t.loggingIn}
                 </>
               ) : (
                 <>
@@ -2114,19 +1634,13 @@ export default function LoginPage() {
                     →
                   </span>
 
-                  {
-                    t.login
-                  }
+                  {t.login}
                 </>
               )}
 
             </button>
 
           </form>
-
-          {/* =================================================
-              CRÉATION COMPTE PHARMACIE
-          ================================================== */}
 
           <div
             style={{
@@ -2149,25 +1663,17 @@ export default function LoginPage() {
                   "14px",
               }}
             >
-              {
-                t.noAccount
-              }
+              {t.noAccount}
             </span>{" "}
 
             <Link
               href="/register"
               className="pf-auth-back-link"
             >
-              {
-                t.createAccount
-              }
+              {t.createAccount}
             </Link>
 
           </div>
-
-          {/* =================================================
-              SÉCURITÉ
-          ================================================== */}
 
           <div className="pf-auth-security">
 
@@ -2178,9 +1684,7 @@ export default function LoginPage() {
             <div>
 
               <strong>
-                {
-                  t.security
-                }
+                {t.security}
               </strong>
 
               <span
@@ -2191,9 +1695,7 @@ export default function LoginPage() {
                     "3px",
                 }}
               >
-                {
-                  t.securityDescription
-                }
+                {t.securityDescription}
               </span>
 
             </div>
@@ -2201,10 +1703,6 @@ export default function LoginPage() {
           </div>
 
         </section>
-
-        {/* ===================================================
-            FOOTER
-        ==================================================== */}
 
         <footer className="pf-auth-page-footer">
           {t.footer}
