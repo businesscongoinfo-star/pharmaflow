@@ -47,6 +47,7 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+
     googleBot: {
       index: true,
       follow: true,
@@ -61,14 +62,20 @@ export const metadata: Metadata = {
     locale: "fr_FR",
     url: "https://pharmaflow.africa/",
     siteName: "PharmaFlow Africa",
-    title: "PharmaFlow — Gestion intelligente des pharmacies",
+
+    title:
+      "PharmaFlow — Gestion intelligente des pharmacies",
+
     description:
       "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "PharmaFlow — Gestion intelligente des pharmacies",
+
+    title:
+      "PharmaFlow — Gestion intelligente des pharmacies",
+
     description:
       "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
   },
@@ -83,22 +90,81 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  /*
-   * ==========================================================
-   * LANGUE SERVEUR
-   * ==========================================================
-   *
-   * La locale est déterminée une seule fois côté serveur.
-   * Cela évite que le HTML initial soit généré en français
-   * puis remplacé immédiatement par l'anglais côté client.
-   */
-
   const locale = await getLocale();
 
   const messages = await getMessages();
 
+  /*
+   * ==========================================================
+   * DONNÉES STRUCTURÉES SEO
+   * ==========================================================
+   *
+   * Organization :
+   * Identifie PharmaFlow Africa comme l'organisation
+   * associée au site.
+   *
+   * WebSite :
+   * Identifie pharmaflow.africa comme le site officiel.
+   */
+
+  const structuredData = {
+    "@context": "https://schema.org",
+
+    "@graph": [
+      {
+        "@type": "Organization",
+
+        "@id": "https://pharmaflow.africa/#organization",
+
+        name: "PharmaFlow Africa",
+
+        url: "https://pharmaflow.africa/",
+
+        email: "pharmaflowafrica@gmail.com",
+
+        telephone: "+242044177909",
+
+        description:
+          "PharmaFlow Africa propose une plateforme SaaS moderne pour la gestion des pharmacies, des produits, des stocks, des ventes, des utilisateurs, des rapports et des paiements.",
+
+        logo: {
+          "@type": "ImageObject",
+          url: "https://pharmaflow.africa/favicon.ico",
+        },
+      },
+
+      {
+        "@type": "WebSite",
+
+        "@id": "https://pharmaflow.africa/#website",
+
+        name: "PharmaFlow Africa",
+
+        url: "https://pharmaflow.africa/",
+
+        description:
+          "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
+
+        publisher: {
+          "@id": "https://pharmaflow.africa/#organization",
+        },
+
+        inLanguage: ["fr-FR", "en"],
+      },
+    ],
+  };
+
   return (
     <html lang={locale}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData),
+          }}
+        />
+      </head>
+
       <body>
         <NextIntlClientProvider
           locale={locale}
