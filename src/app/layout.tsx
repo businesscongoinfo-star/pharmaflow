@@ -5,6 +5,8 @@ import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://pharmaflow.africa"),
+
   title: {
     default: "PharmaFlow — Gestion intelligente des pharmacies",
     template: "%s | PharmaFlow",
@@ -15,6 +17,9 @@ export const metadata: Metadata = {
 
   keywords: [
     "PharmaFlow",
+    "PharmaFlow Africa",
+    "PharmaFlow Congo",
+    "pharmaflow.africa",
     "pharmacie",
     "gestion pharmacie",
     "logiciel pharmacie",
@@ -27,17 +32,45 @@ export const metadata: Metadata = {
 
   authors: [
     {
-      name: "PharmaFlow",
+      name: "PharmaFlow Africa",
     },
   ],
 
-  creator: "PharmaFlow",
+  creator: "PharmaFlow Africa",
 
-  publisher: "PharmaFlow",
+  publisher: "PharmaFlow Africa",
+
+  alternates: {
+    canonical: "https://pharmaflow.africa/",
+  },
 
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+
+  openGraph: {
+    type: "website",
+    locale: "fr_FR",
+    url: "https://pharmaflow.africa/",
+    siteName: "PharmaFlow Africa",
+    title: "PharmaFlow — Gestion intelligente des pharmacies",
+    description:
+      "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "PharmaFlow — Gestion intelligente des pharmacies",
+    description:
+      "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
   },
 
   icons: {
