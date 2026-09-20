@@ -75,47 +75,33 @@ type SubscriptionStatusResponse = {
 const TEXT = {
   fr: {
     brand: "PharmaFlow",
-
-    subtitle:
-      "Gestion intelligente des pharmacies",
+    subtitle: "Gestion intelligente des pharmacies",
 
     badge: "ESPACE PROFESSIONNEL",
 
     title: "Bienvenue 👋",
 
     description:
-      "Connectez-vous à votre espace PharmaFlow.",
+      "Connectez-vous à votre espace PharmaFlow pour gérer votre pharmacie.",
 
     email: "Adresse e-mail",
-
-    emailPlaceholder:
-      "exemple@pharmacie.com",
+    emailPlaceholder: "exemple@pharmacie.com",
 
     password: "Mot de passe",
+    passwordPlaceholder: "Votre mot de passe",
 
-    passwordPlaceholder:
-      "Votre mot de passe",
+    forgot: "Mot de passe oublié ?",
 
-    forgot:
-      "Mot de passe oublié ?",
+    login: "Se connecter",
+    loggingIn: "Connexion en cours...",
 
-    login:
-      "Se connecter",
+    noAccount: "Vous n'avez pas encore de compte ?",
+    createAccount: "Créer une pharmacie",
 
-    loggingIn:
-      "Connexion...",
-
-    noAccount:
-      "Vous n'avez pas encore de compte ?",
-
-    createAccount:
-      "Créer une pharmacie",
-
-    security:
-      "Connexion sécurisée",
+    security: "Connexion sécurisée",
 
     securityDescription:
-      "Vos données sont protégées par l'authentification sécurisée de PharmaFlow.",
+      "Votre session est protégée par l'authentification sécurisée de PharmaFlow.",
 
     footer:
       "©️ 2026 PharmaFlow. Tous droits réservés.",
@@ -128,6 +114,18 @@ const TEXT = {
 
     loginError:
       "Adresse e-mail ou mot de passe incorrect.",
+
+    networkError:
+      "Impossible de contacter le serveur d'authentification. Vérifiez votre connexion Internet puis réessayez.",
+
+    configurationError:
+      "La configuration de l'authentification est incorrecte. Veuillez contacter l'administrateur.",
+
+    emailNotConfirmed:
+      "Votre adresse e-mail n'est pas encore confirmée. Vérifiez votre boîte de réception.",
+
+    tooManyRequests:
+      "Trop de tentatives de connexion. Veuillez patienter quelques instants avant de réessayer.",
 
     profileError:
       "Votre profil utilisateur est introuvable.",
@@ -144,9 +142,6 @@ const TEXT = {
     platformInactive:
       "L'accès à votre compte PharmaFlow est actuellement désactivé.",
 
-    languageError:
-      "Impossible de déterminer la langue de votre pharmacie.",
-
     platformError:
       "Impossible de vérifier les autorisations de la plateforme.",
 
@@ -154,7 +149,7 @@ const TEXT = {
       "Préparation de votre espace...",
 
     loadingDescription:
-      "Nous vérifions vos autorisations et préparons votre environnement PharmaFlow.",
+      "Nous vérifions votre compte et préparons votre environnement PharmaFlow.",
 
     showPassword:
       "Afficher le mot de passe",
@@ -167,55 +162,43 @@ const TEXT = {
 
     languageEnglish:
       "English",
+
+    retry:
+      "Réessayer",
+
+    connectionProtected:
+      "Connexion protégée",
   },
 
   en: {
     brand: "PharmaFlow",
+    subtitle: "Smart pharmacy management",
 
-    subtitle:
-      "Smart pharmacy management",
+    badge: "PROFESSIONAL AREA",
 
-    badge:
-      "PROFESSIONAL AREA",
-
-    title:
-      "Welcome 👋",
+    title: "Welcome 👋",
 
     description:
-      "Sign in to your PharmaFlow workspace.",
+      "Sign in to your PharmaFlow workspace to manage your pharmacy.",
 
-    email:
-      "Email address",
+    email: "Email address",
+    emailPlaceholder: "example@pharmacy.com",
 
-    emailPlaceholder:
-      "example@pharmacy.com",
+    password: "Password",
+    passwordPlaceholder: "Your password",
 
-    password:
-      "Password",
+    forgot: "Forgot your password?",
 
-    passwordPlaceholder:
-      "Your password",
+    login: "Sign in",
+    loggingIn: "Signing in...",
 
-    forgot:
-      "Forgot your password?",
+    noAccount: "Don't have an account yet?",
+    createAccount: "Create a pharmacy",
 
-    login:
-      "Sign in",
-
-    loggingIn:
-      "Signing in...",
-
-    noAccount:
-      "Don't have an account yet?",
-
-    createAccount:
-      "Create a pharmacy",
-
-    security:
-      "Secure sign-in",
+    security: "Secure sign-in",
 
     securityDescription:
-      "Your data is protected by PharmaFlow's secure authentication system.",
+      "Your session is protected by PharmaFlow's secure authentication system.",
 
     footer:
       "©️ 2026 PharmaFlow. All rights reserved.",
@@ -228,6 +211,18 @@ const TEXT = {
 
     loginError:
       "Incorrect email address or password.",
+
+    networkError:
+      "Unable to contact the authentication server. Check your Internet connection and try again.",
+
+    configurationError:
+      "The authentication configuration is incorrect. Please contact the administrator.",
+
+    emailNotConfirmed:
+      "Your email address has not been confirmed yet. Check your inbox.",
+
+    tooManyRequests:
+      "Too many login attempts. Please wait a moment before trying again.",
 
     profileError:
       "Your user profile could not be found.",
@@ -244,9 +239,6 @@ const TEXT = {
     platformInactive:
       "Access to your PharmaFlow account is currently disabled.",
 
-    languageError:
-      "Unable to determine your pharmacy language.",
-
     platformError:
       "Unable to verify platform permissions.",
 
@@ -254,7 +246,7 @@ const TEXT = {
       "Preparing your workspace...",
 
     loadingDescription:
-      "We are checking your permissions and preparing your PharmaFlow environment.",
+      "We are checking your account and preparing your PharmaFlow environment.",
 
     showPassword:
       "Show password",
@@ -267,6 +259,12 @@ const TEXT = {
 
     languageEnglish:
       "English",
+
+    retry:
+      "Try again",
+
+    connectionProtected:
+      "Secure connection",
   },
 } as const;
 
@@ -274,9 +272,7 @@ const TEXT = {
    COOKIE LANGUE
 ============================================================ */
 
-function setLocaleCookie(
-  locale: Locale,
-) {
+function setLocaleCookie(locale: Locale) {
   document.cookie = [
     `pf_locale=${locale}`,
     "Path=/",
@@ -337,29 +333,19 @@ function getAllowedDestination(
   role: string | null | undefined,
   requestedRedirect: string | null,
 ) {
-  const roleHome =
-    getRoleHome(role);
+  const roleHome = getRoleHome(role);
 
-  if (
-    roleHome ===
-    "/login"
-  ) {
+  if (roleHome === "/login") {
     return "/login";
   }
 
-  if (
-    !requestedRedirect
-  ) {
+  if (!requestedRedirect) {
     return roleHome;
   }
 
   if (
-    !requestedRedirect.startsWith(
-      "/",
-    ) ||
-    requestedRedirect.startsWith(
-      "//",
-    )
+    !requestedRedirect.startsWith("/") ||
+    requestedRedirect.startsWith("//")
   ) {
     return roleHome;
   }
@@ -373,42 +359,23 @@ function getAllowedDestination(
     string,
     string[]
   > = {
-    owner: [
-      "/dashboard",
-    ],
-
-    admin: [
-      "/admin",
-    ],
-
-    pharmacist: [
-      "/pharmacien",
-    ],
-
-    cashier: [
-      "/caisse",
-    ],
-
-    employee: [
-      "/employe",
-    ],
+    owner: ["/dashboard"],
+    admin: ["/admin"],
+    pharmacist: ["/pharmacien"],
+    cashier: ["/caisse"],
+    employee: ["/employe"],
   };
 
   const normalizedRole =
-    normalizeRole(
-      role,
-    );
+    normalizeRole(role);
 
   const allowedRoutes =
-    allowedByRole[
-      normalizedRole
-    ] ?? [];
+    allowedByRole[normalizedRole] ?? [];
 
   if (
     allowedRoutes.some(
       (route) =>
-        normalizedRedirect ===
-          route ||
+        normalizedRedirect === route ||
         normalizedRedirect.startsWith(
           `${route}/`,
         ),
@@ -421,22 +388,20 @@ function getAllowedDestination(
 }
 
 /* ============================================================
-   ACCÈS PLATEFORME
+   PLATEFORME
 ============================================================ */
 
 async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
-  const response =
-    await fetch(
-      "/api/auth/platform-access",
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          Accept:
-            "application/json",
-        },
+  const response = await fetch(
+    "/api/auth/platform-access",
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
       },
-    );
+    },
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -452,23 +417,18 @@ async function checkPlatformAccess(): Promise<PlatformAccessResponse> {
 ============================================================ */
 
 async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
-  const response =
-    await fetch(
-      "/api/subscription/status",
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          Accept:
-            "application/json",
-        },
+  const response = await fetch(
+    "/api/subscription/status",
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
       },
-    );
+    },
+  );
 
-  if (
-    response.status ===
-    401
-  ) {
+  if (response.status === 401) {
     throw new Error(
       "SUBSCRIPTION_UNAUTHENTICATED",
     );
@@ -484,36 +444,134 @@ async function checkSubscriptionAccess(): Promise<SubscriptionStatusResponse> {
 }
 
 /* ============================================================
+   ERREURS SUPABASE
+============================================================ */
+
+function getAuthErrorMessage(
+  error: unknown,
+  t: (typeof TEXT)["fr"] | (typeof TEXT)["en"],
+) {
+  if (!error) {
+    return t.loginError;
+  }
+
+  const authError =
+    error as {
+      name?: string;
+      message?: string;
+      status?: number;
+    };
+
+  const name =
+    String(
+      authError.name ?? "",
+    ).toLowerCase();
+
+  const message =
+    String(
+      authError.message ?? "",
+    ).toLowerCase();
+
+  const status =
+    Number(
+      authError.status ?? 0,
+    );
+
+  /* ----------------------------------------------------------
+     PROBLÈME RÉSEAU / FETCH
+  ---------------------------------------------------------- */
+
+  if (
+    name.includes(
+      "retryablefetch",
+    ) ||
+    name.includes(
+      "fetch",
+    ) ||
+    message.includes(
+      "failed to fetch",
+    ) ||
+    message.includes(
+      "network",
+    ) ||
+    message.includes(
+      "fetch failed",
+    )
+  ) {
+    return t.networkError;
+  }
+
+  /* ----------------------------------------------------------
+     CONFIGURATION
+  ---------------------------------------------------------- */
+
+  if (
+    message.includes(
+      "invalid api key",
+    ) ||
+    message.includes(
+      "apikey",
+    ) ||
+    status === 401 &&
+      message.includes(
+        "api",
+      )
+  ) {
+    return t.configurationError;
+  }
+
+  /* ----------------------------------------------------------
+     EMAIL NON CONFIRMÉ
+  ---------------------------------------------------------- */
+
+  if (
+    message.includes(
+      "email not confirmed",
+    )
+  ) {
+    return t.emailNotConfirmed;
+  }
+
+  /* ----------------------------------------------------------
+     TROP DE TENTATIVES
+  ---------------------------------------------------------- */
+
+  if (
+    status === 429 ||
+    message.includes(
+      "too many requests",
+    )
+  ) {
+    return t.tooManyRequests;
+  }
+
+  return t.loginError;
+}
+
+/* ============================================================
    PAGE LOGIN
 ============================================================ */
 
 export default function LoginPage() {
-  const locale =
-    useLocale();
+  const locale = useLocale();
 
-  const router =
-    useRouter();
+  const router = useRouter();
 
   const searchParams =
     useSearchParams();
 
-  const supabase =
-    useMemo(
-      () =>
-        createClient(),
-      [],
-    );
+  const supabase = useMemo(
+    () => createClient(),
+    [],
+  );
 
   const currentLocale: Locale =
-    locale ===
-    "en"
+    locale === "en"
       ? "en"
       : "fr";
 
   const t =
-    TEXT[
-      currentLocale
-    ];
+    TEXT[currentLocale];
 
   const requestedRedirect =
     searchParams.get(
@@ -601,13 +659,17 @@ export default function LoginPage() {
   }
 
   /* ==========================================================
-     CONNEXION MANUELLE UNIQUEMENT
-     ========================================================== */
+     CONNEXION
+  ========================================================== */
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+
+    if (loading) {
+      return;
+    }
 
     setError("");
 
@@ -628,29 +690,57 @@ export default function LoginPage() {
          1. SUPABASE AUTH
       ====================================================== */
 
-      const {
-        data: authData,
-        error: authError,
-      } =
-        await supabase.auth.signInWithPassword(
-          {
-            email:
-              cleanEmail,
-            password,
-          },
+      let authData;
+      let authError;
+
+      try {
+        const result =
+          await supabase.auth.signInWithPassword(
+            {
+              email:
+                cleanEmail,
+              password,
+            },
+          );
+
+        authData =
+          result.data;
+
+        authError =
+          result.error;
+      } catch (errorObject) {
+        console.error(
+          "PHARMAFLOW AUTH FETCH ERROR:",
+          errorObject,
         );
+
+        setError(
+          getAuthErrorMessage(
+            errorObject,
+            t,
+          ),
+        );
+
+        setLoading(false);
+        setSyncing(false);
+
+        return;
+      }
 
       if (
         authError ||
-        !authData.user
+        !authData?.user
       ) {
         console.error(
-          "LOGIN AUTH:",
+          "PHARMAFLOW AUTH ERROR:",
           authError,
         );
 
         setError(
-          t.loginError,
+          getAuthErrorMessage(
+            authError,
+            t,
+          ),
         );
 
         setLoading(false);
@@ -660,7 +750,7 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         2. VÉRIFICATION SUPER ADMIN / AGENT
+         2. SUPER ADMIN / AGENT
       ====================================================== */
 
       let platformAccess:
@@ -669,18 +759,12 @@ export default function LoginPage() {
       try {
         platformAccess =
           await checkPlatformAccess();
-      } catch (
-        platformError
-      ) {
+      } catch (platformError) {
         console.error(
-          "LOGIN PLATFORM ACCESS:",
+          "PLATFORM ACCESS ERROR:",
           platformError,
         );
 
-        /*
-         * Impossible de déterminer les droits de plateforme.
-         * On ne laisse pas une session inconnue entrer.
-         */
         await supabase.auth.signOut();
 
         setError(
@@ -730,7 +814,7 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         AGENT CRÉÉ PAR LE SUPER ADMIN
+         AGENT
       ====================================================== */
 
       if (
@@ -739,31 +823,11 @@ export default function LoginPage() {
       ) {
         if (
           platformAccess.active ===
-            true
+          true
         ) {
-          /*
-           * IMPORTANT :
-           *
-           * Aucun profiles.pharmacy_id n'est demandé.
-           *
-           * Les agents appartiennent à :
-           *
-           * platform_team_members
-           *
-           * et utilisent le même Supabase Auth.
-           */
-
           setLocaleCookie(
             currentLocale,
           );
-
-          /*
-           * /agent utilise requireAgent().
-           *
-           * Si must_change_password = true,
-           * requireAgent() enverra automatiquement
-           * vers /agent/change-password.
-           */
 
           window.location.assign(
             platformAccess.redirect ||
@@ -786,7 +850,7 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         3. UTILISATEUR PHARMACIE
+         3. PROFIL
       ====================================================== */
 
       const {
@@ -810,11 +874,9 @@ export default function LoginPage() {
           )
           .maybeSingle();
 
-      if (
-        profileError
-      ) {
+      if (profileError) {
         console.error(
-          "LOGIN PROFILE:",
+          "PROFILE ERROR:",
           profileError,
         );
 
@@ -830,9 +892,7 @@ export default function LoginPage() {
         return;
       }
 
-      if (
-        !profileData
-      ) {
+      if (!profileData) {
         await supabase.auth.signOut();
 
         setError(
@@ -852,10 +912,7 @@ export default function LoginPage() {
          4. PHARMACY ID
       ====================================================== */
 
-      const pharmacyId =
-        profile.pharmacy_id;
-
-      if (!pharmacyId) {
+      if (!profile.pharmacy_id) {
         await supabase.auth.signOut();
 
         setError(
@@ -867,6 +924,9 @@ export default function LoginPage() {
 
         return;
       }
+
+      const pharmacyId =
+        profile.pharmacy_id;
 
       /* ======================================================
          5. PHARMACIE
@@ -900,7 +960,7 @@ export default function LoginPage() {
         !pharmacyData
       ) {
         console.error(
-          "LOGIN PHARMACY:",
+          "PHARMACY ERROR:",
           pharmacyError,
         );
 
@@ -953,7 +1013,7 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         7. LANGUE
+         7. LANGUE PHARMACIE
       ====================================================== */
 
       const pharmacyLanguage: Locale =
@@ -967,7 +1027,7 @@ export default function LoginPage() {
       );
 
       /* ======================================================
-         8. RÔLE + DESTINATION
+         8. RÔLE
       ====================================================== */
 
       const role =
@@ -1011,16 +1071,7 @@ export default function LoginPage() {
             ?.allowed ===
           true;
 
-        /*
-         * L'abonnement n'est pas actif.
-         *
-         * IMPORTANT :
-         * NE PAS DÉCONNECTER.
-         */
-
-        if (
-          !allowed
-        ) {
+        if (!allowed) {
           const reason =
             subscription
               .access
@@ -1041,7 +1092,7 @@ export default function LoginPage() {
         subscriptionError
       ) {
         console.error(
-          "LOGIN SUBSCRIPTION:",
+          "SUBSCRIPTION ERROR:",
           subscriptionError,
         );
 
@@ -1060,10 +1111,6 @@ export default function LoginPage() {
           return;
         }
 
-        /*
-         * On conserve la session afin de permettre
-         * à l'utilisateur de régler son abonnement.
-         */
         window.location.assign(
           `/abonnement?reason=verification&redirect=${encodeURIComponent(
             destination,
@@ -1074,22 +1121,27 @@ export default function LoginPage() {
       }
 
       /* ======================================================
-         10. ACCÈS FINAL
+         10. REDIRECTION FINALE
       ====================================================== */
+
+      setLocaleCookie(
+        pharmacyLanguage,
+      );
 
       window.location.assign(
         destination,
       );
-    } catch (
-      errorObject
-    ) {
+    } catch (errorObject) {
       console.error(
-        "LOGIN:",
+        "PHARMAFLOW LOGIN ERROR:",
         errorObject,
       );
 
       setError(
-        t.loginError,
+        getAuthErrorMessage(
+          errorObject,
+          t,
+        ),
       );
 
       setLoading(false);
@@ -1098,33 +1150,23 @@ export default function LoginPage() {
   }
 
   /* ==========================================================
-     ÉCRAN DE PRÉPARATION
+     ÉCRAN DE CHARGEMENT
   ========================================================== */
 
-  if (
-    syncing
-  ) {
+  if (syncing) {
     return (
       <main className="pf-auth-page">
-
         <div className="pf-auth-background">
-
           <div className="pf-auth-orb pf-auth-orb-one" />
-
           <div className="pf-auth-orb pf-auth-orb-two" />
-
         </div>
 
         <div className="pf-auth-container">
-
           <section className="pf-auth-card">
 
             <div className="pf-auth-logo">
-
               <div className="pf-auth-logo-icon">
-                <span>
-                  ✚
-                </span>
+                <span>✚</span>
               </div>
 
               <div>
@@ -1136,11 +1178,9 @@ export default function LoginPage() {
                   {t.subtitle}
                 </div>
               </div>
-
             </div>
 
             <div className="pf-auth-loading">
-
               <span className="pf-spinner" />
 
               <h2>
@@ -1150,19 +1190,16 @@ export default function LoginPage() {
               <p>
                 {t.loadingDescription}
               </p>
-
             </div>
 
             <div className="pf-auth-security">
-
               <span className="pf-auth-security-icon">
                 🛡️
               </span>
 
               <div>
-
                 <strong>
-                  {t.security}
+                  {t.connectionProtected}
                 </strong>
 
                 <span
@@ -1175,9 +1212,7 @@ export default function LoginPage() {
                 >
                   {t.securityDescription}
                 </span>
-
               </div>
-
             </div>
 
           </section>
@@ -1185,58 +1220,51 @@ export default function LoginPage() {
           <footer className="pf-auth-page-footer">
             {t.footer}
           </footer>
-
         </div>
-
       </main>
     );
   }
 
   /* ==========================================================
-     INTERFACE LOGIN
+     INTERFACE
   ========================================================== */
 
   return (
     <main className="pf-auth-page">
 
       <div className="pf-auth-background">
-
         <div className="pf-auth-orb pf-auth-orb-one" />
-
         <div className="pf-auth-orb pf-auth-orb-two" />
-
       </div>
 
       <div className="pf-auth-container">
 
         <section className="pf-auth-card">
 
+          {/* ==================================================
+             HEADER
+          ================================================== */}
+
           <div
             style={{
-              display:
-                "flex",
-              alignItems:
-                "flex-start",
-              justifyContent:
-                "space-between",
-              gap:
-                "16px",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "16px",
             }}
           >
 
             <Link
               href="/"
               className="pf-auth-logo"
+              aria-label="PharmaFlow"
             >
 
               <div className="pf-auth-logo-icon">
-                <span>
-                  ✚
-                </span>
+                <span>✚</span>
               </div>
 
               <div>
-
                 <div className="pf-auth-logo-name">
                   {t.brand}
                 </div>
@@ -1244,31 +1272,26 @@ export default function LoginPage() {
                 <div className="pf-auth-logo-subtitle">
                   {t.subtitle}
                 </div>
-
               </div>
 
             </Link>
+
+            {/* LANGUAGE */}
 
             <div
               role="group"
               aria-label="Language selector"
               style={{
-                display:
-                  "flex",
-                alignItems:
-                  "center",
-                gap:
-                  "4px",
-                padding:
-                  "4px",
-                borderRadius:
-                  "12px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "4px",
+                borderRadius: "12px",
                 background:
-                  "rgba(241, 245, 249, 0.9)",
+                  "rgba(241,245,249,0.9)",
                 border:
-                  "1px solid rgba(226, 232, 240, 0.9)",
-                flexShrink:
-                  0,
+                  "1px solid rgba(226,232,240,0.9)",
+                flexShrink: 0,
               }}
             >
 
@@ -1283,19 +1306,14 @@ export default function LoginPage() {
                   currentLocale ===
                   "fr"
                 }
-                title={
-                  t.languageFrench
-                }
                 style={{
-                  border:
-                    "none",
+                  border: "none",
                   cursor:
                     currentLocale ===
                     "fr"
                       ? "default"
                       : "pointer",
-                  borderRadius:
-                    "9px",
+                  borderRadius: "9px",
                   padding:
                     "7px 9px",
                   background:
@@ -1308,8 +1326,7 @@ export default function LoginPage() {
                     "fr"
                       ? "#0f172a"
                       : "#64748b",
-                  fontSize:
-                    "13px",
+                  fontSize: "13px",
                   fontWeight:
                     currentLocale ===
                     "fr"
@@ -1318,10 +1335,8 @@ export default function LoginPage() {
                   boxShadow:
                     currentLocale ===
                     "fr"
-                      ? "0 1px 4px rgba(15, 23, 42, 0.10)"
+                      ? "0 1px 4px rgba(15,23,42,.10)"
                       : "none",
-                  transition:
-                    "all 0.2s ease",
                 }}
               >
                 🇫🇷 FR
@@ -1338,19 +1353,14 @@ export default function LoginPage() {
                   currentLocale ===
                   "en"
                 }
-                title={
-                  t.languageEnglish
-                }
                 style={{
-                  border:
-                    "none",
+                  border: "none",
                   cursor:
                     currentLocale ===
                     "en"
                       ? "default"
                       : "pointer",
-                  borderRadius:
-                    "9px",
+                  borderRadius: "9px",
                   padding:
                     "7px 9px",
                   background:
@@ -1363,8 +1373,7 @@ export default function LoginPage() {
                     "en"
                       ? "#0f172a"
                       : "#64748b",
-                  fontSize:
-                    "13px",
+                  fontSize: "13px",
                   fontWeight:
                     currentLocale ===
                     "en"
@@ -1373,10 +1382,8 @@ export default function LoginPage() {
                   boxShadow:
                     currentLocale ===
                     "en"
-                      ? "0 1px 4px rgba(15, 23, 42, 0.10)"
+                      ? "0 1px 4px rgba(15,23,42,.10)"
                       : "none",
-                  transition:
-                    "all 0.2s ease",
                 }}
               >
                 🇬🇧 EN
@@ -1386,10 +1393,13 @@ export default function LoginPage() {
 
           </div>
 
+          {/* ==================================================
+             TITRE
+          ================================================== */}
+
           <div className="pf-auth-header">
 
             <div className="pf-auth-badge">
-
               <span className="pf-auth-badge-icon">
                 🔐
               </span>
@@ -1397,7 +1407,6 @@ export default function LoginPage() {
               <span>
                 {t.badge}
               </span>
-
             </div>
 
             <h1>
@@ -1410,12 +1419,16 @@ export default function LoginPage() {
 
           </div>
 
+          {/* ==================================================
+             ERREUR
+          ================================================== */}
+
           {error && (
             <div
               className="pf-alert pf-alert-danger"
               role="alert"
+              aria-live="polite"
             >
-
               <span className="pf-alert-icon">
                 !
               </span>
@@ -1423,16 +1436,22 @@ export default function LoginPage() {
               <span>
                 {error}
               </span>
-
             </div>
           )}
+
+          {/* ==================================================
+             FORMULAIRE
+          ================================================== */}
 
           <form
             onSubmit={
               handleSubmit
             }
             className="pf-auth-form"
+            noValidate
           >
+
+            {/* EMAIL */}
 
             <div className="pf-form-group">
 
@@ -1456,58 +1475,43 @@ export default function LoginPage() {
                   id="email"
                   name="email"
                   type="email"
-                  value={
-                    email
-                  }
-                  onChange={(
-                    event,
-                  ) => {
-
+                  value={email}
+                  onChange={(event) => {
                     setEmail(
-                      event.target
-                        .value,
+                      event.target.value,
                     );
 
-                    if (
-                      error
-                    ) {
-                      setError(
-                        "",
-                      );
+                    if (error) {
+                      setError("");
                     }
-
                   }}
                   placeholder={
                     t.emailPlaceholder
                   }
                   className="pf-form-input pf-form-input-with-icon"
-                  autoComplete="email"
+                  autoComplete="username"
                   autoCapitalize="none"
+                  autoCorrect="off"
                   spellCheck={false}
-                  disabled={
-                    loading
-                  }
+                  disabled={loading}
                   required
                 />
 
               </div>
-
             </div>
+
+            {/* MOT DE PASSE */}
 
             <div className="pf-form-group">
 
               <div
                 style={{
-                  display:
-                    "flex",
-                  alignItems:
-                    "center",
+                  display: "flex",
+                  alignItems: "center",
                   justifyContent:
                     "space-between",
-                  gap:
-                    "12px",
-                  marginBottom:
-                    "8px",
+                  gap: "12px",
+                  marginBottom: "8px",
                 }}
               >
 
@@ -1515,8 +1519,7 @@ export default function LoginPage() {
                   htmlFor="password"
                   className="pf-form-label"
                   style={{
-                    marginBottom:
-                      0,
+                    marginBottom: 0,
                   }}
                 >
                   {t.password}
@@ -1548,35 +1551,22 @@ export default function LoginPage() {
                       ? "text"
                       : "password"
                   }
-                  value={
-                    password
-                  }
-                  onChange={(
-                    event,
-                  ) => {
-
+                  value={password}
+                  onChange={(event) => {
                     setPassword(
-                      event.target
-                        .value,
+                      event.target.value,
                     );
 
-                    if (
-                      error
-                    ) {
-                      setError(
-                        "",
-                      );
+                    if (error) {
+                      setError("");
                     }
-
                   }}
                   placeholder={
                     t.passwordPlaceholder
                   }
                   className="pf-form-input pf-form-input-with-icon pf-form-input-with-action"
                   autoComplete="current-password"
-                  disabled={
-                    loading
-                  }
+                  disabled={loading}
                   required
                 />
 
@@ -1585,15 +1575,11 @@ export default function LoginPage() {
                   className="pf-input-action"
                   onClick={() =>
                     setShowPassword(
-                      (
-                        value,
-                      ) =>
+                      (value) =>
                         !value,
                     )
                   }
-                  disabled={
-                    loading
-                  }
+                  disabled={loading}
                   aria-label={
                     showPassword
                       ? t.hidePassword
@@ -1611,15 +1597,14 @@ export default function LoginPage() {
                 </button>
 
               </div>
-
             </div>
+
+            {/* CONNEXION */}
 
             <button
               type="submit"
               className="pf-btn pf-btn-primary pf-btn-full pf-auth-submit"
-              disabled={
-                loading
-              }
+              disabled={loading}
             >
 
               {loading ? (
@@ -1630,9 +1615,7 @@ export default function LoginPage() {
                 </>
               ) : (
                 <>
-                  <span>
-                    →
-                  </span>
+                  <span>→</span>
 
                   {t.login}
                 </>
@@ -1642,25 +1625,25 @@ export default function LoginPage() {
 
           </form>
 
+          {/* ==================================================
+             INSCRIPTION
+          ================================================== */}
+
           <div
             style={{
-              marginTop:
-                "24px",
-              paddingTop:
-                "22px",
+              marginTop: "24px",
+              paddingTop: "22px",
               borderTop:
-                "1px solid var(--pf-border, #e2e8f0)",
-              textAlign:
-                "center",
+                "1px solid var(--pf-border,#e2e8f0)",
+              textAlign: "center",
             }}
           >
 
             <span
               style={{
                 color:
-                  "var(--pf-text-soft, #64748b)",
-                fontSize:
-                  "14px",
+                  "var(--pf-text-soft,#64748b)",
+                fontSize: "14px",
               }}
             >
               {t.noAccount}
@@ -1674,6 +1657,10 @@ export default function LoginPage() {
             </Link>
 
           </div>
+
+          {/* ==================================================
+             SÉCURITÉ
+          ================================================== */}
 
           <div className="pf-auth-security">
 
@@ -1689,10 +1676,8 @@ export default function LoginPage() {
 
               <span
                 style={{
-                  display:
-                    "block",
-                  marginTop:
-                    "3px",
+                  display: "block",
+                  marginTop: "3px",
                 }}
               >
                 {t.securityDescription}

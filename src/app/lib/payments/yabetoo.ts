@@ -1,3 +1,10 @@
+import "server-only";
+
+import {
+  getIntegrationConfig,
+  getRuntimeIntegrationValue,
+} from "@/app/lib/integrations/config";
+
 import type {
   CreatePaymentInput,
   CreatePaymentResult,
@@ -12,7 +19,7 @@ import {
 } from "./types";
 
 /* =========================================================
-   YABETOO - URLS
+   URLS
 ========================================================= */
 
 const SANDBOX_URL =
@@ -22,7 +29,7 @@ const PRODUCTION_URL =
   "https://pay.api.yabetoopay.com";
 
 /* =========================================================
-   TYPES YABETOO
+   TYPES
 ========================================================= */
 
 export type YabetooOperator =
@@ -66,38 +73,60 @@ export type YabetooConfirmResult = {
 
   errorCode?: string | null;
 
-  metadata?: Record<string, unknown>;
+  metadata?: Record<
+    string,
+    unknown
+  >;
 };
 
 /* =========================================================
    CONFIGURATION
 ========================================================= */
 
-function getMode():
-  | "sandbox"
-  | "production" {
-  return process.env.YABETOO_MODE ===
+async function getYabetooConfig() {
+  const configuration =
+    await getIntegrationConfig(
+      "yabetoo",
+    );
+
+  const mode =
+    configuration?.environment ??
+    (process.env.YABETOO_MODE ===
     "production"
-    ? "production"
-    : "sandbox";
-}
+      ? "production"
+      : "sandbox");
 
-function getBaseUrl(): string {
-  const mode = getMode();
+  const baseUrl =
+    await getRuntimeIntegrationValue(
+      "yabetoo",
+      "baseUrl",
+      process.env.YABETOO_BASE_URL,
+    );
 
-  return (
-    process.env.YABETOO_BASE_URL ||
-    (mode === "production"
-      ? PRODUCTION_URL
-      : SANDBOX_URL)
-  ).replace(/\/+$/, "");
-}
+  const secretKey =
+    await getRuntimeIntegrationValue(
+      "yabetoo",
+      "secretKey",
+      process.env.YABETOO_SECRET_KEY,
+    );
 
-function getSecretKey(): string {
-  return (
-    process.env.YABETOO_SECRET_KEY ||
-    ""
-  ).trim();
+  return {
+    mode,
+
+    baseUrl:
+      (
+        baseUrl ||
+        (mode === "production"
+          ? PRODUCTION_URL
+          : SANDBOX_URL)
+      ).replace(/\/+$/, ""),
+
+    secretKey,
+
+    enabled:
+      configuration?.isEnabled ??
+      Boolean(secretKey),
+  };
 }
 
 /* =========================================================
@@ -125,11 +154,8 @@ function getNestedRecord(
   data: unknown,
   key: string,
 ): Record<string, unknown> {
-  const record =
-    getRecord(data);
-
   return getRecord(
-    record[key],
+    getRecord(data)[key],
   );
 }
 
@@ -178,9 +204,7 @@ function getNumber(
         Number(value);
 
       if (
-        Number.isFinite(
-          parsed,
-        )
+        Number.isFinite(parsed)
       ) {
         return parsed;
       }
@@ -247,47 +271,40 @@ function getErrorMessage(
 
 function normalizeYabetooStatus(
   status: unknown,
-):
-  | "created"
-  | "pending"
-  | "successful"
-  | "failed"
-  | "cancelled"
-  | "expired" {
+) {
   return normalizePaymentStatus(
     status,
   );
 }
 
 /* =========================================================
-   CREATE PAYMENT INTENT
+   CREATE
 ========================================================= */
 
 async function createYabetooPayment(
   input: CreatePaymentInput,
 ): Promise<CreatePaymentResult> {
-  const secretKey =
-    getSecretKey();
+  const config =
+    await getYabetooConfig();
 
-  if (!secretKey) {
+  if (
+    !config.enabled ||
+    !config.secretKey
+  ) {
     return {
       success: false,
-
       status: "failed",
-
       merchantReference:
         input.merchantReference,
-
       message:
-        "Yabétoo n'est pas configuré sur le serveur.",
-
+        "Yabétoo n'est pas configuré ou est désactivé.",
       errorCode:
         "YABETOO_NOT_CONFIGURED",
     };
   }
 
   const url =
-    `${getBaseUrl()}/v1/payment-intents`;
+    `${config.baseUrl}/v1/payment-intents`;
 
   const payload: Record<
     string,
@@ -327,7 +344,7 @@ async function createYabetooPayment(
 
           headers: {
             Authorization:
-              `Bearer ${secretKey}`,
+              `Bearer ${config.secretKey}`,
 
             "Content-Type":
               "application/json",
@@ -355,21 +372,16 @@ async function createYabetooPayment(
     if (!response.ok) {
       return {
         success: false,
-
         status: "failed",
-
         merchantReference:
           input.merchantReference,
-
         message:
           getErrorMessage(
             data,
             "Yabétoo a refusé la création du paiement.",
           ),
-
         errorCode:
           `YABETOO_HTTP_${response.status}`,
-
         metadata: {
           provider_response:
             data,
@@ -387,8 +399,9 @@ async function createYabetooPayment(
       );
 
     const providerData =
-      Object.keys(nestedData).length >
-      0
+      Object.keys(
+        nestedData,
+      ).length > 0
         ? nestedData
         : record;
 
@@ -408,13 +421,10 @@ async function createYabetooPayment(
         "client_secret",
       );
 
-    const rawStatus =
-      providerData.status ??
-      "requires_payment_method";
-
     const status =
       normalizeYabetooStatus(
-        rawStatus,
+        providerData.status ??
+          "requires_payment_method",
       );
 
     return {
@@ -451,23 +461,14 @@ async function createYabetooPayment(
           clientSecret,
       },
     };
-  } catch (error) {
-    console.error(
-      "YABETOO CREATE:",
-      error,
-    );
-
+  } catch {
     return {
       success: false,
-
       status: "failed",
-
       merchantReference:
         input.merchantReference,
-
       message:
         "Impossible de contacter Yabétoo.",
-
       errorCode:
         "YABETOO_NETWORK_ERROR",
     };
@@ -475,30 +476,28 @@ async function createYabetooPayment(
 }
 
 /* =========================================================
-   CONFIRM MOBILE MONEY PAYMENT
+   CONFIRM
 ========================================================= */
 
 export async function confirmYabetooPayment(
   input: YabetooConfirmInput,
 ): Promise<YabetooConfirmResult> {
-  const secretKey =
-    getSecretKey();
+  const config =
+    await getYabetooConfig();
 
-  if (!secretKey) {
+  if (
+    !config.enabled ||
+    !config.secretKey
+  ) {
     return {
       success: false,
-
       status: "failed",
-
       paymentIntentId:
         input.paymentIntentId,
-
       failureReason:
         "YABETOO_NOT_CONFIGURED",
-
       message:
-        "Yabétoo n'est pas configuré sur le serveur.",
-
+        "Yabétoo n'est pas configuré.",
       errorCode:
         "YABETOO_NOT_CONFIGURED",
     };
@@ -509,15 +508,11 @@ export async function confirmYabetooPayment(
   ) {
     return {
       success: false,
-
       status: "failed",
-
       failureReason:
         "PAYMENT_INTENT_MISSING",
-
       message:
         "Identifiant de l'intention Yabétoo manquant.",
-
       errorCode:
         "YABETOO_PAYMENT_INTENT_MISSING",
     };
@@ -528,48 +523,35 @@ export async function confirmYabetooPayment(
   ) {
     return {
       success: false,
-
       status: "failed",
-
       paymentIntentId:
         input.paymentIntentId,
-
       failureReason:
         "CLIENT_SECRET_MISSING",
-
       message:
         "Client secret Yabétoo manquant.",
-
       errorCode:
         "YABETOO_CLIENT_SECRET_MISSING",
     };
   }
 
-  const phone =
-    input.phone.trim();
-
-  if (!phone) {
+  if (!input.phone.trim()) {
     return {
       success: false,
-
       status: "failed",
-
       paymentIntentId:
         input.paymentIntentId,
-
       failureReason:
         "PHONE_MISSING",
-
       message:
         "Numéro Mobile Money manquant.",
-
       errorCode:
         "YABETOO_PHONE_MISSING",
     };
   }
 
   const url =
-    `${getBaseUrl()}/v1/payment-intents/${encodeURIComponent(
+    `${config.baseUrl}/v1/payment-intents/${encodeURIComponent(
       input.paymentIntentId,
     )}/confirm`;
 
@@ -605,7 +587,7 @@ export async function confirmYabetooPayment(
         country: "cg",
 
         msisdn:
-          phone,
+          input.phone.trim(),
 
         operator_name:
           input.operator,
@@ -622,7 +604,7 @@ export async function confirmYabetooPayment(
 
           headers: {
             Authorization:
-              `Bearer ${secretKey}`,
+              `Bearer ${config.secretKey}`,
 
             "Content-Type":
               "application/json",
@@ -657,25 +639,18 @@ export async function confirmYabetooPayment(
       );
 
     const providerData =
-      Object.keys(nestedData).length >
-      0
+      Object.keys(
+        nestedData,
+      ).length > 0
         ? nestedData
         : record;
 
-    /*
-     * Si l'API retourne une erreur HTTP,
-     * on considère la confirmation comme
-     * échouée plutôt que pending.
-     */
     if (!response.ok) {
       return {
         success: false,
-
         status: "failed",
-
         paymentIntentId:
           input.paymentIntentId,
-
         providerTransactionId:
           getString(
             providerData,
@@ -684,19 +659,16 @@ export async function confirmYabetooPayment(
             "id",
             "externalId",
           ),
-
         amount:
           getNumber(
             providerData,
             "amount",
           ),
-
         currency:
           getString(
             providerData,
             "currency",
           ),
-
         failureReason:
           getString(
             providerData,
@@ -704,42 +676,27 @@ export async function confirmYabetooPayment(
             "failure_reason",
             "error",
           ),
-
         message:
           getErrorMessage(
             data,
             "Yabétoo a refusé la confirmation du paiement.",
           ),
-
         errorCode:
           `YABETOO_HTTP_${response.status}`,
-
         metadata: {
           provider_response:
             providerData,
-
-          yabetoo_payment_intent_id:
-            input.paymentIntentId,
-
-          yabetoo_operator:
-            input.operator,
         },
       };
     }
 
-    const rawStatus =
-      providerData.status ??
-      providerData.payment_status ??
-      providerData.paymentStatus ??
-      "processing";
-
     const status =
       normalizeYabetooStatus(
-        rawStatus,
+        providerData.status ??
+          providerData.payment_status ??
+          providerData.paymentStatus ??
+          "processing",
       );
-
-    const successful =
-      status === "successful";
 
     const providerTransactionId =
       getString(
@@ -750,22 +707,14 @@ export async function confirmYabetooPayment(
         "externalId",
       );
 
-    const failureReason =
-      getString(
-        providerData,
-        "failureReason",
-        "failure_reason",
-        "failureMessage",
-        "failure_message",
-      );
+    const successful =
+      status === "successful";
 
     return {
       success:
         successful,
 
       status,
-
-      failureReason,
 
       providerTransactionId,
 
@@ -788,6 +737,15 @@ export async function confirmYabetooPayment(
         getString(
           providerData,
           "currency",
+        ),
+
+      failureReason:
+        getString(
+          providerData,
+          "failureReason",
+          "failure_reason",
+          "failureMessage",
+          "failure_message",
         ),
 
       message:
@@ -818,26 +776,16 @@ export async function confirmYabetooPayment(
           input.operator,
       },
     };
-  } catch (error) {
-    console.error(
-      "YABETOO CONFIRM:",
-      error,
-    );
-
+  } catch {
     return {
       success: false,
-
       status: "pending",
-
       paymentIntentId:
         input.paymentIntentId,
-
       failureReason:
         "NETWORK_ERROR",
-
       message:
         "La confirmation Yabétoo est temporairement indisponible.",
-
       errorCode:
         "YABETOO_CONFIRM_NETWORK_ERROR",
     };
@@ -845,36 +793,30 @@ export async function confirmYabetooPayment(
 }
 
 /* =========================================================
-   VERIFY PAYMENT INTENT
+   VERIFY
 ========================================================= */
 
 async function verifyYabetooPayment(
   input: VerifyPaymentInput,
 ): Promise<VerifyPaymentResult> {
-  const secretKey =
-    getSecretKey();
+  const config =
+    await getYabetooConfig();
 
-  if (!secretKey) {
+  if (
+    !config.enabled ||
+    !config.secretKey
+  ) {
     return {
       success: false,
-
       status: "failed",
-
       merchantReference:
         input.merchantReference ??
         null,
-
       providerTransactionId:
         input.providerTransactionId ??
         null,
-
       message:
         "Yabétoo n'est pas configuré.",
-
-      metadata: {
-        errorCode:
-          "YABETOO_NOT_CONFIGURED",
-      },
     };
   }
 
@@ -884,41 +826,29 @@ async function verifyYabetooPayment(
   if (!id) {
     return {
       success: false,
-
       status: "failed",
-
       merchantReference:
         input.merchantReference ??
         null,
-
       providerTransactionId:
         null,
-
       message:
         "Identifiant de transaction Yabétoo manquant.",
-
-      metadata: {
-        errorCode:
-          "YABETOO_TRANSACTION_ID_MISSING",
-      },
     };
   }
-
-  const url =
-    `${getBaseUrl()}/v1/payment-intents/${encodeURIComponent(
-      id,
-    )}`;
 
   try {
     const response =
       await fetch(
-        url,
+        `${config.baseUrl}/v1/payment-intents/${encodeURIComponent(
+          id,
+        )}`,
         {
           method: "GET",
 
           headers: {
             Authorization:
-              `Bearer ${secretKey}`,
+              `Bearer ${config.secretKey}`,
 
             Accept:
               "application/json",
@@ -938,29 +868,17 @@ async function verifyYabetooPayment(
     if (!response.ok) {
       return {
         success: false,
-
         status: "failed",
-
         merchantReference:
           input.merchantReference ??
           null,
-
         providerTransactionId:
           id,
-
         message:
           getErrorMessage(
             data,
             "Impossible de vérifier le paiement Yabétoo.",
           ),
-
-        metadata: {
-          provider_response:
-            data,
-
-          errorCode:
-            `YABETOO_HTTP_${response.status}`,
-        },
       };
     }
 
@@ -974,8 +892,9 @@ async function verifyYabetooPayment(
       );
 
     const providerData =
-      Object.keys(nestedData).length >
-      0
+      Object.keys(
+        nestedData,
+      ).length > 0
         ? nestedData
         : record;
 
@@ -998,9 +917,6 @@ async function verifyYabetooPayment(
         "currency",
       );
 
-    /*
-     * Vérification du montant.
-     */
     if (
       input.expectedAmount !==
         undefined &&
@@ -1010,36 +926,21 @@ async function verifyYabetooPayment(
     ) {
       return {
         success: false,
-
         status: "failed",
-
         merchantReference:
           input.merchantReference ??
           null,
-
         providerTransactionId:
           id,
-
         amount,
-
         currency,
-
         message:
           "Le montant Yabétoo ne correspond pas au montant attendu.",
-
         failureReason:
           "AMOUNT_MISMATCH",
-
-        metadata: {
-          provider_response:
-            providerData,
-        },
       };
     }
 
-    /*
-     * Vérification de la devise.
-     */
     if (
       input.expectedCurrency &&
       currency &&
@@ -1048,30 +949,18 @@ async function verifyYabetooPayment(
     ) {
       return {
         success: false,
-
         status: "failed",
-
         merchantReference:
           input.merchantReference ??
           null,
-
         providerTransactionId:
           id,
-
         amount,
-
         currency,
-
         message:
           "La devise Yabétoo ne correspond pas à la devise attendue.",
-
         failureReason:
           "CURRENCY_MISMATCH",
-
-        metadata: {
-          provider_response:
-            providerData,
-        },
       };
     }
 
@@ -1102,37 +991,23 @@ async function verifyYabetooPayment(
           providerData,
       },
     };
-  } catch (error) {
-    console.error(
-      "YABETOO VERIFY:",
-      error,
-    );
-
+  } catch {
     return {
       success: false,
-
       status: "pending",
-
       merchantReference:
         input.merchantReference ??
         null,
-
       providerTransactionId:
         id,
-
       message:
         "Vérification Yabétoo temporairement indisponible.",
-
-      metadata: {
-        errorCode:
-          "YABETOO_VERIFY_NETWORK_ERROR",
-      },
     };
   }
 }
 
 /* =========================================================
-   WEBHOOK PARSER
+   WEBHOOK
 ========================================================= */
 
 function parseYabetooWebhook(
@@ -1151,8 +1026,9 @@ function parseYabetooWebhook(
     );
 
   const providerData =
-    Object.keys(nestedData).length >
-    0
+    Object.keys(
+      nestedData,
+    ).length > 0
       ? nestedData
       : record;
 
@@ -1164,51 +1040,43 @@ function parseYabetooWebhook(
         providerData.event_status,
     );
 
-  const merchantReference =
-    getString(
-      providerData,
-      "merchant_reference",
-      "merchantReference",
-      "reference",
-      "metadata_reference",
-    );
-
-  const providerTransactionId =
-    getString(
-      providerData,
-      "financialTransactionId",
-      "transactionId",
-      "transaction_id",
-      "id",
-      "externalId",
-      "external_id",
-    );
-
-  const amount =
-    getNumber(
-      providerData,
-      "amount",
-    );
-
-  const currency =
-    getString(
-      providerData,
-      "currency",
-    );
-
   return {
     success:
       status === "successful",
 
     status,
 
-    merchantReference,
+    merchantReference:
+      getString(
+        providerData,
+        "merchant_reference",
+        "merchantReference",
+        "reference",
+        "metadata_reference",
+      ),
 
-    providerTransactionId,
+    providerTransactionId:
+      getString(
+        providerData,
+        "financialTransactionId",
+        "transactionId",
+        "transaction_id",
+        "id",
+        "externalId",
+        "external_id",
+      ),
 
-    amount,
+    amount:
+      getNumber(
+        providerData,
+        "amount",
+      ),
 
-    currency,
+    currency:
+      getString(
+        providerData,
+        "currency",
+      ),
 
     message:
       "Webhook Yabétoo reçu.",
@@ -1221,69 +1089,61 @@ function parseYabetooWebhook(
 }
 
 /* =========================================================
-   ADAPTER YABETOO
+   ADAPTER
 ========================================================= */
 
 export const yabetooAdapter:
   PaymentProviderAdapter = {
+  code: "yabetoo",
+
+  name: "Yabétoo",
+
+  config: {
     code: "yabetoo",
 
     name: "Yabétoo",
 
-    config: {
-      code: "yabetoo",
+    mode:
+      process.env.YABETOO_MODE ===
+      "production"
+        ? "production"
+        : "sandbox",
 
-      name: "Yabétoo",
+    baseUrl:
+      (
+        process.env.YABETOO_BASE_URL ||
+        SANDBOX_URL
+      ).replace(/\/+$/, ""),
 
-      mode:
-        getMode(),
+    countries: [
+      "CG",
+    ],
 
-      baseUrl:
-        getBaseUrl(),
+    currencies: [
+      "XAF",
+    ],
 
-      countries: [
-        "CG",
-      ],
+    paymentMethods: [
+      "mobile_money",
+      "mtn",
+      "airtel",
+    ],
 
-      currencies: [
-        "XAF",
-      ],
+    enabled:
+      Boolean(
+        process.env.YABETOO_SECRET_KEY,
+      ),
+  },
 
-      paymentMethods: [
-        "mobile_money",
-        "mtn",
-        "airtel",
-      ],
+  createPayment:
+    createYabetooPayment,
 
-      enabled:
-        Boolean(
-          getSecretKey(),
-        ),
-    },
+  verifyPayment:
+    verifyYabetooPayment,
 
-    async createPayment(
-      input: CreatePaymentInput,
-    ): Promise<CreatePaymentResult> {
-      return createYabetooPayment(
-        input,
-      );
-    },
-
-    async verifyPayment(
-      input: VerifyPaymentInput,
-    ): Promise<VerifyPaymentResult> {
-      return verifyYabetooPayment(
-        input,
-      );
-    },
-
-    parseWebhook:
-      parseYabetooWebhook,
-  };
-
-/* =========================================================
-   COMPATIBILITY ALIAS
-========================================================= */
+  parseWebhook:
+    parseYabetooWebhook,
+};
 
 export const yabetooProvider =
   yabetooAdapter;

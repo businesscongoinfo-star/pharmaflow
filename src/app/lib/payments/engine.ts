@@ -1,3 +1,9 @@
+import "server-only";
+
+import {
+  getIntegrationConfig,
+} from "@/app/lib/integrations/config";
+
 import type {
   CreatePaymentInput,
   CreatePaymentResult,
@@ -19,73 +25,34 @@ import { yabetooAdapter } from "./yabetoo";
 import { gofreshpayAdapter } from "./gofreshpay";
 import { mokoAfrikaAdapter } from "./moko-afrika";
 
-/**
- * ============================================================
- * REGISTRE DES FOURNISSEURS
- * ============================================================
- *
- * Les adapters doivent être ajoutés ici lorsqu'ils sont prêts.
- *
- * Pour le moment :
- * - Moko Afrika
- * - Yabetoo
- * - GoFreshPay
- *
- * Les autres fournisseurs pourront être ajoutés sans changer
- * l'architecture générale :
- * - PawaPay
- * - CinetPay
- * - PayPal
- * - etc.
- */
 const PROVIDERS: Record<
   PaymentProviderCode,
   PaymentProviderAdapter
 > = {
-  moko_afrika: mokoAfrikaAdapter,
-  yabetoo: yabetooAdapter,
-  gofreshpay: gofreshpayAdapter,
+  moko_afrika:
+    mokoAfrikaAdapter,
+
+  yabetoo:
+    yabetooAdapter,
+
+  gofreshpay:
+    gofreshpayAdapter,
 };
 
-/**
- * ============================================================
- * PRIORITÉ DES FOURNISSEURS
- * ============================================================
- *
- * Cette priorité n'est PAS une garantie de compatibilité.
- *
- * Le moteur vérifie d'abord :
- * - pays
- * - devise
- * - moyen de paiement
- * - activation du provider
- *
- * avant de sélectionner le fournisseur.
- *
- * Moko Afrika est prioritaire.
- * Yabetoo vient ensuite.
- * GoFreshPay sert de fallback lorsqu'il est compatible.
- */
-const DEFAULT_PROVIDER_PRIORITY: PaymentProviderCode[] = [
-  "moko_afrika",
-  "yabetoo",
-  "gofreshpay",
-];
-
-/**
- * ============================================================
- * NORMALISATION
- * ============================================================
- */
+const DEFAULT_PROVIDER_PRIORITY: PaymentProviderCode[] =
+  [
+    "moko_afrika",
+    "yabetoo",
+    "gofreshpay",
+  ];
 
 function normalizeCountry(
   value?: string | null,
 ): string | undefined {
-  const normalized = String(
-    value ?? "",
-  )
-    .trim()
-    .toUpperCase();
+  const normalized =
+    String(value ?? "")
+      .trim()
+      .toUpperCase();
 
   return normalized || undefined;
 }
@@ -93,11 +60,10 @@ function normalizeCountry(
 function normalizeCurrency(
   value?: string | null,
 ): string | undefined {
-  const normalized = String(
-    value ?? "",
-  )
-    .trim()
-    .toUpperCase();
+  const normalized =
+    String(value ?? "")
+      .trim()
+      .toUpperCase();
 
   return normalized || undefined;
 }
@@ -105,26 +71,14 @@ function normalizeCurrency(
 function normalizePaymentMethod(
   value?: string | null,
 ): string | undefined {
-  const normalized = String(
-    value ?? "",
-  )
-    .trim()
-    .toLowerCase();
+  const normalized =
+    String(value ?? "")
+      .trim()
+      .toLowerCase();
 
   return normalized || undefined;
 }
 
-/**
- * ============================================================
- * RÉCUPÉRATION DU PAYS
- * ============================================================
- *
- * Le pays peut venir :
- *
- * 1. metadata.countryCode
- * 2. metadata.country
- * 3. customer.countryCode
- */
 function getPaymentCountry(
   input: CreatePaymentInput,
 ): string | undefined {
@@ -150,11 +104,6 @@ function getPaymentCountry(
   );
 }
 
-/**
- * ============================================================
- * COMPATIBILITÉ PAYS
- * ============================================================
- */
 function providerSupportsCountry(
   provider: PaymentProviderAdapter,
   country?: string,
@@ -162,11 +111,6 @@ function providerSupportsCountry(
   const countries =
     provider.config.countries;
 
-  /**
-   * Si le provider n'a pas encore déclaré
-   * ses pays, on laisse son adapter effectuer
-   * sa propre validation.
-   */
   if (
     !countries ||
     countries.length === 0
@@ -185,11 +129,6 @@ function providerSupportsCountry(
   );
 }
 
-/**
- * ============================================================
- * COMPATIBILITÉ DEVISE
- * ============================================================
- */
 function providerSupportsCurrency(
   provider: PaymentProviderAdapter,
   currency: string,
@@ -197,13 +136,6 @@ function providerSupportsCurrency(
   const currencies =
     provider.config.currencies;
 
-  /**
-   * Si aucune devise n'est encore déclarée,
-   * ne pas bloquer l'adapter.
-   *
-   * L'API du provider pourra effectuer
-   * sa propre validation.
-   */
   if (
     !currencies ||
     currencies.length === 0
@@ -225,11 +157,6 @@ function providerSupportsCurrency(
   );
 }
 
-/**
- * ============================================================
- * COMPATIBILITÉ MOYEN DE PAIEMENT
- * ============================================================
- */
 function providerSupportsPaymentMethod(
   provider: PaymentProviderAdapter,
   input: CreatePaymentInput,
@@ -237,10 +164,6 @@ function providerSupportsPaymentMethod(
   const configuredMethods =
     provider.config.paymentMethods;
 
-  /**
-   * Aucun moyen configuré :
-   * laisser l'adapter décider.
-   */
   if (
     !configuredMethods ||
     configuredMethods.length === 0
@@ -261,61 +184,25 @@ function providerSupportsPaymentMethod(
   const methods =
     configuredMethods.map(
       (method) =>
-        normalizePaymentMethod(method),
+        normalizePaymentMethod(
+          method,
+        ),
     );
 
-  /**
-   * Correspondance avec le type général.
-   *
-   * Exemple :
-   * card -> card
-   * mobile_money -> mobile_money
-   */
   if (
     requestedType &&
-    methods.includes(requestedType)
-  ) {
-    return true;
-  }
-
-  /**
-   * Correspondance avec une méthode précise.
-   *
-   * Exemple :
-   * mpesa
-   * airtel
-   * orange
-   * visa
-   * mastercard
-   */
-  if (
-    requestedMethod &&
-    methods.includes(requestedMethod)
-  ) {
-    return true;
-  }
-
-  /**
-   * Un provider déclarant mobile_money
-   * accepte un paiement Mobile Money général.
-   */
-  if (
-    requestedType ===
-      "mobile_money" &&
     methods.includes(
-      "mobile_money",
+      requestedType,
     )
   ) {
     return true;
   }
 
-  /**
-   * Un provider déclarant card
-   * accepte un paiement par carte général.
-   */
   if (
-    requestedType === "card" &&
-    methods.includes("card")
+    requestedMethod &&
+    methods.includes(
+      requestedMethod,
+    )
   ) {
     return true;
   }
@@ -323,14 +210,6 @@ function providerSupportsPaymentMethod(
   return false;
 }
 
-/**
- * ============================================================
- * SCORE PROVIDER
- * ============================================================
- *
- * Le score permet de choisir le meilleur provider
- * parmi ceux qui sont compatibles.
- */
 function getProviderScore(
   provider: PaymentProviderAdapter,
   input: CreatePaymentInput,
@@ -367,9 +246,6 @@ function getProviderScore(
       input.paymentMethod,
     );
 
-  /**
-   * Pays explicitement déclaré.
-   */
   if (
     country &&
     provider.config.countries?.some(
@@ -381,9 +257,6 @@ function getProviderScore(
     score += 50;
   }
 
-  /**
-   * Devise explicitement déclarée.
-   */
   if (
     currency &&
     provider.config.currencies?.some(
@@ -395,29 +268,25 @@ function getProviderScore(
     score += 50;
   }
 
-  /**
-   * Type de paiement.
-   */
   if (
     requestedType &&
     provider.config.paymentMethods?.some(
       (item) =>
-        normalizePaymentMethod(item) ===
-        requestedType,
+        normalizePaymentMethod(
+          item,
+        ) === requestedType,
     )
   ) {
     score += 75;
   }
 
-  /**
-   * Méthode précise.
-   */
   if (
     requestedMethod &&
     provider.config.paymentMethods?.some(
       (item) =>
-        normalizePaymentMethod(item) ===
-        requestedMethod,
+        normalizePaymentMethod(
+          item,
+        ) === requestedMethod,
     )
   ) {
     score += 100;
@@ -426,11 +295,6 @@ function getProviderScore(
   return score;
 }
 
-/**
- * ============================================================
- * GET PROVIDER
- * ============================================================
- */
 export function getPaymentProvider(
   provider: PaymentProviderCode,
 ): PaymentProviderAdapter {
@@ -454,11 +318,6 @@ export function getPaymentProvider(
   return adapter;
 }
 
-/**
- * ============================================================
- * PROVIDERS DISPONIBLES
- * ============================================================
- */
 export function getAvailablePaymentProviders(): PaymentProviderAdapter[] {
   return Object.values(
     PROVIDERS,
@@ -468,17 +327,9 @@ export function getAvailablePaymentProviders(): PaymentProviderAdapter[] {
   );
 }
 
-/**
- * Registre public des providers.
- */
 export const paymentProviders =
   PROVIDERS;
 
-/**
- * ============================================================
- * VALIDATION CREATE PAYMENT
- * ============================================================
- */
 function validateCreatePaymentInput(
   input: CreatePaymentInput,
 ): void {
@@ -522,11 +373,6 @@ function validateCreatePaymentInput(
   }
 }
 
-/**
- * ============================================================
- * VALIDATION RÉSULTAT CREATE
- * ============================================================
- */
 function validateCreatePaymentResult(
   result: CreatePaymentResult,
 ): CreatePaymentResult {
@@ -539,16 +385,63 @@ function validateCreatePaymentResult(
   };
 }
 
-/**
- * ============================================================
- * PROVIDERS COMPATIBLES
- * ============================================================
- *
- * Retourne les providers capables de traiter
- * la combinaison demandée :
- *
- * pays + devise + moyen de paiement.
- */
+/*
+|--------------------------------------------------------------------------
+| CONFIGURATION RUNTIME
+|--------------------------------------------------------------------------
+*/
+
+async function isProviderRuntimeEnabled(
+  provider: PaymentProviderCode,
+): Promise<boolean> {
+  const configuration =
+    await getIntegrationConfig(
+      provider as
+        | "moko_afrika"
+        | "yabetoo"
+        | "gofreshpay",
+    );
+
+  if (configuration) {
+    return configuration.isEnabled;
+  }
+
+  return (
+    PROVIDERS[provider]
+      ?.config.enabled !== false
+  );
+}
+
+async function getRuntimeProviders(): Promise<
+  PaymentProviderAdapter[]
+> {
+  const providers =
+    Object.values(
+      PROVIDERS,
+    );
+
+  const result: PaymentProviderAdapter[] =
+    [];
+
+  for (const provider of providers) {
+    if (
+      await isProviderRuntimeEnabled(
+        provider.code,
+      )
+    ) {
+      result.push(provider);
+    }
+  }
+
+  return result;
+}
+
+/*
+|--------------------------------------------------------------------------
+| COMPATIBLE PROVIDERS
+|--------------------------------------------------------------------------
+*/
+
 export function getCompatiblePaymentProviders(
   input: CreatePaymentInput,
 ): PaymentProviderAdapter[] {
@@ -591,11 +484,53 @@ export function getCompatiblePaymentProviders(
     );
 }
 
-/**
- * ============================================================
- * SÉLECTION DU MEILLEUR PROVIDER
- * ============================================================
- */
+async function getRuntimeCompatiblePaymentProviders(
+  input: CreatePaymentInput,
+): Promise<
+  PaymentProviderAdapter[]
+> {
+  validateCreatePaymentInput(
+    input,
+  );
+
+  const country =
+    getPaymentCountry(input);
+
+  const providers =
+    await getRuntimeProviders();
+
+  return providers
+    .filter((provider) =>
+      providerSupportsCountry(
+        provider,
+        country,
+      ),
+    )
+    .filter((provider) =>
+      providerSupportsCurrency(
+        provider,
+        input.currency,
+      ),
+    )
+    .filter((provider) =>
+      providerSupportsPaymentMethod(
+        provider,
+        input,
+      ),
+    )
+    .sort(
+      (a, b) =>
+        getProviderScore(
+          b,
+          input,
+        ) -
+        getProviderScore(
+          a,
+          input,
+        ),
+    );
+}
+
 export function selectPaymentProvider(
   input: CreatePaymentInput,
 ): PaymentProviderAdapter {
@@ -604,41 +539,18 @@ export function selectPaymentProvider(
       input,
     );
 
-  if (compatible.length === 0) {
-    const country =
-      getPaymentCountry(input) ??
-      "non spécifié";
-
-    const currency =
-      normalizeCurrency(
-        input.currency,
-      ) ??
-      "non spécifiée";
-
-    const method =
-      normalizePaymentMethod(
-        input.paymentMethodType,
-      ) ??
-      "non spécifié";
-
+  if (!compatible.length) {
     throw new Error(
-      `Aucun fournisseur de paiement compatible pour le pays ${country}, la devise ${currency} et le moyen de paiement ${method}.`,
+      `Aucun fournisseur de paiement compatible pour ${getPaymentCountry(input) ?? "pays non spécifié"}, ${normalizeCurrency(input.currency) ?? "devise non spécifiée"} et ${input.paymentMethodType}.`,
     );
   }
 
   return compatible[0];
 }
 
-/**
- * ============================================================
- * GÉNÉRATION RÉFÉRENCE MARCHAND
- * ============================================================
- */
 export function generateMerchantReference(): string {
-  const now = new Date();
-
   const date =
-    now
+    new Date()
       .toISOString()
       .replace(
         /[-:TZ.]/g,
@@ -646,24 +558,15 @@ export function generateMerchantReference(): string {
       )
       .slice(0, 17);
 
-  const random = Math.random()
-    .toString(36)
-    .slice(2, 10)
-    .toUpperCase();
+  const random =
+    Math.random()
+      .toString(36)
+      .slice(2, 10)
+      .toUpperCase();
 
   return `PF-${date}-${random}`;
 }
 
-/**
- * ============================================================
- * CRÉATION DIRECTE AVEC UN PROVIDER
- * ============================================================
- *
- * Cette fonction conserve votre ancienne architecture.
- *
- * Elle est utile lorsqu'une route connaît déjà
- * le provider à utiliser.
- */
 export async function createPayment(
   provider: PaymentProviderCode,
   input: CreatePaymentInput,
@@ -671,6 +574,17 @@ export async function createPayment(
   validateCreatePaymentInput(
     input,
   );
+
+  const runtimeEnabled =
+    await isProviderRuntimeEnabled(
+      provider,
+    );
+
+  if (!runtimeEnabled) {
+    throw new Error(
+      `Le fournisseur ${provider} est désactivé dans la configuration PharmaFlow.`,
+    );
+  }
 
   const adapter =
     getPaymentProvider(
@@ -687,26 +601,6 @@ export async function createPayment(
   );
 }
 
-/**
- * ============================================================
- * CRÉATION AUTOMATIQUE
- * ============================================================
- *
- * Cette fonction utilise le nouveau routeur.
- *
- * Ordre :
- *
- * 1. trouver les providers compatibles
- * 2. choisir le meilleur
- * 3. essayer le provider
- * 4. fallback si la création échoue immédiatement
- *
- * IMPORTANT :
- *
- * Si un paiement est créé ou retourne pending/created,
- * nous ne lançons PAS un second paiement chez un autre
- * provider.
- */
 export async function createPaymentWithBestProvider(
   input: CreatePaymentInput,
 ): Promise<
@@ -719,23 +613,13 @@ export async function createPaymentWithBestProvider(
   );
 
   const providers =
-    getCompatiblePaymentProviders(
+    await getRuntimeCompatiblePaymentProviders(
       input,
     );
 
-  if (providers.length === 0) {
-    const country =
-      getPaymentCountry(input) ??
-      "non spécifié";
-
-    const currency =
-      normalizeCurrency(
-        input.currency,
-      ) ??
-      "non spécifiée";
-
+  if (!providers.length) {
     throw new Error(
-      `Aucun fournisseur de paiement compatible pour ${country}, ${currency} et ${input.paymentMethodType}.`,
+      `Aucun fournisseur de paiement compatible pour ${getPaymentCountry(input) ?? "pays non spécifié"}, ${normalizeCurrency(input.currency) ?? "devise non spécifiée"} et ${input.paymentMethodType}.`,
     );
   }
 
@@ -755,12 +639,6 @@ export async function createPaymentWithBestProvider(
           result,
         );
 
-      /**
-       * Le paiement a été créé.
-       *
-       * Même si son statut est pending ou created,
-       * on arrête le fallback.
-       */
       if (
         normalized.success ||
         normalized.status ===
@@ -775,14 +653,11 @@ export async function createPaymentWithBestProvider(
         };
       }
 
-      /**
-       * Échec immédiat :
-       * essayer le prochain provider compatible.
-       */
-      lastError = new Error(
-        normalized.message ??
-          `Le fournisseur ${provider.name} n'a pas pu créer le paiement.`,
-      );
+      lastError =
+        new Error(
+          normalized.message ??
+            `Le fournisseur ${provider.name} n'a pas pu créer le paiement.`,
+        );
     } catch (error) {
       lastError =
         error instanceof Error
@@ -801,11 +676,6 @@ export async function createPaymentWithBestProvider(
   );
 }
 
-/**
- * ============================================================
- * VALIDATION RESULT VERIFY
- * ============================================================
- */
 function validateVerifyPaymentResult(
   result: VerifyPaymentResult,
 ): VerifyPaymentResult {
@@ -818,11 +688,6 @@ function validateVerifyPaymentResult(
   };
 }
 
-/**
- * ============================================================
- * VÉRIFICATION DU PAIEMENT
- * ============================================================
- */
 export async function verifyPayment(
   provider: PaymentProviderCode,
   input: VerifyPaymentInput,
@@ -842,6 +707,17 @@ export async function verifyPayment(
     );
   }
 
+  const runtimeEnabled =
+    await isProviderRuntimeEnabled(
+      provider,
+    );
+
+  if (!runtimeEnabled) {
+    throw new Error(
+      `Le fournisseur ${provider} est désactivé.`,
+    );
+  }
+
   const adapter =
     getPaymentProvider(
       provider,
@@ -857,68 +733,50 @@ export async function verifyPayment(
       result,
     );
 
-  /**
-   * Vérification du montant.
-   */
   if (
     normalized.amount !==
       undefined &&
     normalized.amount !==
       null &&
     input.expectedAmount !==
-      undefined
-  ) {
-    if (
-      Number(
-        normalized.amount,
-      ) !==
+      undefined &&
+    Number(
+      normalized.amount,
+    ) !==
       Number(
         input.expectedAmount,
       )
-    ) {
-      return {
-        ...normalized,
-        success: false,
-        status: "failed",
-        failureReason:
-          "Le montant retourné par le fournisseur ne correspond pas au montant attendu.",
-      };
-    }
+  ) {
+    return {
+      ...normalized,
+      success: false,
+      status: "failed",
+      failureReason:
+        "Le montant retourné par le fournisseur ne correspond pas au montant attendu.",
+    };
   }
 
-  /**
-   * Vérification de la devise.
-   */
   if (
     normalized.currency &&
-    input.expectedCurrency
-  ) {
-    if (
-      normalized.currency
-        .trim()
-        .toUpperCase() !==
+    input.expectedCurrency &&
+    normalized.currency
+      .trim()
+      .toUpperCase() !==
       input.expectedCurrency
         .trim()
         .toUpperCase()
-    ) {
-      return {
-        ...normalized,
-        success: false,
-        status: "failed",
-        failureReason:
-          "La devise retournée par le fournisseur ne correspond pas à la devise attendue.",
-      };
-    }
+  ) {
+    return {
+      ...normalized,
+      success: false,
+      status: "failed",
+      failureReason:
+        "La devise retournée par le fournisseur ne correspond pas à la devise attendue.",
+    };
   }
 
   return normalized;
 }
-
-/**
- * ============================================================
- * STATUTS DE PAIEMENT
- * ============================================================
- */
 
 export function canActivateSubscription(
   status: PaymentTransactionStatus,
@@ -952,9 +810,6 @@ export function isPaymentFailed(
   );
 }
 
-/**
- * Export de la normalisation des statuts.
- */
 export {
   normalizePaymentStatus,
 };

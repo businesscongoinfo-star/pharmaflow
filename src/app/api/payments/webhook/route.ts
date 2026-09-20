@@ -7,6 +7,7 @@ import {
 
 import {
   mokoAfrikaAdapter,
+  parseMokoCardWebhook,
 } from "@/app/lib/payments/moko-afrika";
 
 import {
@@ -26,28 +27,34 @@ import {
 
 /*
 |--------------------------------------------------------------------------
+| RUNTIME
+|--------------------------------------------------------------------------
+*/
+
+export const runtime = "nodejs";
+
+/*
+|--------------------------------------------------------------------------
 | SUPABASE ADMIN
 |--------------------------------------------------------------------------
 */
 
 function getSupabaseAdmin(): SupabaseClient {
   const url =
-    process.env
-      .NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   const serviceRoleKey =
-    process.env
-      .SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url) {
     throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL is missing",
+      "NEXT_PUBLIC_SUPABASE_URL is missing.",
     );
   }
 
   if (!serviceRoleKey) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is missing",
+      "SUPABASE_SERVICE_ROLE_KEY is missing.",
     );
   }
 
@@ -117,10 +124,7 @@ type PaymentTransactionRow = {
     | null;
 
   metadata:
-    | Record<
-        string,
-        unknown
-      >
+    | Record<string, unknown>
     | null;
 
   failure_reason:
@@ -159,10 +163,7 @@ function jsonError(
 
 function jsonSuccess(
   message: string,
-  data: Record<
-    string,
-    unknown
-  > = {},
+  data: Record<string, unknown> = {},
 ) {
   return NextResponse.json({
     success: true,
@@ -171,12 +172,17 @@ function jsonSuccess(
   });
 }
 
+/*
+|--------------------------------------------------------------------------
+| PROVIDER NORMALIZATION
+|--------------------------------------------------------------------------
+*/
+
 function normalizeProvider(
   value: unknown,
 ): PaymentProviderCode | null {
   if (
-    typeof value !==
-    "string"
+    typeof value !== "string"
   ) {
     return null;
   }
@@ -190,7 +196,8 @@ function normalizeProvider(
     provider === "moko" ||
     provider === "moko-afrika" ||
     provider === "moko_afrika" ||
-    provider === "gofreshpay"
+    provider === "gofreshpay" ||
+    provider === "freshpay"
   ) {
     return "moko_afrika";
   }
@@ -208,6 +215,58 @@ function normalizeProvider(
 
 /*
 |--------------------------------------------------------------------------
+| CARD WEBHOOK DETECTION
+|--------------------------------------------------------------------------
+|
+| Les callbacks carte Moko utilisent :
+|
+| X-FreshPay-Signature
+|
+| et doivent être vérifiés à partir du raw body.
+|
+*/
+
+function isMokoCardWebhook(
+  request: NextRequest,
+  payload: unknown,
+): boolean {
+  const cardSignature =
+    request.headers.get(
+      "x-freshpay-signature",
+    );
+
+  if (cardSignature) {
+    return true;
+  }
+
+  if (
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload)
+  ) {
+    const body =
+      payload as Record<
+        string,
+        unknown
+      >;
+
+    if (
+      body.transaction_uuid !==
+        undefined ||
+      body.decision !==
+        undefined ||
+      body.merchant_reference !==
+        undefined
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/*
+|--------------------------------------------------------------------------
 | PROVIDER DETECTION
 |--------------------------------------------------------------------------
 */
@@ -217,9 +276,17 @@ function detectProvider(
   request: NextRequest,
 ): PaymentProviderCode {
   if (
+    isMokoCardWebhook(
+      request,
+      payload,
+    )
+  ) {
+    return "moko_afrika";
+  }
+
+  if (
     payload &&
-    typeof payload ===
-      "object" &&
+    typeof payload === "object" &&
     !Array.isArray(payload)
   ) {
     const body =
@@ -303,8 +370,8 @@ function detectProvider(
   }
 
   /*
-   * Pour cette route unique, le callback
-   * FreshPay/Moko est le fallback principal.
+   * Fallback principal :
+   * Moko/FreshPay.
    */
 
   return "moko_afrika";
@@ -316,15 +383,44 @@ function detectProvider(
 |--------------------------------------------------------------------------
 */
 
-function parseProviderWebhook(
+async function parseProviderWebhook(
   provider: PaymentProviderCode,
   payload: unknown,
+  rawBody: string,
   headers: Headers,
-): PaymentWebhookResult {
+  request: NextRequest,
+): Promise<PaymentWebhookResult> {
+  /*
+   * MOKO AFRIKA
+   */
+
   if (
     provider ===
     "moko_afrika"
   ) {
+    /*
+     * Callback CARTE.
+     *
+     * Très important :
+     * parseMokoCardWebhook reçoit le raw body.
+     */
+
+    if (
+      isMokoCardWebhook(
+        request,
+        payload,
+      )
+    ) {
+      return parseMokoCardWebhook(
+        rawBody,
+        headers,
+      );
+    }
+
+    /*
+     * Callback MOBILE MONEY.
+     */
+
     if (
       !mokoAfrikaAdapter.parseWebhook
     ) {
@@ -338,6 +434,10 @@ function parseProviderWebhook(
       headers,
     );
   }
+
+  /*
+   * YABÉTOO
+   */
 
   if (
     provider ===
@@ -374,6 +474,10 @@ async function findTransaction(
 ): Promise<
   PaymentTransactionRow | null
 > {
+  /*
+   * Recherche prioritaire par merchant_reference.
+   */
+
   if (
     webhook.merchantReference
   ) {
@@ -401,6 +505,10 @@ async function findTransaction(
       return data as PaymentTransactionRow;
     }
   }
+
+  /*
+   * Recherche secondaire par ID provider.
+   */
 
   if (
     webhook.providerTransactionId
@@ -442,10 +550,7 @@ async function findTransaction(
 async function updateTransaction(
   supabase: SupabaseClient,
   transactionId: string,
-  values: Record<
-    string,
-    unknown
-  >,
+  values: Record<string, unknown>,
 ) {
   const {
     error,
@@ -476,6 +581,10 @@ async function verifyPayment(
   provider: PaymentProviderCode,
   transaction: PaymentTransactionRow,
 ): Promise<VerifyPaymentResult> {
+  /*
+   * MOKO AFRIKA
+   */
+
   if (
     provider ===
     "moko_afrika"
@@ -505,6 +614,10 @@ async function verifyPayment(
       },
     );
   }
+
+  /*
+   * YABÉTOO
+   */
 
   if (
     provider ===
@@ -538,7 +651,10 @@ async function verifyPayment(
 
   return {
     success: false,
-    status: "failed",
+
+    status:
+      "failed",
+
     message:
       "Unsupported payment provider.",
   };
@@ -576,6 +692,36 @@ async function activateSubscription(
 
 /*
 |--------------------------------------------------------------------------
+| SECURITY ERRORS
+|--------------------------------------------------------------------------
+*/
+
+function isSecurityFailure(
+  failureReason:
+    | string
+    | null
+    | undefined,
+): boolean {
+  if (
+    !failureReason
+  ) {
+    return false;
+  }
+
+  return new Set([
+    "SIGNATURE_MISSING",
+    "INVALID_SIGNATURE_FORMAT",
+    "SIGNATURE_TIMESTAMP_EXPIRED",
+    "INVALID_SIGNATURE",
+    "CALLBACK_SECRET_MISSING",
+    "INVALID_JSON",
+  ]).has(
+    failureReason,
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
 | POST
 |--------------------------------------------------------------------------
 */
@@ -585,7 +731,11 @@ export async function POST(
 ) {
   try {
     /*
-     * Le body doit être lu une seule fois.
+     * IMPORTANT :
+     *
+     * Le body est lu une seule fois.
+     * Le raw body est nécessaire pour la
+     * vérification de signature carte.
      */
 
     const rawBody =
@@ -598,6 +748,10 @@ export async function POST(
         "Empty webhook body.",
       );
     }
+
+    /*
+     * Parser JSON.
+     */
 
     let payload: unknown;
 
@@ -623,31 +777,58 @@ export async function POST(
       );
 
     /*
-     * Parser et, pour Moko,
-     * vérifier la signature + déchiffrer.
+     * Parser le webhook.
+     *
+     * Pour Moko carte, cette étape vérifie
+     * également la signature.
      */
 
     const webhook =
-      parseProviderWebhook(
+      await parseProviderWebhook(
         provider,
         payload,
+        rawBody,
         request.headers,
+        request,
       );
 
     /*
-     * Une signature invalide est une erreur
-     * de sécurité et ne doit jamais continuer.
+     * Erreurs de sécurité.
      */
 
     if (
-      webhook.failureReason ===
-      "INVALID_SIGNATURE"
+      isSecurityFailure(
+        webhook.failureReason,
+      )
     ) {
+      console.error(
+        "[PAYMENT WEBHOOK] Security failure",
+        {
+          provider,
+          reason:
+            webhook.failureReason,
+        },
+      );
+
+      if (
+        webhook.failureReason ===
+        "CALLBACK_SECRET_MISSING"
+      ) {
+        return jsonError(
+          "Payment callback secret is not configured.",
+          500,
+        );
+      }
+
       return jsonError(
-        "Invalid webhook signature.",
+        "Invalid payment webhook signature.",
         401,
       );
     }
+
+    /*
+     * Erreur de chiffrement FreshPay/Moko.
+     */
 
     if (
       webhook.failureReason ===
@@ -658,6 +839,11 @@ export async function POST(
         400,
       );
     }
+
+    /*
+     * Une transaction doit toujours pouvoir
+     * être identifiée.
+     */
 
     if (
       !webhook.merchantReference &&
@@ -676,8 +862,7 @@ export async function POST(
       getSupabaseAdmin();
 
     /*
-     * Rechercher la transaction créée
-     * précédemment par PharmaFlow.
+     * Recherche de la transaction existante.
      */
 
     const transaction =
@@ -687,8 +872,10 @@ export async function POST(
       );
 
     /*
-     * Un webhook inconnu ne doit jamais créer
-     * automatiquement une nouvelle transaction.
+     * IMPORTANT :
+     *
+     * On ne crée JAMAIS une transaction
+     * automatiquement depuis un webhook inconnu.
      */
 
     if (!transaction) {
@@ -696,16 +883,20 @@ export async function POST(
         "[PAYMENT WEBHOOK] Unknown transaction",
         {
           provider,
+
           merchantReference:
             webhook.merchantReference,
+
           providerTransactionId:
             webhook.providerTransactionId,
         },
       );
 
       /*
-       * 200 évite des retries infinis,
-       * mais aucune activation n'est effectuée.
+       * 200 pour éviter les retries infinis.
+       *
+       * Aucune activation.
+       * Aucune nouvelle transaction.
        */
 
       return jsonSuccess(
@@ -737,12 +928,21 @@ export async function POST(
     }
 
     /*
-     * Fusion metadata.
+     * Déterminer le rail de paiement.
+     *
+     * La valeur peut déjà exister dans metadata
+     * lors de la création du paiement.
      */
 
-    const webhookMetadata = {
-      ...(transaction.metadata ??
-        {}),
+    const existingMetadata =
+      transaction.metadata ??
+      {};
+
+    const webhookMetadata: Record<
+      string,
+      unknown
+    > = {
+      ...existingMetadata,
 
       webhook_received:
         true,
@@ -752,10 +952,13 @@ export async function POST(
 
       webhook_payload:
         payload,
+
+      webhook_received_at:
+        new Date().toISOString(),
     };
 
     /*
-     * Sauvegarder l'ID provider reçu.
+     * ID de transaction provider.
      */
 
     const providerTransactionId =
@@ -763,7 +966,52 @@ export async function POST(
       transaction.provider_transaction_id;
 
     /*
-     * Échec / annulation / expiration.
+     * Si le paiement est déjà successful,
+     * le webhook peut être un doublon.
+     */
+
+    if (
+      transaction.status ===
+        "successful" &&
+      webhook.status ===
+        "successful"
+    ) {
+      console.info(
+        "[PAYMENT WEBHOOK] Duplicate successful webhook",
+        {
+          transactionId:
+            transaction.id,
+
+          merchantReference:
+            transaction.merchant_reference,
+
+          provider,
+        },
+      );
+
+      /*
+       * On ne réactive pas inutilement
+       * l'abonnement.
+       */
+
+      return jsonSuccess(
+        "Payment webhook already processed.",
+        {
+          processed: true,
+
+          duplicate: true,
+
+          status:
+            "successful",
+
+          transactionId:
+            transaction.id,
+        },
+      );
+    }
+
+    /*
+     * ÉCHEC / ANNULATION / EXPIRATION
      */
 
     if (
@@ -801,8 +1049,10 @@ export async function POST(
         "Payment failure received.",
         {
           processed: true,
+
           status:
             webhook.status,
+
           transactionId:
             transaction.id,
         },
@@ -810,22 +1060,24 @@ export async function POST(
     }
 
     /*
-     * Pour tout paiement qui n'est pas encore
-     * définitivement successful, on conserve pending.
+     * PENDING / CREATED
      */
 
     if (
       webhook.status !==
       "successful"
     ) {
+      const pendingStatus =
+        normalizePaymentStatus(
+          webhook.status,
+        );
+
       await updateTransaction(
         supabase,
         transaction.id,
         {
           status:
-            normalizePaymentStatus(
-              webhook.status,
-            ),
+            pendingStatus,
 
           provider_transaction_id:
             providerTransactionId,
@@ -842,10 +1094,10 @@ export async function POST(
         "Payment status received.",
         {
           processed: true,
+
           status:
-            normalizePaymentStatus(
-              webhook.status,
-            ),
+            pendingStatus,
+
           transactionId:
             transaction.id,
         },
@@ -853,10 +1105,10 @@ export async function POST(
     }
 
     /*
-     * IMPORTANT :
+     * SUCCESS CALLBACK
      *
-     * Même lorsque le callback indique Successful,
-     * on vérifie encore la transaction directement
+     * Même si le callback indique SUCCESS,
+     * on effectue une vérification serveur
      * auprès du provider.
      */
 
@@ -868,11 +1120,14 @@ export async function POST(
 
           provider_transaction_id:
             providerTransactionId,
+
+          metadata:
+            webhookMetadata,
         },
       );
 
     /*
-     * Le provider doit confirmer Successful.
+     * Le provider doit confirmer SUCCESS.
      */
 
     if (
@@ -880,15 +1135,18 @@ export async function POST(
       verified.status !==
         "successful"
     ) {
+      const verificationStatus =
+        verified.status ===
+        "pending"
+          ? "pending"
+          : "failed";
+
       await updateTransaction(
         supabase,
         transaction.id,
         {
           status:
-            verified.status ===
-            "pending"
-              ? "pending"
-              : "failed",
+            verificationStatus,
 
           provider_transaction_id:
             verified.providerTransactionId ??
@@ -918,10 +1176,7 @@ export async function POST(
           processed: true,
 
           status:
-            verified.status ===
-            "pending"
-              ? "pending"
-              : "failed",
+            verificationStatus,
 
           transactionId:
             transaction.id,
@@ -930,7 +1185,7 @@ export async function POST(
     }
 
     /*
-     * Montant.
+     * VALIDATION DU MONTANT
      */
 
     if (
@@ -970,7 +1225,7 @@ export async function POST(
     }
 
     /*
-     * Devise.
+     * VALIDATION DE LA DEVISE
      */
 
     if (
@@ -1003,7 +1258,7 @@ export async function POST(
     }
 
     /*
-     * SUCCESS FINAL.
+     * SUCCESS FINAL
      */
 
     await updateTransaction(
@@ -1038,11 +1293,10 @@ export async function POST(
     );
 
     /*
-     * Une transaction successful peut être reçue
-     * plusieurs fois par le provider.
+     * ACTIVATION ABONNEMENT
      *
-     * Le RPC existant reste notre unique mécanisme
-     * d'activation.
+     * Le RPC existant reste le mécanisme
+     * officiel d'activation PharmaFlow.
      */
 
     let activationResult:
@@ -1057,6 +1311,10 @@ export async function POST(
           transaction.id,
         );
     }
+
+    /*
+     * RÉPONSE FINALE
+     */
 
     return jsonSuccess(
       "Payment successfully verified and processed.",
@@ -1103,8 +1361,11 @@ export async function POST(
 export async function GET() {
   return NextResponse.json({
     success: true,
+
     service:
       "PharmaFlow Payment Webhook",
-    status: "online",
+
+    status:
+      "online",
   });
 }

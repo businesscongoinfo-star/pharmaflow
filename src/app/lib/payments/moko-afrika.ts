@@ -1,4 +1,10 @@
+import "server-only";
+
 import crypto from "crypto";
+
+import {
+  getRuntimeIntegrationValue,
+} from "@/app/lib/integrations/config";
 
 import type {
   CreatePaymentInput,
@@ -18,1137 +24,2553 @@ import {
 | MOKO AFRIKA / FRESHPAY
 |--------------------------------------------------------------------------
 |
-| Produit utilisé ici :
+| Ce provider gère deux rails :
 |
-| PAYMENTS
-| - Mobile Money
-| - PayIn / C2B
-| - Check Status / Verify
-| - Callback
+| 1. MOBILE MONEY
+|    FreshPay Gateway
+|    POST /api/v1/gateway
 |
-| Le produit Card Payments de Moko Afrika possède
-| une API et une authentification différentes.
-| Il sera intégré séparément.
+| 2. CARTE
+|    Moko Checkout
+|    POST /api/v1/payment/orders
+|    POST /api/v1/payment/status
+|
+|--------------------------------------------------------------------------
+| IMPORTANT
+|--------------------------------------------------------------------------
+|
+| Les secrets restent exclusivement côté serveur.
+|
+| Le type de paiement est déterminé par :
+|
+| metadata.rail = "card"
+| metadata.rail = "mobile_money"
+|
+| On ne déduit PAS le rail à partir du format du
+| transaction_uuid.
 |
 |--------------------------------------------------------------------------
 */
 
-const DEFAULT_SANDBOX_URL =
+/* ==========================================================================
+ * TYPES
+ * ========================================================================== */
+
+type JsonRecord = Record<string, unknown>;
+
+/* ==========================================================================
+ * URLS PAR DÉFAUT
+ * ========================================================================== */
+
+const DEFAULT_MOBILE_MONEY_BASE_URL =
   "https://api.gofreshpay.com/api/v1/gateway";
 
-const DEFAULT_PRODUCTION_URL =
-  "https://paydrc.gofreshbakery.net/api/v5/";
+const DEFAULT_CARD_BASE_URL =
+  "https://sandbox.gofreshpay.com";
 
-/*
-|--------------------------------------------------------------------------
-| ENVIRONMENT
-|--------------------------------------------------------------------------
-*/
+const DEFAULT_CARD_PRODUCTION_BASE_URL =
+  "https://card.gofreshpay.com";
+
+/* ==========================================================================
+ * HELPERS
+ * ========================================================================== */
+
+function clean(value: unknown): string {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
+function asRecord(
+  value: unknown,
+): JsonRecord {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return {};
+  }
+
+  return value as JsonRecord;
+}
+
+function toNumber(
+  value: unknown,
+): number | null {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    return value;
+  }
+
+  if (
+    typeof value === "string" &&
+    value.trim()
+  ) {
+    const parsed =
+      Number(value);
+
+    if (
+      Number.isFinite(parsed)
+    ) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function getNestedString(
+  object: JsonRecord,
+  key: string,
+): string {
+  return clean(object[key]);
+}
+
+function getEnv(
+  name: string,
+): string {
+  return clean(
+    process.env[name],
+  );
+}
 
 function getMode():
   | "sandbox"
   | "production" {
-  return (
-    process.env.MOKO_AFRIKA_MODE ===
+  const mode =
+    getEnv(
+      "MOKO_AFRIKA_MODE",
+    ).toLowerCase();
+
+  return mode ===
     "production"
-      ? "production"
-      : "sandbox"
-  );
+    ? "production"
+    : "sandbox";
 }
 
-function getBaseUrl(): string {
-  const configured =
-    process.env.MOKO_AFRIKA_BASE_URL?.trim();
+/* ==========================================================================
+ * RUNTIME CONFIGURATION
+ * ========================================================================== */
 
-  if (configured) {
-    return configured.replace(/\/+$/, "");
+async function runtimeValue(
+  key: string,
+  envName: string,
+): Promise<string> {
+  try {
+    const value =
+      await getRuntimeIntegrationValue(
+        "moko_afrika",
+        key,
+        getEnv(envName),
+      );
+
+    return clean(value);
+  } catch {
+    return getEnv(envName);
   }
-
-  return getMode() === "production"
-    ? DEFAULT_PRODUCTION_URL.replace(
-        /\/+$/,
-        "",
-      )
-    : DEFAULT_SANDBOX_URL;
 }
 
-function getMerchantId(): string {
-  return (
-    process.env.MOKO_AFRIKA_MERCHANT_ID?.trim() ??
-    ""
-  );
-}
+/* ==========================================================================
+ * MOBILE MONEY CONFIGURATION
+ * ========================================================================== */
 
-function getMerchantSecret(): string {
-  return (
-    process.env.MOKO_AFRIKA_MERCHANT_SECRET?.trim() ??
-    ""
-  );
-}
+async function getMobileMoneyConfig() {
+  const mode =
+    getMode();
 
-function getCallbackUrl(): string {
-  return (
-    process.env.MOKO_AFRIKA_CALLBACK_URL?.trim() ??
-    ""
-  );
-}
+  const baseUrl =
+    (await runtimeValue(
+      "baseUrl",
+      "MOKO_AFRIKA_BASE_URL",
+    )) ||
+    DEFAULT_MOBILE_MONEY_BASE_URL;
 
-/*
-|--------------------------------------------------------------------------
-| WEBHOOK SECURITY
-|--------------------------------------------------------------------------
-|
-| FreshPay documente :
-|
-| X-Signature = HMAC-SHA256
-| body.data   = payload chiffré
-|
-| Le document fournit également un exemple
-| AES-CBC avec une clé de 16 octets et IV = clé.
-|
-*/
-
-function getWebhookAesKey(): Buffer | null {
-  const value =
-    process.env.MOKO_AFRIKA_WEBHOOK_AES_KEY?.trim() ||
-    process.env.MOKO_AFRIKA_AES_KEY?.trim() ||
-    process.env.FRESHPAY_SECRET_KEY?.trim();
-
-  if (!value) {
-    return null;
-  }
-
-  const buffer =
-    Buffer.from(value, "utf8");
-
-  /*
-   * Le document FreshPay montre une clé de
-   * 16 octets pour AES-CBC.
-   *
-   * On refuse une clé de taille incorrecte
-   * plutôt que de tronquer silencieusement
-   * un secret.
-   */
-
-  if (buffer.length !== 16) {
-    return null;
-  }
-
-  return buffer;
-}
-
-function getWebhookHmacKey(): string {
-  return (
-    process.env.MOKO_AFRIKA_WEBHOOK_HMAC_KEY?.trim() ||
-    process.env.MOKO_AFRIKA_WEBHOOK_SECRET?.trim() ||
-    process.env.FRESHPAY_HMAC_KEY?.trim() ||
-    ""
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| GENERIC HELPERS
-|--------------------------------------------------------------------------
-*/
-
-type RecordLike =
-  Record<string, unknown>;
-
-function isRecord(
-  value: unknown,
-): value is RecordLike {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-  );
-}
-
-function getString(
-  data: unknown,
-  ...keys: string[]
-): string | null {
-  if (!isRecord(data)) {
-    return null;
-  }
-
-  for (const key of keys) {
-    const value = data[key];
-
-    if (
-      typeof value === "string" &&
-      value.trim()
-    ) {
-      return value.trim();
-    }
-
-    if (
-      typeof value === "number" ||
-      typeof value === "boolean"
-    ) {
-      return String(value);
-    }
-  }
-
-  return null;
-}
-
-function getNumber(
-  data: unknown,
-  ...keys: string[]
-): number | null {
-  if (!isRecord(data)) {
-    return null;
-  }
-
-  for (const key of keys) {
-    const value = data[key];
-
-    if (
-      typeof value === "number" &&
-      Number.isFinite(value)
-    ) {
-      return value;
-    }
-
-    if (typeof value === "string") {
-      const parsed =
-        Number(value);
-
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-  }
-
-  return null;
-}
-
-function getErrorMessage(
-  data: unknown,
-): string {
-  return (
-    getString(
-      data,
-      "Trans_Status_Description",
-      "Status_Description",
-      "Comment",
-      "message",
-      "error",
-    ) ??
-    "Moko Afrika payment error"
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| PAYMENT METHOD
-|--------------------------------------------------------------------------
-*/
-
-function normalizeMokoMethod(
-  input: CreatePaymentInput,
-): string {
-  const method =
-    String(
-      input.paymentMethod ??
-        "",
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    [
-      "mpesa",
-      "vodacom",
-    ].includes(method)
-  ) {
-    return "mpesa";
-  }
-
-  if (
-    [
-      "airtel",
-    ].includes(method)
-  ) {
-    return "airtel";
-  }
-
-  if (
-    [
-      "orange",
-    ].includes(method)
-  ) {
-    return "orange";
-  }
-
-  if (
-    [
-      "africell",
-      "afrimoney",
-    ].includes(method)
-  ) {
-    return "africell";
-  }
-
-  if (method) {
-    return method;
-  }
-
-  return "airtel";
-}
-
-/*
-|--------------------------------------------------------------------------
-| REQUEST
-|--------------------------------------------------------------------------
-*/
-
-async function mokoRequest(
-  body: Record<string, unknown>,
-): Promise<unknown> {
   const merchantId =
-    getMerchantId();
+    await runtimeValue(
+      "merchantId",
+      "MOKO_AFRIKA_MERCHANT_ID",
+    );
 
   const merchantSecret =
-    getMerchantSecret();
-
-  if (!merchantId) {
-    throw new Error(
-      "MOKO_AFRIKA_MERCHANT_ID is missing",
+    await runtimeValue(
+      "merchantSecret",
+      "MOKO_AFRIKA_MERCHANT_SECRET",
     );
+
+  const callbackUrl =
+    await runtimeValue(
+      "callbackUrl",
+      "MOKO_AFRIKA_CALLBACK_URL",
+    );
+
+  return {
+    mode,
+
+    baseUrl:
+      baseUrl.replace(
+        /\/+$/,
+        "",
+      ),
+
+    merchantId,
+
+    merchantSecret,
+
+    callbackUrl,
+  };
+}
+
+/* ==========================================================================
+ * CARD CONFIGURATION
+ * ========================================================================== */
+
+async function getCardConfig() {
+  const mode =
+    getMode();
+
+  const defaultBaseUrl =
+    mode === "production"
+      ? DEFAULT_CARD_PRODUCTION_BASE_URL
+      : DEFAULT_CARD_BASE_URL;
+
+  const baseUrl =
+    (await runtimeValue(
+      "cardBaseUrl",
+      "MOKO_AFRIKA_CARD_BASE_URL",
+    )) ||
+    defaultBaseUrl;
+
+  const apiKey =
+    await runtimeValue(
+      "cardApiKey",
+      "MOKO_AFRIKA_CARD_API_KEY",
+    );
+
+  const apiSecret =
+    await runtimeValue(
+      "cardApiSecret",
+      "MOKO_AFRIKA_CARD_API_SECRET",
+    );
+
+  const callbackSecret =
+    await runtimeValue(
+      "cardCallbackSecret",
+      "MOKO_AFRIKA_CARD_CALLBACK_SECRET",
+    );
+
+  const callbackUrl =
+    await runtimeValue(
+      "cardCallbackUrl",
+      "MOKO_AFRIKA_CARD_CALLBACK_URL",
+    );
+
+  const returnUrl =
+    await runtimeValue(
+      "cardReturnUrl",
+      "MOKO_AFRIKA_CARD_RETURN_URL",
+    );
+
+  const cancelUrl =
+    await runtimeValue(
+      "cardCancelUrl",
+      "MOKO_AFRIKA_CARD_CANCEL_URL",
+    );
+
+  return {
+    mode,
+
+    baseUrl:
+      baseUrl.replace(
+        /\/+$/,
+        "",
+      ),
+
+    apiKey,
+
+    apiSecret,
+
+    callbackSecret,
+
+    callbackUrl,
+
+    returnUrl,
+
+    cancelUrl,
+  };
+}
+
+/* ==========================================================================
+ * SIGNATURE MOKO CHECKOUT
+ *
+ * Requête :
+ *
+ * JSON_BODY + timestamp
+ *
+ * HMAC-SHA256
+ * ========================================================================== */
+
+function createMokoRequestSignature(
+  rawBody: string,
+  timestamp: string,
+  secret: string,
+): string {
+  return crypto
+    .createHmac(
+      "sha256",
+      secret,
+    )
+    .update(
+      `${rawBody}${timestamp}`,
+      "utf8",
+    )
+    .digest("hex");
+}
+
+/* ==========================================================================
+ * SIGNATURE CALLBACK
+ *
+ * timestamp + rawBody
+ * ========================================================================== */
+
+function createCallbackSignature(
+  rawBody: string,
+  timestamp: string,
+  callbackSecret: string,
+): string {
+  return crypto
+    .createHmac(
+      "sha256",
+      callbackSecret,
+    )
+    .update(
+      `${timestamp}${rawBody}`,
+      "utf8",
+    )
+    .digest("hex");
+}
+
+/* ==========================================================================
+ * TIMESTAMP CALLBACK
+ * ========================================================================== */
+
+function verifyTimestamp(
+  timestamp: string,
+): boolean {
+  const parsed =
+    Number(timestamp);
+
+  if (
+    !Number.isFinite(parsed)
+  ) {
+    return false;
   }
 
-  if (!merchantSecret) {
-    throw new Error(
-      "MOKO_AFRIKA_MERCHANT_SECRET is missing",
-    );
-  }
-
-  const response =
-    await fetch(
-      getBaseUrl(),
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify({
-          merchant_id:
-            merchantId,
-
-          merchant_secrete:
-            merchantSecret,
-
-          ...body,
-        }),
-        cache: "no-store",
-      },
+  const now =
+    Math.floor(
+      Date.now() / 1000,
     );
 
-  const text =
-    await response.text();
+  return (
+    Math.abs(
+      now - parsed,
+    ) <= 30
+  );
+}
 
-  let data: unknown;
+/* ==========================================================================
+ * CARD — CREATE CHECKOUT
+ * ========================================================================== */
 
-  try {
-    data =
-      text
-        ? JSON.parse(text)
-        : {};
-  } catch {
-    data = {
-      raw: text,
+async function createCardPayment(
+  input: CreatePaymentInput,
+): Promise<CreatePaymentResult> {
+  const config =
+    await getCardConfig();
+
+  /* ------------------------------------------------------------------------
+   * API KEY
+   * ---------------------------------------------------------------------- */
+
+  if (!config.apiKey) {
+    return {
+      success: false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Moko Afrika Card API Key non configurée.",
+
+      errorCode:
+        "MOKO_CARD_API_KEY_MISSING",
     };
   }
 
-  if (!response.ok) {
-    throw new Error(
-      `Moko Afrika HTTP ${response.status}: ${getErrorMessage(data)}`,
-    );
+  /* ------------------------------------------------------------------------
+   * API SECRET
+   * ---------------------------------------------------------------------- */
+
+  if (!config.apiSecret) {
+    return {
+      success: false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Moko Afrika Card API Secret non configurée.",
+
+      errorCode:
+        "MOKO_CARD_API_SECRET_MISSING",
+    };
   }
 
-  return data;
-}
+  /* ------------------------------------------------------------------------
+   * CALLBACK
+   * ---------------------------------------------------------------------- */
 
-/*
-|--------------------------------------------------------------------------
-| CREATE MOBILE MONEY PAYMENT
-|--------------------------------------------------------------------------
-*/
+  if (!config.callbackUrl) {
+    return {
+      success: false,
 
-async function createMobileMoneyPayment(
-  input: CreatePaymentInput,
-): Promise<CreatePaymentResult> {
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Moko Afrika Card Callback URL non configurée.",
+
+      errorCode:
+        "MOKO_CARD_CALLBACK_URL_MISSING",
+    };
+  }
+
+  /* ------------------------------------------------------------------------
+   * CLIENT
+   * ---------------------------------------------------------------------- */
+
+  if (!input.customer) {
+    return {
+      success: false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Les informations client sont obligatoires pour Moko Checkout.",
+
+      errorCode:
+        "MOKO_CARD_CUSTOMER_MISSING",
+    };
+  }
+
   const customer =
-    input.customer ?? {};
+    input.customer;
+
+  const firstName =
+    customer.firstName ||
+    customer.name
+      ?.split(" ")[0] ||
+    "";
+
+  const lastName =
+    customer.lastName ||
+    customer.name
+      ?.split(" ")
+      .slice(1)
+      .join(" ") ||
+    "";
 
   const phone =
-    customer.phone?.trim();
+    clean(
+      customer.phone,
+    );
+
+  if (
+    !firstName ||
+    !lastName
+  ) {
+    return {
+      success: false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Le prénom et le nom du client sont obligatoires.",
+
+      errorCode:
+        "MOKO_CARD_CUSTOMER_NAME_MISSING",
+    };
+  }
+
+  if (
+    !clean(
+      customer.email,
+    )
+  ) {
+    return {
+      success: false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "L'adresse email du client est obligatoire.",
+
+      errorCode:
+        "MOKO_CARD_CUSTOMER_EMAIL_MISSING",
+    };
+  }
 
   if (!phone) {
     return {
       success: false,
-      status: "failed",
-      errorCode:
-        "MOKO_PHONE_REQUIRED",
-      message:
-        "Le numéro Mobile Money du client est obligatoire.",
-    };
-  }
 
-  const firstname =
-    customer.firstName ??
-    customer.name ??
-    "";
-
-  const lastname =
-    customer.lastName ??
-    "";
-
-  const email =
-    customer.email ??
-    "";
-
-  const method =
-    normalizeMokoMethod(
-      input,
-    );
-
-  const callbackUrl =
-    getCallbackUrl();
-
-  const payload: Record<
-    string,
-    unknown
-  > = {
-    action: "debit",
-
-    method,
-
-    amount:
-      String(input.amount),
-
-    currency:
-      input.currency.toUpperCase(),
-
-    customer_number:
-      phone,
-
-    reference:
-      input.merchantReference,
-
-    firstname,
-
-    lastname,
-
-    "e-mail":
-      email,
-  };
-
-  if (callbackUrl) {
-    payload.callback_url =
-      callbackUrl;
-  }
-
-  /*
-   * Les informations PharmaFlow complémentaires
-   * restent dans metadata et ne sont pas envoyées
-   * arbitrairement à FreshPay.
-   */
-
-  try {
-    const data =
-      await mokoRequest(
-        payload,
-      );
-
-    const transactionId =
-      getString(
-        data,
-        "Transaction_id",
-        "transaction_id",
-        "id",
-      );
-
-    const returnedReference =
-      getString(
-        data,
-        "Reference",
-        "reference",
-      ) ??
-      input.merchantReference;
-
-    /*
-     * IMPORTANT :
-     *
-     * Status = Success signifie seulement que
-     * FreshPay a reçu la demande.
-     *
-     * Le paiement réel sera ensuite confirmé
-     * par Callback ou Verify.
-     */
-
-    const status =
-      normalizePaymentStatus(
-        getString(
-          data,
-          "Trans_Status",
-        ) ??
-          "pending",
-      );
-
-    return {
-      success: true,
-
-      status,
-
-      providerTransactionId:
-        transactionId,
+      status:
+        "failed",
 
       merchantReference:
-        returnedReference,
+        input.merchantReference,
 
       message:
-        getString(
-          data,
-          "Comment",
-          "message",
-        ) ??
-        "Demande de paiement envoyée à Moko Afrika.",
-
-      metadata: {
-        moko_method:
-          method,
-
-        moko_raw_response:
-          data,
-      },
-    };
-  } catch (error) {
-    return {
-      success: false,
-
-      status: "failed",
+        "Le téléphone du client est obligatoire.",
 
       errorCode:
-        "MOKO_CREATE_FAILED",
-
-      message:
-        error instanceof Error
-          ? error.message
-          : "Impossible de créer le paiement Moko Afrika.",
+        "MOKO_CARD_CUSTOMER_PHONE_MISSING",
     };
   }
-}
 
-/*
-|--------------------------------------------------------------------------
-| CREATE PAYMENT
-|--------------------------------------------------------------------------
-*/
-
-async function createPayment(
-  input: CreatePaymentInput,
-): Promise<CreatePaymentResult> {
   if (
-    input.paymentMethodType !==
-    "mobile_money"
+    !clean(
+      customer.addressLine1,
+    )
   ) {
     return {
       success: false,
-      status: "failed",
-      errorCode:
-        "MOKO_CARD_NOT_CONFIGURED",
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
       message:
-        "Le produit Card Payments Moko Afrika utilise une API séparée. Il sera connecté avec son contrat Card dédié.",
+        "L'adresse du client est obligatoire.",
+
+      errorCode:
+        "MOKO_CARD_ADDRESS_MISSING",
     };
   }
 
-  return createMobileMoneyPayment(
-    input,
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| VERIFY PAYMENT
-|--------------------------------------------------------------------------
-*/
-
-async function verifyPayment(
-  input: VerifyPaymentInput,
-): Promise<VerifyPaymentResult> {
-  const reference =
-    input.merchantReference ??
-    input.providerTransactionId;
-
-  if (!reference) {
+  if (
+    !clean(
+      customer.city,
+    )
+  ) {
     return {
       success: false,
-      status: "failed",
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
       message:
-        "Une référence Moko Afrika est nécessaire pour vérifier le paiement.",
-      failureReason:
-        "Missing transaction reference",
+        "La ville du client est obligatoire.",
+
+      errorCode:
+        "MOKO_CARD_CITY_MISSING",
     };
   }
 
+  if (
+    !clean(
+      customer.countryCode,
+    )
+  ) {
+    return {
+      success: false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Le code pays du client est obligatoire.",
+
+      errorCode:
+        "MOKO_CARD_COUNTRY_MISSING",
+    };
+  }
+
+  /* ------------------------------------------------------------------------
+   * DEVISE
+   * ---------------------------------------------------------------------- */
+
+  const currency =
+    clean(
+      input.currency,
+    ).toUpperCase() ||
+    "USD";
+
+  /* ------------------------------------------------------------------------
+   * PAYLOAD
+   * ---------------------------------------------------------------------- */
+
+  const rawPayload:
+    JsonRecord = {
+    amount:
+      Number(
+        input.amount,
+      ),
+
+    currency,
+
+    merchant_reference:
+      input.merchantReference,
+
+    callback_url:
+      config.callbackUrl,
+
+    ...(config.returnUrl
+      ? {
+          return_url:
+            config.returnUrl,
+        }
+      : {}),
+
+    ...(config.cancelUrl
+      ? {
+          cancel_url:
+            config.cancelUrl,
+        }
+      : {}),
+
+    bill_to_forename:
+      firstName,
+
+    bill_to_surname:
+      lastName,
+
+    bill_to_email:
+      clean(
+        customer.email,
+      ),
+
+    bill_to_phone:
+      phone,
+
+    bill_to_address_line1:
+      clean(
+        customer.addressLine1,
+      ),
+
+    bill_to_address_city:
+      clean(
+        customer.city,
+      ),
+
+    bill_to_address_country:
+      clean(
+        customer.countryCode,
+      ).toUpperCase(),
+
+    ...(customer.state
+      ? {
+          bill_to_address_state:
+            clean(
+              customer.state,
+            ),
+        }
+      : {}),
+
+    ...(customer.postalCode
+      ? {
+          bill_to_address_postal_code:
+            clean(
+              customer.postalCode,
+            ),
+        }
+      : {}),
+  };
+
+  /*
+   * Le rail est explicitement card.
+   */
+
+  const rawBody =
+    JSON.stringify(
+      rawPayload,
+    );
+
+  /* ------------------------------------------------------------------------
+   * TIMESTAMP
+   * ---------------------------------------------------------------------- */
+
+  const timestamp =
+    new Date()
+      .toISOString()
+      .replace(
+        /\.\d+Z$/,
+        "Z",
+      );
+
+  /* ------------------------------------------------------------------------
+   * SIGNATURE
+   * ---------------------------------------------------------------------- */
+
+  const signature =
+    createMokoRequestSignature(
+      rawBody,
+      timestamp,
+      config.apiSecret,
+    );
+
+  /* ------------------------------------------------------------------------
+   * ENDPOINT
+   * ---------------------------------------------------------------------- */
+
+  const endpoint =
+    `${config.baseUrl}/api/v1/payment/orders`;
+
   try {
+    const response =
+      await fetch(
+        endpoint,
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            "X-API-Key":
+              config.apiKey,
+
+            "X-Timestamp":
+              timestamp,
+
+            "X-Signature":
+              signature,
+          },
+
+          body:
+            rawBody,
+
+          cache:
+            "no-store",
+        },
+      );
+
+    const responseText =
+      await response.text();
+
+    let responseJson:
+      unknown = {};
+
+    try {
+      responseJson =
+        responseText
+          ? JSON.parse(
+              responseText,
+            )
+          : {};
+    } catch {
+      responseJson = {};
+    }
+
+    const root =
+      asRecord(
+        responseJson,
+      );
+
     const data =
-      await mokoRequest({
-        action: "verify",
-        reference,
-      });
-
-    const statusValue =
-      getString(
-        data,
-        "Trans_Status",
+      asRecord(
+        root.data,
       );
 
-    const status =
+    /* ----------------------------------------------------------------------
+     * CHECKOUT URL
+     * -------------------------------------------------------------------- */
+
+    const checkoutUrl =
+      getNestedString(
+        data,
+        "links",
+      ) ||
+      getNestedString(
+        data,
+        "checkout_url",
+      ) ||
+      getNestedString(
+        root,
+        "checkout_url",
+      );
+
+    /* ----------------------------------------------------------------------
+     * TRANSACTION UUID
+     * -------------------------------------------------------------------- */
+
+    const transactionUuid =
+      getNestedString(
+        data,
+        "transaction_uuid",
+      ) ||
+      getNestedString(
+        root,
+        "transaction_uuid",
+      );
+
+    /* ----------------------------------------------------------------------
+     * STATUS
+     * -------------------------------------------------------------------- */
+
+    const transactionStatus =
       normalizePaymentStatus(
-        statusValue,
+        getNestedString(
+          data,
+          "transaction_status",
+        ) ||
+          getNestedString(
+            root,
+            "transaction_status",
+          ) ||
+          "pending",
       );
 
-    const amount =
-      getNumber(
-        data,
-        "Amount",
-        "amount",
-      );
+    /* ----------------------------------------------------------------------
+     * HTTP ERROR
+     * -------------------------------------------------------------------- */
 
-    const currency =
-      getString(
-        data,
-        "Currency",
-        "currency",
-      )?.toUpperCase() ??
-      null;
+    if (!response.ok) {
+      const detail =
+        getNestedString(
+          root,
+          "detail",
+        ) ||
+        getNestedString(
+          root,
+          "message",
+        ) ||
+        `Moko Afrika a retourné HTTP ${response.status}.`;
 
-    const transactionId =
-      getString(
-        data,
-        "Transaction_id",
-        "transaction_id",
-      );
-
-    const returnedReference =
-      getString(
-        data,
-        "Reference",
-        "reference",
-      );
-
-    /*
-     * Vérification du montant attendu.
-     */
-
-    if (
-      input.expectedAmount !==
-        undefined &&
-      amount !== null &&
-      Number(amount) !==
-        Number(input.expectedAmount)
-    ) {
       return {
-        success: false,
-        status: "failed",
+        success:
+          false,
+
+        status:
+          "failed",
+
         providerTransactionId:
-          transactionId,
-        merchantReference:
-          returnedReference ??
-          input.merchantReference ??
+          transactionUuid ||
           null,
-        amount,
-        currency,
+
+        merchantReference:
+          input.merchantReference,
+
         message:
-          "Le montant retourné par Moko Afrika ne correspond pas au montant attendu.",
-        failureReason:
-          "AMOUNT_MISMATCH",
+          detail,
+
+        errorCode:
+          `MOKO_HTTP_${response.status}`,
+
         metadata: {
-          moko_raw_response:
-            data,
+          provider:
+            "moko_afrika",
+
+          rail:
+            "card",
+
+          response:
+            responseJson,
         },
       };
     }
 
-    /*
-     * Vérification de la devise.
-     */
+    /* ----------------------------------------------------------------------
+     * CHECKOUT URL MANQUANTE
+     * -------------------------------------------------------------------- */
 
-    if (
-      input.expectedCurrency &&
-      currency &&
-      currency.toUpperCase() !==
-        input.expectedCurrency.toUpperCase()
-    ) {
+    if (!checkoutUrl) {
       return {
-        success: false,
-        status: "failed",
+        success:
+          false,
+
+        status:
+          "failed",
+
         providerTransactionId:
-          transactionId,
-        merchantReference:
-          returnedReference ??
-          input.merchantReference ??
+          transactionUuid ||
           null,
-        amount,
-        currency,
+
+        merchantReference:
+          input.merchantReference,
+
         message:
-          "La devise retournée par Moko Afrika ne correspond pas à la devise attendue.",
-        failureReason:
-          "CURRENCY_MISMATCH",
+          "Moko Afrika n'a pas retourné l'URL Hosted Checkout.",
+
+        errorCode:
+          "MOKO_CHECKOUT_URL_MISSING",
+
         metadata: {
-          moko_raw_response:
-            data,
+          provider:
+            "moko_afrika",
+
+          rail:
+            "card",
+
+          response:
+            responseJson,
+        },
+      };
+    }
+
+    /* ----------------------------------------------------------------------
+     * SUCCESS DE CRÉATION
+     * -------------------------------------------------------------------- */
+
+    return {
+      success:
+        true,
+
+      status:
+        transactionStatus ===
+        "successful"
+          ? "successful"
+          : "pending",
+
+      providerTransactionId:
+        transactionUuid ||
+        null,
+
+      merchantReference:
+        input.merchantReference,
+
+      checkoutUrl,
+
+      message:
+        "Checkout Moko Afrika créé. Redirection du client vers la page de paiement.",
+
+      metadata: {
+        provider:
+          "moko_afrika",
+
+        rail:
+          "card",
+
+        response:
+          responseJson,
+      },
+    };
+  } catch (error) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        error instanceof Error
+          ? error.message
+          : "Erreur réseau Moko Afrika.",
+
+      errorCode:
+        "MOKO_NETWORK_ERROR",
+
+      metadata: {
+        provider:
+          "moko_afrika",
+
+        rail:
+          "card",
+      },
+    };
+  }
+}
+
+/* ==========================================================================
+ * CARD — VERIFY STATUS
+ * ========================================================================== */
+
+async function verifyCardPayment(
+  input: VerifyPaymentInput,
+): Promise<VerifyPaymentResult> {
+  const config =
+    await getCardConfig();
+
+  if (
+    !config.apiKey ||
+    !config.apiSecret
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      providerTransactionId:
+        input.providerTransactionId ||
+        null,
+
+      merchantReference:
+        input.merchantReference ||
+        null,
+
+      message:
+        "Les identifiants Moko Checkout ne sont pas configurés.",
+
+      failureReason:
+        "MOKO_CARD_CREDENTIALS_MISSING",
+    };
+  }
+
+  if (
+    !input.providerTransactionId
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference ||
+        null,
+
+      message:
+        "transaction_uuid requis pour vérifier le paiement Moko.",
+
+      failureReason:
+        "TRANSACTION_UUID_MISSING",
+    };
+  }
+
+  const payload = {
+    transaction_uuid:
+      input.providerTransactionId,
+  };
+
+  const rawBody =
+    JSON.stringify(
+      payload,
+    );
+
+  const timestamp =
+    new Date()
+      .toISOString()
+      .replace(
+        /\.\d+Z$/,
+        "Z",
+      );
+
+  const signature =
+    createMokoRequestSignature(
+      rawBody,
+      timestamp,
+      config.apiSecret,
+    );
+
+  try {
+    const response =
+      await fetch(
+        `${config.baseUrl}/api/v1/payment/status`,
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            "X-API-Key":
+              config.apiKey,
+
+            "X-Timestamp":
+              timestamp,
+
+            "X-Signature":
+              signature,
+          },
+
+          body:
+            rawBody,
+
+          cache:
+            "no-store",
+        },
+      );
+
+    const responseText =
+      await response.text();
+
+    let responseJson:
+      unknown = {};
+
+    try {
+      responseJson =
+        responseText
+          ? JSON.parse(
+              responseText,
+            )
+          : {};
+    } catch {
+      responseJson = {};
+    }
+
+    const root =
+      asRecord(
+        responseJson,
+      );
+
+    const data =
+      asRecord(
+        root.data,
+      );
+
+    const providerStatus =
+      getNestedString(
+        data,
+        "transaction_status",
+      ) ||
+      getNestedString(
+        root,
+        "transaction_status",
+      );
+
+    const normalizedStatus =
+      normalizePaymentStatus(
+        providerStatus,
+      );
+
+    const amount =
+      toNumber(
+        data.amount,
+      ) ??
+      toNumber(
+        root.amount,
+      );
+
+    const currency =
+      getNestedString(
+        data,
+        "currency",
+      ) ||
+      getNestedString(
+        root,
+        "currency",
+      ) ||
+      null;
+
+    const merchantReference =
+      getNestedString(
+        data,
+        "merchant_reference",
+      ) ||
+      getNestedString(
+        root,
+        "merchant_reference",
+      ) ||
+      input.merchantReference ||
+      null;
+
+    if (!response.ok) {
+      return {
+        success:
+          false,
+
+        status:
+          "failed",
+
+        providerTransactionId:
+          input.providerTransactionId,
+
+        merchantReference,
+
+        amount,
+
+        currency,
+
+        message:
+          getNestedString(
+            root,
+            "detail",
+          ) ||
+          getNestedString(
+            root,
+            "message",
+          ) ||
+          `Erreur Moko HTTP ${response.status}.`,
+
+        failureReason:
+          `MOKO_HTTP_${response.status}`,
+
+        metadata: {
+          provider:
+            "moko_afrika",
+
+          rail:
+            "card",
+
+          response:
+            responseJson,
         },
       };
     }
 
     return {
       success:
-        status ===
+        normalizedStatus ===
         "successful",
 
-      status,
+      status:
+        normalizedStatus,
 
       providerTransactionId:
-        transactionId,
+        getNestedString(
+          data,
+          "transaction_uuid",
+        ) ||
+        input.providerTransactionId,
 
-      merchantReference:
-        returnedReference ??
-        input.merchantReference ??
-        null,
+      merchantReference,
 
       amount,
 
       currency,
 
       message:
-        getString(
+        getNestedString(
           data,
-          "Trans_Status_Description",
-          "Comment",
-        ),
+          "message",
+        ) ||
+        getNestedString(
+          root,
+          "message",
+        ) ||
+        null,
 
       failureReason:
-        status ===
+        normalizedStatus ===
         "failed"
-          ? getErrorMessage(
+          ? getNestedString(
               data,
-            )
+              "message",
+            ) || null
           : null,
 
       metadata: {
-        moko_raw_response:
-          data,
+        provider:
+          "moko_afrika",
+
+        rail:
+          "card",
+
+        decision:
+          getNestedString(
+            data,
+            "decision",
+          ) || null,
+
+        cardType:
+          getNestedString(
+            data,
+            "card_type",
+          ) || null,
+
+        cardLast4:
+          getNestedString(
+            data,
+            "card_last4",
+          ) || null,
+
+        cardScheme:
+          getNestedString(
+            data,
+            "card_scheme",
+          ) || null,
+
+        response:
+          responseJson,
       },
     };
   } catch (error) {
     return {
-      success: false,
+      success:
+        false,
 
-      status: "failed",
-
-      merchantReference:
-        input.merchantReference ??
-        null,
+      status:
+        "failed",
 
       providerTransactionId:
-        input.providerTransactionId ??
+        input.providerTransactionId,
+
+      merchantReference:
+        input.merchantReference ||
         null,
 
       message:
         error instanceof Error
           ? error.message
-          : "Erreur lors de la vérification Moko Afrika.",
+          : "Erreur réseau Moko Afrika.",
 
       failureReason:
-        "MOKO_VERIFY_FAILED",
+        "MOKO_NETWORK_ERROR",
+
+      metadata: {
+        provider:
+          "moko_afrika",
+
+        rail:
+          "card",
+      },
     };
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| HMAC
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+ * MOBILE MONEY — CREATE
+ * ========================================================================== */
 
-function verifyMokoWebhookSignature(
-  payload: string,
-  headers: Headers,
-): boolean {
-  const signature =
-    headers.get(
-      "x-signature",
-    )?.trim();
-
-  const hmacKey =
-    getWebhookHmacKey();
+async function createMobileMoneyPayment(
+  input: CreatePaymentInput,
+): Promise<CreatePaymentResult> {
+  const config =
+    await getMobileMoneyConfig();
 
   if (
-    !signature ||
-    !hmacKey
+    !config.merchantId
   ) {
-    return false;
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Moko Afrika Merchant ID non configuré.",
+
+      errorCode:
+        "MOKO_MERCHANT_ID_MISSING",
+    };
   }
-
-  const calculated =
-    crypto
-      .createHmac(
-        "sha256",
-        hmacKey,
-      )
-      .update(
-        payload,
-        "utf8",
-      )
-      .digest("hex");
-
-  const receivedBuffer =
-    Buffer.from(
-      signature,
-      "utf8",
-    );
-
-  const calculatedBuffer =
-    Buffer.from(
-      calculated,
-      "utf8",
-    );
 
   if (
-    receivedBuffer.length !==
-    calculatedBuffer.length
+    !config.merchantSecret
   ) {
-    return false;
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Moko Afrika Merchant Secret non configuré.",
+
+      errorCode:
+        "MOKO_MERCHANT_SECRET_MISSING",
+    };
   }
-
-  return crypto.timingSafeEqual(
-    receivedBuffer,
-    calculatedBuffer,
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| AES DECRYPTION
-|--------------------------------------------------------------------------
-*/
-
-function decryptMokoWebhookData(
-  encryptedData: string,
-): unknown {
-  const key =
-    getWebhookAesKey();
-
-  if (!key) {
-    throw new Error(
-      "FreshPay webhook AES key is missing or invalid. Expected a 16-byte UTF-8 key.",
-    );
-  }
-
-  const encrypted =
-    Buffer.from(
-      encryptedData,
-      "base64",
-    );
-
-  /*
-   * Le document FreshPay montre :
-   *
-   * AES-CBC
-   * IV = SECRET_KEY
-   *
-   * et un exemple Node en aes-128-cbc.
-   */
-
-  const decipher =
-    crypto.createDecipheriv(
-      "aes-128-cbc",
-      key,
-      key,
-    );
-
-  let decrypted =
-    decipher.update(
-      encrypted,
-      undefined,
-      "utf8",
-    );
-
-  decrypted +=
-    decipher.final(
-      "utf8",
-    );
-
-  return JSON.parse(
-    decrypted,
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| WEBHOOK PARSER
-|--------------------------------------------------------------------------
-*/
-
-function parseWebhook(
-  payload: unknown,
-  headers?: Headers,
-): PaymentWebhookResult {
-  /*
-   * Cas standard :
-   *
-   * {
-   *   data: "<encrypted>"
-   * }
-   */
-
-  if (
-    isRecord(payload) &&
-    typeof payload.data ===
-      "string"
-  ) {
-    if (!headers) {
-      return {
-        success: false,
-        status: "failed",
-        message:
-          "Headers requis pour vérifier la signature du callback Moko Afrika.",
-        failureReason:
-          "MISSING_HEADERS",
-      };
-    }
-
-    const encryptedData =
-      payload.data;
-
-    const signatureValid =
-      verifyMokoWebhookSignature(
-        encryptedData,
-        headers,
-      );
-
-    if (!signatureValid) {
-      return {
-        success: false,
-        status: "failed",
-        message:
-          "Signature du callback Moko Afrika invalide.",
-        failureReason:
-          "INVALID_SIGNATURE",
-      };
-    }
-
-    try {
-      const decrypted =
-        decryptMokoWebhookData(
-          encryptedData,
-        );
-
-      return parsePlainWebhook(
-        decrypted,
-      );
-    } catch (error) {
-      return {
-        success: false,
-        status: "failed",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Impossible de déchiffrer le callback Moko Afrika.",
-        failureReason:
-          "INVALID_ENCRYPTION",
-      };
-    }
-  }
-
-  /*
-   * Compatibilité avec les réponses webhook JSON
-   * directement exposées par le nouveau portail Moko.
-   */
-
-  return parsePlainWebhook(
-    payload,
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| PLAIN WEBHOOK
-|--------------------------------------------------------------------------
-*/
-
-function parsePlainWebhook(
-  payload: unknown,
-): PaymentWebhookResult {
-  const merchantReference =
-    getString(
-      payload,
-      "Reference",
-      "reference",
-      "thirdparty_reference",
-    );
-
-  const providerTransactionId =
-    getString(
-      payload,
-      "Transaction_id",
-      "transaction_id",
-      "PayDRC_Reference",
-      "paydrc_reference",
-    );
-
-  const amount =
-    getNumber(
-      payload,
-      "Amount",
-      "amount",
-    );
-
-  const currency =
-    getString(
-      payload,
-      "Currency",
-      "currency",
-    )?.toUpperCase() ??
-    null;
 
   const method =
-    getString(
-      payload,
-      "Method",
-      "method",
+    clean(
+      input.paymentMethod,
+    ) ||
+    "mobile_money";
+
+  const customerNumber =
+    clean(
+      input.customer?.phone,
     );
 
-  const rawStatus =
-    getString(
-      payload,
-      "Trans_Status",
-      "trans_status",
+  if (
+    !customerNumber
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        "Le numéro Mobile Money du client est obligatoire.",
+
+      errorCode:
+        "MOKO_CUSTOMER_NUMBER_MISSING",
+    };
+  }
+
+  const payload:
+    JsonRecord = {
+    merchant_id:
+      config.merchantId,
+
+    merchant_secrete:
+      config.merchantSecret,
+
+    amount:
+      String(
+        input.amount,
+      ),
+
+    currency:
+      input.currency,
+
+    action:
+      "debit",
+
+    customer_number:
+      customerNumber,
+
+    firstname:
+      input.customer
+        ?.firstName ||
+      input.customer
+        ?.name ||
+      "",
+
+    lastname:
+      input.customer
+        ?.lastName ||
+      "",
+
+    email:
+      input.customer
+        ?.email ||
+      "",
+
+    reference:
+      input.merchantReference,
+
+    method,
+
+    ...(config.callbackUrl
+      ? {
+          callback_url:
+            config.callbackUrl,
+        }
+      : {}),
+  };
+
+  try {
+    const response =
+      await fetch(
+        config.baseUrl,
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify(
+              payload,
+            ),
+
+          cache:
+            "no-store",
+        },
+      );
+
+    const responseText =
+      await response.text();
+
+    let responseJson:
+      unknown = {};
+
+    try {
+      responseJson =
+        responseText
+          ? JSON.parse(
+              responseText,
+            )
+          : {};
+    } catch {
+      responseJson = {};
+    }
+
+    const root =
+      asRecord(
+        responseJson,
+      );
+
+    const transactionId =
+      getNestedString(
+        root,
+        "Transaction_id",
+      ) ||
+      getNestedString(
+        root,
+        "transaction_id",
+      );
+
+    const providerStatus =
+      getNestedString(
+        root,
+        "Trans_Status",
+      ) ||
+      getNestedString(
+        root,
+        "Status",
+      );
+
+    const normalized =
+      normalizePaymentStatus(
+        providerStatus,
+      );
+
+    if (
+      !response.ok
+    ) {
+      return {
+        success:
+          false,
+
+        status:
+          "failed",
+
+        providerTransactionId:
+          transactionId ||
+          null,
+
+        merchantReference:
+          input.merchantReference,
+
+        message:
+          getNestedString(
+            root,
+            "Comment",
+          ) ||
+          getNestedString(
+            root,
+            "message",
+          ) ||
+          `FreshPay HTTP ${response.status}.`,
+
+        errorCode:
+          `FRESHPAY_HTTP_${response.status}`,
+
+        metadata: {
+          provider:
+            "moko_afrika",
+
+          rail:
+            "mobile_money",
+
+          response:
+            responseJson,
+        },
+      };
+    }
+
+    /*
+     * FreshPay :
+     *
+     * Status = Success
+     *
+     * signifie que la requête a été reçue.
+     * Le statut final doit être vérifié.
+     */
+
+    return {
+      success:
+        true,
+
+      status:
+        normalized ===
+        "successful"
+          ? "successful"
+          : "pending",
+
+      providerTransactionId:
+        transactionId ||
+        null,
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        getNestedString(
+          root,
+          "Comment",
+        ) ||
+        "Demande de paiement reçue par FreshPay.",
+
+      metadata: {
+        provider:
+          "moko_afrika",
+
+        rail:
+          "mobile_money",
+
+        response:
+          responseJson,
+      },
+    };
+  } catch (error) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference,
+
+      message:
+        error instanceof Error
+          ? error.message
+          : "Erreur réseau FreshPay.",
+
+      errorCode:
+        "FRESHPAY_NETWORK_ERROR",
+
+      metadata: {
+        provider:
+          "moko_afrika",
+
+        rail:
+          "mobile_money",
+      },
+    };
+  }
+}
+
+/* ==========================================================================
+ * MOBILE MONEY — VERIFY
+ * ========================================================================== */
+
+async function verifyMobileMoneyPayment(
+  input: VerifyPaymentInput,
+): Promise<VerifyPaymentResult> {
+  const config =
+    await getMobileMoneyConfig();
+
+  if (
+    !config.merchantId ||
+    !config.merchantSecret
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Les identifiants FreshPay ne sont pas configurés.",
+
+      failureReason:
+        "FRESHPAY_CREDENTIALS_MISSING",
+    };
+  }
+
+  if (
+    !input.merchantReference
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "La référence marchand est obligatoire.",
+
+      failureReason:
+        "MERCHANT_REFERENCE_MISSING",
+    };
+  }
+
+  const payload = {
+    merchant_id:
+      config.merchantId,
+
+    merchant_secrete:
+      config.merchantSecret,
+
+    action:
+      "verify",
+
+    reference:
+      input.merchantReference,
+  };
+
+  try {
+    const response =
+      await fetch(
+        config.baseUrl,
+        {
+          method:
+            "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify(
+              payload,
+            ),
+
+          cache:
+            "no-store",
+        },
+      );
+
+    const responseText =
+      await response.text();
+
+    let responseJson:
+      unknown = {};
+
+    try {
+      responseJson =
+        responseText
+          ? JSON.parse(
+              responseText,
+            )
+          : {};
+    } catch {
+      responseJson = {};
+    }
+
+    const root =
+      asRecord(
+        responseJson,
+      );
+
+    const providerStatus =
+      getNestedString(
+        root,
+        "Trans_Status",
+      );
+
+    const normalized =
+      normalizePaymentStatus(
+        providerStatus,
+      );
+
+    const amount =
+      toNumber(
+        root.Amount,
+      );
+
+    const currency =
+      getNestedString(
+        root,
+        "Currency",
+      ) || null;
+
+    const transactionId =
+      getNestedString(
+        root,
+        "Transaction_id",
+      ) || null;
+
+    if (
+      !response.ok
+    ) {
+      return {
+        success:
+          false,
+
+        status:
+          "failed",
+
+        providerTransactionId:
+          transactionId,
+
+        merchantReference:
+          input.merchantReference,
+
+        amount,
+
+        currency,
+
+        message:
+          getNestedString(
+            root,
+            "Trans_Status_Description",
+          ) ||
+          getNestedString(
+            root,
+            "Comment",
+          ) ||
+          `FreshPay HTTP ${response.status}.`,
+
+        failureReason:
+          `FRESHPAY_HTTP_${response.status}`,
+
+        metadata: {
+          provider:
+            "moko_afrika",
+
+          rail:
+            "mobile_money",
+
+          response:
+            responseJson,
+        },
+      };
+    }
+
+    return {
+      success:
+        normalized ===
+        "successful",
+
+      status:
+        normalized,
+
+      providerTransactionId:
+        transactionId,
+
+      merchantReference:
+        getNestedString(
+          root,
+          "Reference",
+        ) ||
+        input.merchantReference,
+
+      amount,
+
+      currency,
+
+      message:
+        getNestedString(
+          root,
+          "Trans_Status_Description",
+        ) ||
+        getNestedString(
+          root,
+          "Comment",
+        ) ||
+        null,
+
+      failureReason:
+        normalized ===
+        "failed"
+          ? getNestedString(
+              root,
+              "Trans_Status_Description",
+            ) || null
+          : null,
+
+      metadata: {
+        provider:
+          "moko_afrika",
+
+        rail:
+          "mobile_money",
+
+        method:
+          getNestedString(
+            root,
+            "Method",
+          ) || null,
+
+        response:
+          responseJson,
+      },
+    };
+  } catch (error) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      merchantReference:
+        input.merchantReference ||
+        null,
+
+      providerTransactionId:
+        input.providerTransactionId ||
+        null,
+
+      message:
+        error instanceof Error
+          ? error.message
+          : "Erreur réseau FreshPay.",
+
+      failureReason:
+        "FRESHPAY_NETWORK_ERROR",
+
+      metadata: {
+        provider:
+          "moko_afrika",
+
+        rail:
+          "mobile_money",
+      },
+    };
+  }
+}
+
+/* ==========================================================================
+ * PUBLIC ADAPTER
+ * ========================================================================== */
+
+export const mokoAfrikaAdapter:
+  PaymentProviderAdapter = {
+  code:
+    "moko_afrika",
+
+  name:
+    "Moko Afrika",
+
+  config: {
+    code:
+      "moko_afrika",
+
+    name:
+      "Moko Afrika",
+
+    mode:
+      getMode(),
+
+    baseUrl:
+      getEnv(
+        "MOKO_AFRIKA_BASE_URL",
+      ) ||
+      DEFAULT_MOBILE_MONEY_BASE_URL,
+
+    countries: [
+      "CD",
+    ],
+
+    currencies: [
+      "USD",
+      "CDF",
+    ],
+
+    paymentMethods: [
+      "mobile_money",
+      "visa",
+      "mastercard",
+      "card",
+    ],
+
+    enabled:
+      Boolean(
+        getEnv(
+          "MOKO_AFRIKA_MERCHANT_SECRET",
+        ) ||
+          getEnv(
+            "MOKO_AFRIKA_CARD_API_SECRET",
+          ),
+      ),
+  },
+
+  /* ========================================================================
+   * CREATE PAYMENT
+   * ====================================================================== */
+
+  async createPayment(
+    input,
+  ) {
+    /*
+     * CARTE
+     */
+
+    if (
+      input.paymentMethodType ===
+        "card" ||
+      input.paymentMethod ===
+        "card" ||
+      input.paymentMethod ===
+        "visa" ||
+      input.paymentMethod ===
+        "mastercard"
+    ) {
+      return createCardPayment(
+        input,
+      );
+    }
+
+    /*
+     * MOBILE MONEY
+     */
+
+    return createMobileMoneyPayment(
+      input,
+    );
+  },
+
+  /* ========================================================================
+   * VERIFY PAYMENT
+   * ====================================================================== */
+
+  async verifyPayment(
+    input,
+  ) {
+    /*
+     * IMPORTANT :
+     *
+     * Le rail est déterminé à partir de metadata.rail.
+     *
+     * Exemple :
+     *
+     * metadata: {
+     *   rail: "card"
+     * }
+     *
+     * ou :
+     *
+     * metadata: {
+     *   rail: "mobile_money"
+     * }
+     */
+
+    const metadata =
+      input.metadata &&
+      typeof input.metadata ===
+        "object"
+        ? input.metadata
+        : {};
+
+    const rail =
+      typeof metadata.rail ===
+      "string"
+        ? metadata.rail
+            .trim()
+            .toLowerCase()
+        : "";
+
+    /*
+     * CARTE
+     */
+
+    if (
+      rail === "card" ||
+      rail === "visa" ||
+      rail === "mastercard"
+    ) {
+      return verifyCardPayment(
+        input,
+      );
+    }
+
+    /*
+     * MOBILE MONEY
+     */
+
+    return verifyMobileMoneyPayment(
+      input,
+    );
+  },
+
+  /* ========================================================================
+   * VERIFY WEBHOOK SIGNATURE
+   * ====================================================================== */
+
+  verifyWebhookSignature(
+    payload: string,
+    headers: Headers,
+  ): boolean {
+    const header =
+      headers.get(
+        "X-FreshPay-Signature",
+      ) ||
+      headers.get(
+        "x-freshpay-signature",
+      );
+
+    const callbackSecret =
+      getEnv(
+        "MOKO_AFRIKA_CARD_CALLBACK_SECRET",
+      );
+
+    if (
+      !header ||
+      !callbackSecret
+    ) {
+      return false;
+    }
+
+    const match =
+      /^t=(\d+),v1=(.+)$/.exec(
+        header.trim(),
+      );
+
+    if (!match) {
+      return false;
+    }
+
+    const timestamp =
+      match[1];
+
+    const receivedSignature =
+      match[2];
+
+    if (
+      !verifyTimestamp(
+        timestamp,
+      )
+    ) {
+      return false;
+    }
+
+    const expectedSignature =
+      createCallbackSignature(
+        payload,
+        timestamp,
+        callbackSecret,
+      );
+
+    if (
+      expectedSignature.length !==
+      receivedSignature.length
+    ) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(
+      Buffer.from(
+        expectedSignature,
+      ),
+      Buffer.from(
+        receivedSignature,
+      ),
+    );
+  },
+};
+
+/* ==========================================================================
+ * MOKO CARD WEBHOOK PARSER
+ * ==========================================================================
+ *
+ * Utilisé par :
+ *
+ * /api/payments/webhook
+ *
+ * ou :
+ *
+ * /api/payments/moko-afrika/card-webhook
+ *
+ * Le raw body est obligatoire afin de vérifier correctement
+ * X-FreshPay-Signature.
+ * ========================================================================== */
+
+export async function parseMokoCardWebhook(
+  rawBody: string,
+  headers: Headers,
+): Promise<PaymentWebhookResult> {
+  const config =
+    await getCardConfig();
+
+  /* ------------------------------------------------------------------------
+   * SIGNATURE
+   * ---------------------------------------------------------------------- */
+
+  const header =
+    headers.get(
+      "X-FreshPay-Signature",
+    ) ||
+    headers.get(
+      "x-freshpay-signature",
+    );
+
+  if (!header) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Signature Moko Afrika absente.",
+
+      failureReason:
+        "SIGNATURE_MISSING",
+    };
+  }
+
+  /* ------------------------------------------------------------------------
+   * CALLBACK SECRET
+   * ---------------------------------------------------------------------- */
+
+  if (
+    !config.callbackSecret
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Moko Afrika Callback Secret non configuré.",
+
+      failureReason:
+        "CALLBACK_SECRET_MISSING",
+    };
+  }
+
+  /* ------------------------------------------------------------------------
+   * FORMAT SIGNATURE
+   *
+   * t=timestamp,v1=signature
+   * ---------------------------------------------------------------------- */
+
+  const match =
+    /^t=(\d+),v1=(.+)$/.exec(
+      header.trim(),
+    );
+
+  if (!match) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Format de signature Moko Afrika invalide.",
+
+      failureReason:
+        "INVALID_SIGNATURE_FORMAT",
+    };
+  }
+
+  const timestamp =
+    match[1];
+
+  const receivedSignature =
+    match[2];
+
+  /* ------------------------------------------------------------------------
+   * TIMESTAMP
+   * ---------------------------------------------------------------------- */
+
+  if (
+    !verifyTimestamp(
+      timestamp,
+    )
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Timestamp du callback Moko Afrika expiré.",
+
+      failureReason:
+        "SIGNATURE_TIMESTAMP_EXPIRED",
+    };
+  }
+
+  /* ------------------------------------------------------------------------
+   * SIGNATURE ATTENDUE
+   * ---------------------------------------------------------------------- */
+
+  const expectedSignature =
+    createCallbackSignature(
+      rawBody,
+      timestamp,
+      config.callbackSecret,
+    );
+
+  if (
+    expectedSignature.length !==
+    receivedSignature.length
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Signature Moko Afrika invalide.",
+
+      failureReason:
+        "INVALID_SIGNATURE",
+    };
+  }
+
+  const signaturesEqual =
+    crypto.timingSafeEqual(
+      Buffer.from(
+        expectedSignature,
+      ),
+      Buffer.from(
+        receivedSignature,
+      ),
+    );
+
+  if (
+    !signaturesEqual
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Signature Moko Afrika invalide.",
+
+      failureReason:
+        "INVALID_SIGNATURE",
+    };
+  }
+
+  /* ------------------------------------------------------------------------
+   * JSON
+   * ---------------------------------------------------------------------- */
+
+  let parsed:
+    unknown;
+
+  try {
+    parsed =
+      JSON.parse(
+        rawBody,
+      );
+  } catch {
+    return {
+      success:
+        false,
+
+      status:
+        "failed",
+
+      message:
+        "Payload JSON Moko Afrika invalide.",
+
+      failureReason:
+        "INVALID_JSON",
+    };
+  }
+
+  const data =
+    asRecord(
+      parsed,
+    );
+
+  /* ------------------------------------------------------------------------
+   * STATUS
+   * ---------------------------------------------------------------------- */
+
+  const providerStatus =
+    getNestedString(
+      data,
       "status",
     );
 
   const status =
     normalizePaymentStatus(
-      rawStatus,
+      providerStatus,
     );
 
-  const failureReason =
-    status === "failed"
-      ? getString(
-          payload,
-          "Trans_Status_Description",
-          "Status_Description",
-          "Comment",
-        )
-      : null;
+  /* ------------------------------------------------------------------------
+   * AMOUNT
+   * ---------------------------------------------------------------------- */
+
+  const amount =
+    toNumber(
+      data.amount,
+    );
+
+  /* ------------------------------------------------------------------------
+   * CURRENCY
+   * ---------------------------------------------------------------------- */
+
+  const currency =
+    getNestedString(
+      data,
+      "currency",
+    ) ||
+    null;
+
+  /* ------------------------------------------------------------------------
+   * REFERENCE
+   * ---------------------------------------------------------------------- */
+
+  const reference =
+    getNestedString(
+      data,
+      "reference",
+    ) ||
+    null;
+
+  /* ------------------------------------------------------------------------
+   * TRANSACTION UUID
+   * ---------------------------------------------------------------------- */
+
+  const transactionUuid =
+    getNestedString(
+      data,
+      "transaction_uuid",
+    ) ||
+    null;
+
+  /* ------------------------------------------------------------------------
+   * DECISION
+   * ---------------------------------------------------------------------- */
+
+  const decision =
+    getNestedString(
+      data,
+      "decision",
+    ) ||
+    null;
+
+  /* ------------------------------------------------------------------------
+   * MESSAGE
+   * ---------------------------------------------------------------------- */
+
+  const message =
+    getNestedString(
+      data,
+      "message",
+    ) ||
+    null;
+
+  /* ------------------------------------------------------------------------
+   * RESULT
+   * ---------------------------------------------------------------------- */
 
   return {
     success:
-      status === "successful",
+      status ===
+      "successful",
 
     status,
 
-    merchantReference,
+    merchantReference:
+      reference,
 
-    providerTransactionId,
+    providerTransactionId:
+      transactionUuid,
 
     amount,
 
     currency,
 
     paymentMethod:
-      method as
-        | PaymentWebhookResult["paymentMethod"]
-        | null,
+      "card",
 
-    message:
-      getString(
-        payload,
-        "Comment",
-        "Status_Description",
-        "Trans_Status_Description",
-      ),
+    message,
 
-    failureReason,
+    failureReason:
+      status ===
+      "failed"
+        ? message
+        : null,
 
     metadata: {
-      moko_webhook:
-        payload,
+      provider:
+        "moko_afrika",
+
+      rail:
+        "card",
+
+      decision,
+
+      customerName:
+        getNestedString(
+          data,
+          "customer_name",
+        ) ||
+        null,
+
+      customerEmail:
+        getNestedString(
+          data,
+          "customer_email",
+        ) ||
+        null,
+
+      cardType:
+        getNestedString(
+          data,
+          "card_type",
+        ) ||
+        null,
+
+      cardLast4:
+        getNestedString(
+          data,
+          "card_last4",
+        ) ||
+        null,
+
+      cardScheme:
+        getNestedString(
+          data,
+          "card_scheme",
+        ) ||
+        null,
+
+      raw:
+        data,
     },
   };
 }
 
-/*
-|--------------------------------------------------------------------------
-| ADAPTER
-|--------------------------------------------------------------------------
-*/
-
-export const mokoAfrikaAdapter:
-  PaymentProviderAdapter = {
-  code: "moko_afrika",
-
-  name: "Moko Afrika",
-
-  config: {
-    code: "moko_afrika",
-
-    name: "Moko Afrika",
-
-    mode: getMode(),
-
-    baseUrl:
-      getBaseUrl(),
-
-    countries: [
-      "CD",
-      "CG",
-      "CM",
-    ],
-
-    currencies: [
-      "CDF",
-      "USD",
-    ],
-
-    paymentMethods: [
-      "mobile_money",
-      "mpesa",
-      "airtel",
-      "orange",
-      "africell",
-      "vodacom",
-    ],
-
-    enabled:
-      Boolean(
-        getMerchantId() &&
-        getMerchantSecret(),
-      ),
-  },
-
-  createPayment,
-
-  verifyPayment,
-
-  parseWebhook,
-
-  verifyWebhookSignature:
-    verifyMokoWebhookSignature,
-};
-
-/*
-|--------------------------------------------------------------------------
-| ALIASES
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+ * COMPATIBILITY ALIAS
+ * ========================================================================== */
 
 export const mokoAfrikaProvider =
   mokoAfrikaAdapter;
