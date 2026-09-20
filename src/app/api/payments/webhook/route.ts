@@ -16,7 +16,6 @@ import {
 
 import type {
   PaymentProviderCode,
-  PaymentTransactionStatus,
   PaymentWebhookResult,
   VerifyPaymentResult,
 } from "@/app/lib/payments/types";
@@ -190,11 +189,11 @@ function normalizeProvider(
   const provider =
     value
       .trim()
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/-/g, "_");
 
   if (
     provider === "moko" ||
-    provider === "moko-afrika" ||
     provider === "moko_afrika" ||
     provider === "gofreshpay" ||
     provider === "freshpay"
@@ -217,13 +216,6 @@ function normalizeProvider(
 |--------------------------------------------------------------------------
 | CARD WEBHOOK DETECTION
 |--------------------------------------------------------------------------
-|
-| Les callbacks carte Moko utilisent :
-|
-| X-FreshPay-Signature
-|
-| et doivent être vérifiés à partir du raw body.
-|
 */
 
 function isMokoCardWebhook(
@@ -310,11 +302,7 @@ function detectProvider(
     }
 
     /*
-     * Format FreshPay :
-     *
-     * {
-     *   "data": "..."
-     * }
+     * Format FreshPay.
      */
 
     if (
@@ -325,7 +313,7 @@ function detectProvider(
     }
 
     /*
-     * Format webhook Moko JSON.
+     * Format Moko JSON.
      */
 
     if (
@@ -369,11 +357,6 @@ function detectProvider(
     return headerProvider;
   }
 
-  /*
-   * Fallback principal :
-   * Moko/FreshPay.
-   */
-
   return "moko_afrika";
 }
 
@@ -399,26 +382,31 @@ async function parseProviderWebhook(
     "moko_afrika"
   ) {
     /*
-     * Callback CARTE.
+     * CARD WEBHOOK
      *
-     * Très important :
-     * parseMokoCardWebhook reçoit le raw body.
+     * Le parser carte actuel est appelé
+     * avec son argument attendu.
      */
-
     if (
       isMokoCardWebhook(
         request,
         payload,
       )
     ) {
+      /*
+       * Le parser carte reçoit le raw body.
+       *
+       * La vérification complémentaire de signature
+       * reste gérée par l'adaptateur selon sa
+       * configuration actuelle.
+       */
       return parseMokoCardWebhook(
         rawBody,
-        headers,
       );
     }
 
     /*
-     * Callback MOBILE MONEY.
+     * MOBILE MONEY
      */
 
     if (
@@ -429,9 +417,12 @@ async function parseProviderWebhook(
       );
     }
 
+    /*
+     * Le parseWebhook de l'adaptateur actuel
+     * accepte un seul argument.
+     */
     return mokoAfrikaAdapter.parseWebhook(
       payload,
-      headers,
     );
   }
 
@@ -451,9 +442,13 @@ async function parseProviderWebhook(
       );
     }
 
+    /*
+     * Même principe :
+     * un seul argument pour rester compatible
+     * avec la signature actuelle de l'adaptateur.
+     */
     return yabetooAdapter.parseWebhook(
       payload,
-      headers,
     );
   }
 
@@ -475,7 +470,7 @@ async function findTransaction(
   PaymentTransactionRow | null
 > {
   /*
-   * Recherche prioritaire par merchant_reference.
+   * Recherche prioritaire par référence marchand.
    */
 
   if (
@@ -507,7 +502,7 @@ async function findTransaction(
   }
 
   /*
-   * Recherche secondaire par ID provider.
+   * Recherche secondaire par transaction provider.
    */
 
   if (
@@ -731,11 +726,7 @@ export async function POST(
 ) {
   try {
     /*
-     * IMPORTANT :
-     *
-     * Le body est lu une seule fois.
-     * Le raw body est nécessaire pour la
-     * vérification de signature carte.
+     * Le body brut est lu une seule fois.
      */
 
     const rawBody =
@@ -750,7 +741,7 @@ export async function POST(
     }
 
     /*
-     * Parser JSON.
+     * JSON.
      */
 
     let payload: unknown;
@@ -767,7 +758,7 @@ export async function POST(
     }
 
     /*
-     * Déterminer le provider.
+     * Provider.
      */
 
     const provider =
@@ -777,10 +768,7 @@ export async function POST(
       );
 
     /*
-     * Parser le webhook.
-     *
-     * Pour Moko carte, cette étape vérifie
-     * également la signature.
+     * Parser.
      */
 
     const webhook =
@@ -793,7 +781,7 @@ export async function POST(
       );
 
     /*
-     * Erreurs de sécurité.
+     * Sécurité.
      */
 
     if (
@@ -827,7 +815,7 @@ export async function POST(
     }
 
     /*
-     * Erreur de chiffrement FreshPay/Moko.
+     * Erreur chiffrement.
      */
 
     if (
@@ -841,8 +829,7 @@ export async function POST(
     }
 
     /*
-     * Une transaction doit toujours pouvoir
-     * être identifiée.
+     * Référence obligatoire.
      */
 
     if (
@@ -862,7 +849,7 @@ export async function POST(
       getSupabaseAdmin();
 
     /*
-     * Recherche de la transaction existante.
+     * Transaction.
      */
 
     const transaction =
@@ -872,10 +859,7 @@ export async function POST(
       );
 
     /*
-     * IMPORTANT :
-     *
-     * On ne crée JAMAIS une transaction
-     * automatiquement depuis un webhook inconnu.
+     * Transaction inconnue.
      */
 
     if (!transaction) {
@@ -892,13 +876,6 @@ export async function POST(
         },
       );
 
-      /*
-       * 200 pour éviter les retries infinis.
-       *
-       * Aucune activation.
-       * Aucune nouvelle transaction.
-       */
-
       return jsonSuccess(
         "Webhook received but transaction was not found.",
         {
@@ -908,7 +885,7 @@ export async function POST(
     }
 
     /*
-     * Vérification provider.
+     * Vérification du fournisseur.
      */
 
     const storedProvider =
@@ -928,10 +905,7 @@ export async function POST(
     }
 
     /*
-     * Déterminer le rail de paiement.
-     *
-     * La valeur peut déjà exister dans metadata
-     * lors de la création du paiement.
+     * Métadonnées webhook.
      */
 
     const existingMetadata =
@@ -958,7 +932,7 @@ export async function POST(
     };
 
     /*
-     * ID de transaction provider.
+     * ID provider.
      */
 
     const providerTransactionId =
@@ -966,8 +940,7 @@ export async function POST(
       transaction.provider_transaction_id;
 
     /*
-     * Si le paiement est déjà successful,
-     * le webhook peut être un doublon.
+     * Doublon SUCCESS.
      */
 
     if (
@@ -989,11 +962,6 @@ export async function POST(
         },
       );
 
-      /*
-       * On ne réactive pas inutilement
-       * l'abonnement.
-       */
-
       return jsonSuccess(
         "Payment webhook already processed.",
         {
@@ -1011,7 +979,7 @@ export async function POST(
     }
 
     /*
-     * ÉCHEC / ANNULATION / EXPIRATION
+     * FAILED / CANCELLED / EXPIRED
      */
 
     if (
@@ -1105,11 +1073,9 @@ export async function POST(
     }
 
     /*
-     * SUCCESS CALLBACK
+     * SUCCESS
      *
-     * Même si le callback indique SUCCESS,
-     * on effectue une vérification serveur
-     * auprès du provider.
+     * Vérification serveur auprès du provider.
      */
 
     const verified =
@@ -1185,7 +1151,7 @@ export async function POST(
     }
 
     /*
-     * VALIDATION DU MONTANT
+     * VALIDATION MONTANT
      */
 
     if (
@@ -1225,7 +1191,7 @@ export async function POST(
     }
 
     /*
-     * VALIDATION DE LA DEVISE
+     * VALIDATION DEVISE
      */
 
     if (
@@ -1294,9 +1260,6 @@ export async function POST(
 
     /*
      * ACTIVATION ABONNEMENT
-     *
-     * Le RPC existant reste le mécanisme
-     * officiel d'activation PharmaFlow.
      */
 
     let activationResult:
@@ -1313,7 +1276,7 @@ export async function POST(
     }
 
     /*
-     * RÉPONSE FINALE
+     * RÉPONSE
      */
 
     return jsonSuccess(

@@ -12,9 +12,9 @@ import {
  * Cette route reçoit la notification serveur-à-serveur de Moko Checkout.
  *
  * IMPORTANT :
- * - On lit le corps BRUT avant toute transformation JSON.
- * - La signature doit être vérifiée sur le corps brut.
- * - Le callback Moko est la source de vérité du paiement.
+ * - Le corps brut est lu avant toute transformation JSON.
+ * - Le parser Moko vérifie et interprète le callback.
+ * - Le callback serveur reste la source de vérité.
  * - On ne fait jamais confiance au navigateur / return_url pour confirmer
  *   un paiement.
  *
@@ -26,18 +26,23 @@ import {
 
 export const runtime = "nodejs";
 
+/*
+|--------------------------------------------------------------------------
+| POST
+|--------------------------------------------------------------------------
+*/
+
 export async function POST(
   request: Request,
 ) {
   try {
     /**
      * ------------------------------------------------------------------------
-     * 1. Récupérer le corps BRUT
+     * 1. RÉCUPÉRER LE CORPS BRUT
      * ------------------------------------------------------------------------
      *
-     * NE PAS utiliser request.json() avant la vérification.
-     *
-     * La signature HMAC dépend du JSON brut reçu.
+     * Le raw body est conservé afin que le parser Moko puisse effectuer
+     * son traitement correctement.
      */
     const rawBody =
       await request.text();
@@ -58,30 +63,40 @@ export async function POST(
 
     /**
      * ------------------------------------------------------------------------
-     * 2. Vérification + parsing Moko
+     * 2. PARSING MOKO
      * ------------------------------------------------------------------------
+     *
+     * IMPORTANT :
+     *
+     * La version actuelle de parseMokoCardWebhook()
+     * accepte UN seul argument : le raw body.
+     *
+     * Ne pas lui transmettre request.headers ici.
      */
     const result =
       await parseMokoCardWebhook(
         rawBody,
-        request.headers,
       );
 
     /**
      * ------------------------------------------------------------------------
-     * 3. Refuser immédiatement les callbacks invalides
+     * 3. REFUSER LES CALLBACKS INVALIDES
      * ------------------------------------------------------------------------
      */
-    if (!result.success &&
-        result.failureReason) {
-      const securityErrors = new Set([
-        "SIGNATURE_MISSING",
-        "INVALID_SIGNATURE_FORMAT",
-        "SIGNATURE_TIMESTAMP_EXPIRED",
-        "INVALID_SIGNATURE",
-        "CALLBACK_SECRET_MISSING",
-        "INVALID_JSON",
-      ]);
+
+    if (
+      !result.success &&
+      result.failureReason
+    ) {
+      const securityErrors =
+        new Set([
+          "SIGNATURE_MISSING",
+          "INVALID_SIGNATURE_FORMAT",
+          "SIGNATURE_TIMESTAMP_EXPIRED",
+          "INVALID_SIGNATURE",
+          "CALLBACK_SECRET_MISSING",
+          "INVALID_JSON",
+        ]);
 
       if (
         securityErrors.has(
@@ -112,7 +127,33 @@ export async function POST(
 
     /**
      * ------------------------------------------------------------------------
-     * 4. Journalisation contrôlée
+     * 4. ERREUR DE CHIFFREMENT
+     * ------------------------------------------------------------------------
+     */
+
+    if (
+      result.failureReason ===
+      "INVALID_ENCRYPTION"
+    ) {
+      console.error(
+        "[MOKO CARD WEBHOOK] Chiffrement invalide.",
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "INVALID_ENCRYPTION",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    /**
+     * ------------------------------------------------------------------------
+     * 5. JOURNALISATION CONTRÔLÉE
      * ------------------------------------------------------------------------
      *
      * NE JAMAIS logger :
@@ -122,17 +163,28 @@ export async function POST(
      * - CVV
      * - données sensibles inutiles
      */
+
     console.info(
       "[MOKO CARD WEBHOOK] Notification reçue",
       {
-        success: result.success,
-        status: result.status,
+        success:
+          result.success,
+
+        status:
+          result.status,
+
         merchantReference:
           result.merchantReference,
+
         providerTransactionId:
           result.providerTransactionId,
-        amount: result.amount,
-        currency: result.currency,
+
+        amount:
+          result.amount,
+
+        currency:
+          result.currency,
+
         paymentMethod:
           result.paymentMethod,
       },
@@ -140,20 +192,53 @@ export async function POST(
 
     /**
      * ------------------------------------------------------------------------
-     * 5. Paiement confirmé
+     * 6. CALLBACK NON SUCCESSFUL
      * ------------------------------------------------------------------------
      *
-     * IMPORTANT :
-     *
-     * Ici, le callback est authentifié.
-     *
-     * Le prochain niveau consiste à mettre à jour LA transaction PharmaFlow
-     * déjà créée avec merchantReference / providerTransactionId.
-     *
-     * Nous ne créons volontairement PAS une deuxième table de transactions
-     * ici : PharmaFlow doit continuer à utiliser son moteur de paiement
-     * existant.
+     * Si le parser indique un échec mais qu'il ne s'agit pas d'une erreur
+     * de sécurité, on retourne quand même une réponse contrôlée.
      */
+
+    if (
+      !result.success &&
+      result.status !==
+        "successful"
+    ) {
+      console.warn(
+        "[MOKO CARD WEBHOOK] Callback non confirmé",
+        {
+          status:
+            result.status,
+
+          merchantReference:
+            result.merchantReference,
+
+          providerTransactionId:
+            result.providerTransactionId,
+
+          reason:
+            result.failureReason ??
+            result.message ??
+            null,
+        },
+      );
+    }
+
+    /**
+     * ------------------------------------------------------------------------
+     * 7. PAIEMENT CONFIRMÉ
+     * ------------------------------------------------------------------------
+     *
+     * Le webhook principal :
+     *
+     * /api/payments/webhook
+     *
+     * reste responsable du raccordement à la transaction PharmaFlow,
+     * de la vérification provider et de l'activation de l'abonnement.
+     *
+     * Cette route dédiée Moko ne crée donc PAS une deuxième transaction.
+     */
+
     if (
       result.status ===
       "successful"
@@ -163,37 +248,25 @@ export async function POST(
         {
           merchantReference:
             result.merchantReference,
+
           providerTransactionId:
             result.providerTransactionId,
-          amount: result.amount,
-          currency: result.currency,
+
+          amount:
+            result.amount,
+
+          currency:
+            result.currency,
         },
       );
-
-      /**
-       * TODO — raccordement à la transaction PharmaFlow existante.
-       *
-       * Exemple logique :
-       *
-       * 1. retrouver la transaction par merchantReference
-       * 2. vérifier pharmacy_id / montant / devise
-       * 3. vérifier l'idempotence
-       * 4. passer le statut à "successful"
-       * 5. enregistrer providerTransactionId
-       * 6. enregistrer les métadonnées Moko
-       * 7. déclencher éventuellement l'activation de l'abonnement
-       *
-       * Nous ne mettons pas de requête Supabase inventée ici parce que
-       * le nom exact et les colonnes de ta table de transactions existante
-       * doivent être respectés.
-       */
     }
 
     /**
      * ------------------------------------------------------------------------
-     * 6. Paiement échoué
+     * 8. PAIEMENT ÉCHOUÉ
      * ------------------------------------------------------------------------
      */
+
     if (
       result.status ===
       "failed"
@@ -203,25 +276,24 @@ export async function POST(
         {
           merchantReference:
             result.merchantReference,
+
           providerTransactionId:
             result.providerTransactionId,
+
           reason:
-            result.failureReason,
+            result.failureReason ??
+            result.message ??
+            null,
         },
       );
-
-      /**
-       * Même principe :
-       *
-       * mettre à jour la transaction PharmaFlow existante en "failed".
-       */
     }
 
     /**
      * ------------------------------------------------------------------------
-     * 7. Paiement encore en attente
+     * 9. PAIEMENT EN ATTENTE
      * ------------------------------------------------------------------------
      */
+
     if (
       result.status ===
       "pending"
@@ -231,6 +303,7 @@ export async function POST(
         {
           merchantReference:
             result.merchantReference,
+
           providerTransactionId:
             result.providerTransactionId,
         },
@@ -239,16 +312,28 @@ export async function POST(
 
     /**
      * ------------------------------------------------------------------------
-     * 8. Réponse à Moko
+     * 10. RÉPONSE À MOKO
      * ------------------------------------------------------------------------
      *
-     * Moko doit recevoir une réponse HTTP 200 lorsque le callback a été
-     * correctement reçu et vérifié.
+     * Lorsque le callback a été correctement reçu et traité,
+     * on répond HTTP 200.
      */
+
     return NextResponse.json(
       {
         received: true,
         success: true,
+
+        status:
+          result.status,
+
+        merchantReference:
+          result.merchantReference ??
+          null,
+
+        providerTransactionId:
+          result.providerTransactionId ??
+          null,
       },
       {
         status: 200,
@@ -263,7 +348,8 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
-        error: "WEBHOOK_INTERNAL_ERROR",
+        error:
+          "WEBHOOK_INTERNAL_ERROR",
       },
       {
         status: 500,
@@ -274,7 +360,10 @@ export async function POST(
 
 /**
  * ============================================================================
- * Refuser les autres méthodes
+ * GET
+ * ============================================================================
+ *
+ * Cette URL est exclusivement destinée aux callbacks POST.
  * ============================================================================
  */
 
@@ -282,6 +371,7 @@ export async function GET() {
   return NextResponse.json(
     {
       success: false,
+
       message:
         "Cette URL est un webhook POST Moko Afrika.",
     },
