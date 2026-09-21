@@ -858,7 +858,7 @@ export default function RegisterPage() {
 
       const response =
         await fetch(
-          "/api/inscription",
+          "/api/auth/inscription",
           {
             method: "POST",
 
