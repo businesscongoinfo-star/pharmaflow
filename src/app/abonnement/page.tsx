@@ -7,9 +7,31 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 type Locale = "fr" | "en";
+
+type BillingCycle =
+  | "monthly"
+  | "yearly";
+
+type PaymentMethod =
+  | "mobile_money"
+  | "card";
+
+type MobileMoneyOperator =
+  | "mpesa"
+  | "airtel"
+  | "orange"
+  | "africell";
 
 type PlanPrice = {
   plan_id: string;
@@ -33,6 +55,7 @@ type SubscriptionStatusResponse = {
   };
 
   status?: string;
+
   locale?: Locale;
 
   user?: {
@@ -109,15 +132,65 @@ type SubscriptionStatusResponse = {
   server_time?: string;
 };
 
-type BillingCycle = "monthly" | "yearly";
+type CreatePaymentResponse = {
+  success?: boolean;
 
-type PaymentMethod =
-  | "mobile_money"
-  | "card";
+  message?: string;
+
+  code?: string;
+
+  checkoutUrl?: string | null;
+
+  redirectUrl?: string | null;
+
+  paymentUrl?: string | null;
+
+  status?: string;
+
+  providerTransactionId?: string | null;
+
+  merchantReference?: string | null;
+
+  provider?: string | null;
+
+  paymentTransactionId?: string | null;
+
+  payment?: {
+    id?: string;
+    merchantReference?: string | null;
+    provider?: string | null;
+    providerTransactionId?: string | null;
+    rail?: string | null;
+    clientSecret?: string | null;
+    amount?: number | null;
+    currency?: string | null;
+    paymentMethod?: string | null;
+    providerPaymentMethod?: string | null;
+    mobileMoneyOperator?: string | null;
+    status?: string | null;
+    checkoutUrl?: string | null;
+  };
+
+  subscription?: {
+    id?: string;
+    planId?: string;
+    planCode?: string | null;
+    billingCycle?: BillingCycle;
+    currency?: string;
+    amount?: number;
+  };
+
+  providerResponse?: unknown;
+};
+
+/* =========================================================
+   TEXTES
+========================================================= */
 
 const TEXT = {
   fr: {
     brand: "PharmaFlow",
+
     subtitle:
       "Gestion intelligente des pharmacies",
 
@@ -151,7 +224,8 @@ const TEXT = {
     activeDescription:
       "Votre abonnement est actif. Merci de faire confiance à PharmaFlow.",
 
-    remaining: "Temps restant",
+    remaining:
+      "Temps restant",
 
     days: "jours",
     day: "jour",
@@ -165,11 +239,14 @@ const TEXT = {
     seconds: "secondes",
     second: "seconde",
 
-    expired: "Expiré",
+    expired:
+      "Expiré",
 
-    expiresOn: "Expire le",
+    expiresOn:
+      "Expire le",
 
-    activeUntil: "Actif jusqu'au",
+    activeUntil:
+      "Actif jusqu'au",
 
     pricing:
       "Choisissez votre abonnement",
@@ -177,13 +254,17 @@ const TEXT = {
     pricingDescription:
       "Des tarifs simples pour continuer à utiliser toute la puissance de PharmaFlow.",
 
-    monthly: "Mensuel",
+    monthly:
+      "Mensuel",
 
-    yearly: "Annuel",
+    yearly:
+      "Annuel",
 
-    month: "mois",
+    month:
+      "mois",
 
-    year: "an",
+    year:
+      "an",
 
     monthlyDescription:
       "Facturation tous les mois. Si vous renouvelez avant expiration, les jours restants sont conservés et 7 jours bonus sont ajoutés.",
@@ -191,11 +272,14 @@ const TEXT = {
     yearlyDescription:
       "12 mois d'abonnement + 1 mois offert. En cas de renouvellement anticipé, les jours restants sont conservés et 7 jours bonus sont ajoutés.",
 
-    popular: "RECOMMANDÉ",
+    popular:
+      "RECOMMANDÉ",
 
-    perMonth: "/ mois",
+    perMonth:
+      "/ mois",
 
-    perYear: "/ an",
+    perYear:
+      "/ an",
 
     monthlyBonus:
       "+ 7 jours bonus en cas de renouvellement anticipé",
@@ -228,7 +312,25 @@ const TEXT = {
       "Mobile Money",
 
     mobileMoneyDescription:
-      "Payez directement avec un service Mobile Money disponible dans votre pays.",
+      "Payez directement avec le service Mobile Money de votre choix.",
+
+    chooseOperator:
+      "Choisissez votre opérateur",
+
+    operatorRequired:
+      "Veuillez sélectionner votre opérateur Mobile Money.",
+
+    mpesa:
+      "M-Pesa",
+
+    airtel:
+      "Airtel Money",
+
+    orange:
+      "Orange Money",
+
+    africell:
+      "Africell Money",
 
     card:
       "Carte bancaire",
@@ -340,10 +442,32 @@ const TEXT = {
 
     noRedirect:
       "Retourner à mon espace",
+
+    paymentCreated:
+      "La demande de paiement a été créée. Suivez les instructions pour terminer le paiement.",
+
+    paymentCancelled:
+      "Le paiement a été annulé.",
+
+    paymentExpired:
+      "La session de paiement a expiré.",
+
+    providerUnavailable:
+      "Le fournisseur de paiement n'est actuellement pas disponible.",
+
+    mobileMoneyOperatorHint:
+      "Sélectionnez l'opérateur correspondant au numéro Mobile Money utilisé.",
+
+    selectedOperator:
+      "Opérateur sélectionné",
+
+    paymentReference:
+      "Référence de paiement",
   },
 
   en: {
-    brand: "PharmaFlow",
+    brand:
+      "PharmaFlow",
 
     subtitle:
       "Smart pharmacy management",
@@ -466,7 +590,25 @@ const TEXT = {
       "Mobile Money",
 
     mobileMoneyDescription:
-      "Pay directly with a Mobile Money service available in your country.",
+      "Pay directly with your preferred Mobile Money service.",
+
+    chooseOperator:
+      "Choose your operator",
+
+    operatorRequired:
+      "Please select your Mobile Money operator.",
+
+    mpesa:
+      "M-Pesa",
+
+    airtel:
+      "Airtel Money",
+
+    orange:
+      "Orange Money",
+
+    africell:
+      "Africell Money",
 
     card:
       "Bank card",
@@ -578,8 +720,33 @@ const TEXT = {
 
     noRedirect:
       "Return to my workspace",
+
+    paymentCreated:
+      "The payment request was created. Follow the instructions to complete your payment.",
+
+    paymentCancelled:
+      "The payment was cancelled.",
+
+    paymentExpired:
+      "The payment session expired.",
+
+    providerUnavailable:
+      "The payment provider is currently unavailable.",
+
+    mobileMoneyOperatorHint:
+      "Select the operator corresponding to the Mobile Money number you are using.",
+
+    selectedOperator:
+      "Selected operator",
+
+    paymentReference:
+      "Payment reference",
   },
 } as const;
+
+/* =========================================================
+   REDIRECTION SÉCURISÉE
+========================================================= */
 
 function getSafeRedirect(
   value: string | null,
@@ -595,38 +762,36 @@ function getSafeRedirect(
   return value;
 }
 
+/* =========================================================
+   COMPOSANT
+========================================================= */
+
 export default function SubscriptionPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
+
   const searchParams =
     useSearchParams();
 
-  /*
-   * IMPORTANT :
-   *
-   * On conserve la destination d'origine.
-   *
-   * Exemple :
-   *
-   * /abonnement?redirect=/dashboard
-   *
-   * ou :
-   *
-   * /abonnement?redirect=/pharmacien
-   */
-  const redirectPath = useMemo(
-    () =>
-      getSafeRedirect(
-        searchParams.get(
-          "redirect",
+  const redirectPath =
+    useMemo(
+      () =>
+        getSafeRedirect(
+          searchParams.get(
+            "redirect",
+          ),
         ),
-      ),
-    [searchParams],
-  );
+      [searchParams],
+    );
 
   const reason =
     searchParams.get(
       "reason",
     );
+
+  /* =======================================================
+     ÉTATS
+  ======================================================= */
 
   const [data, setData] =
     useState<SubscriptionStatusResponse | null>(
@@ -642,44 +807,63 @@ export default function SubscriptionPage() {
   const [locale, setLocale] =
     useState<Locale>("fr");
 
-  const [billingCycle, setBillingCycle] =
+  const [
+    billingCycle,
+    setBillingCycle,
+  ] =
     useState<BillingCycle>(
       "monthly",
     );
 
-  const [paymentMethod, setPaymentMethod] =
+  const [
+    paymentMethod,
+    setPaymentMethod,
+  ] =
     useState<PaymentMethod | null>(
+      null,
+    );
+
+  const [
+    mobileMoneyOperator,
+    setMobileMoneyOperator,
+  ] =
+    useState<MobileMoneyOperator | null>(
       null,
     );
 
   const [
     showPaymentMethods,
     setShowPaymentMethods,
-  ] = useState(false);
+  ] =
+    useState(false);
 
   const [processing, setProcessing] =
     useState(false);
 
-  const [paymentMessage, setPaymentMessage] =
+  const [
+    paymentMessage,
+    setPaymentMessage,
+  ] =
+    useState("");
+
+  const [
+    paymentReference,
+    setPaymentReference,
+  ] =
     useState("");
 
   const [
     redirecting,
     setRedirecting,
-  ] = useState(false);
+  ] =
+    useState(false);
 
-  /*
-   * Empêche plusieurs redirections
-   * simultanées.
-   */
   const redirectStarted =
     useRef(false);
 
-  /*
-   * ============================================================
-   * CHARGEMENT DU STATUT
-   * ============================================================
-   */
+  /* =======================================================
+     CHARGEMENT ABONNEMENT
+  ======================================================= */
 
   const loadSubscription =
     useCallback(
@@ -719,10 +903,6 @@ export default function SubscriptionPage() {
           const result =
             (await response.json()) as SubscriptionStatusResponse;
 
-          /*
-           * Session absente :
-           * on revient au login.
-           */
           if (
             response.status === 401 ||
             !result.authenticated
@@ -749,32 +929,13 @@ export default function SubscriptionPage() {
           setData(result);
 
           if (
-            result.locale === "en" ||
-            result.locale === "fr"
+            result.locale === "fr" ||
+            result.locale === "en"
           ) {
             setLocale(
               result.locale,
             );
           }
-
-          /*
-           * ======================================================
-           * IMPORTANT
-           *
-           * On ne redirige vers le dashboard QUE si le serveur
-           * confirme réellement que l'accès est autorisé.
-           *
-           * Donc :
-           *
-           * access.allowed === false
-           *      ↓
-           * RESTER sur /abonnement
-           *
-           * access.allowed === true
-           *      ↓
-           * RETOUR vers l'espace demandé
-           * ======================================================
-           */
 
           if (
             redirectIfAllowed &&
@@ -789,11 +950,6 @@ export default function SubscriptionPage() {
               true,
             );
 
-            /*
-             * Petit délai pour laisser
-             * l'utilisateur voir que
-             * son accès est restauré.
-             */
             window.setTimeout(
               () => {
                 router.replace(
@@ -834,14 +990,9 @@ export default function SubscriptionPage() {
     void loadSubscription();
   }, [loadSubscription]);
 
-  const t =
-    TEXT[locale];
-
-  /*
-   * ============================================================
-   * MESSAGE SELON LE MOTIF DE REDIRECTION
-   * ============================================================
-   */
+  /* =======================================================
+     MESSAGE REDIRECTION
+  ======================================================= */
 
   useEffect(() => {
     if (
@@ -882,16 +1033,9 @@ export default function SubscriptionPage() {
     locale,
   ]);
 
-  /*
-   * ============================================================
-   * RETOUR MANUEL VERS L'ESPACE
-   *
-   * IMPORTANT :
-   *
-   * Même le bouton de retour vérifie d'abord
-   * que l'abonnement est réellement actif.
-   * ============================================================
-   */
+  /* =======================================================
+     RETOUR ESPACE
+  ======================================================= */
 
   const handleReturnToWorkspace =
     useCallback(
@@ -902,9 +1046,7 @@ export default function SubscriptionPage() {
           return;
         }
 
-        setProcessing(
-          true,
-        );
+        setProcessing(true);
         setPaymentMessage("");
 
         const result =
@@ -914,9 +1056,7 @@ export default function SubscriptionPage() {
             },
           );
 
-        setProcessing(
-          false,
-        );
+        setProcessing(false);
 
         if (
           result?.access
@@ -925,9 +1065,7 @@ export default function SubscriptionPage() {
           redirectStarted.current =
             true;
 
-          setRedirecting(
-            true,
-          );
+          setRedirecting(true);
 
           router.replace(
             redirectPath,
@@ -950,25 +1088,21 @@ export default function SubscriptionPage() {
       ],
     );
 
-  /*
-   * ============================================================
-   * COMPTE À REBOURS
-   * ============================================================
-   */
+  /* =======================================================
+     COMPTE À REBOURS
+  ======================================================= */
 
   const [
     remainingMs,
     setRemainingMs,
-  ] = useState(0);
+  ] =
+    useState(0);
 
   useEffect(() => {
-    const initial =
+    setRemainingMs(
       data?.trial
         ?.remaining_ms ??
-      0;
-
-    setRemainingMs(
-      initial,
+        0,
     );
   }, [data]);
 
@@ -995,11 +1129,10 @@ export default function SubscriptionPage() {
         1000,
       );
 
-    return () => {
+    return () =>
       window.clearInterval(
         timer,
       );
-    };
   }, [
     data?.trial?.active,
     remainingMs,
@@ -1047,11 +1180,9 @@ export default function SubscriptionPage() {
       };
     }, [remainingMs]);
 
-  /*
-   * ============================================================
-   * DEVISE
-   * ============================================================
-   */
+  /* =======================================================
+     DEVISE
+  ======================================================= */
 
   const currency =
     (
@@ -1069,11 +1200,9 @@ export default function SubscriptionPage() {
       currency,
     );
 
-  /*
-   * ============================================================
-   * TARIFS
-   * ============================================================
-   */
+  /* =======================================================
+     TARIFS
+  ======================================================= */
 
   const monthlyPrice =
     data?.prices
@@ -1169,8 +1298,7 @@ export default function SubscriptionPage() {
 
         try {
           return new Intl.NumberFormat(
-            locale ===
-              "en"
+            locale === "en"
               ? "en-US"
               : "fr-FR",
             {
@@ -1192,8 +1320,7 @@ export default function SubscriptionPage() {
           return `${Number(
             price,
           ).toLocaleString(
-            locale ===
-              "en"
+            locale === "en"
               ? "en-US"
               : "fr-FR",
           )} ${code}`;
@@ -1202,9 +1329,11 @@ export default function SubscriptionPage() {
       [
         currency,
         locale,
-        t.unavailable,
       ],
     );
+
+  const t =
+    TEXT[locale];
 
   const monthlyLabel =
     monthlyAvailable
@@ -1222,25 +1351,21 @@ export default function SubscriptionPage() {
         )
       : t.yearlyPriceUnavailable;
 
-  /*
-   * ============================================================
-   * CHOIX DU FORFAIT
-   * ============================================================
-   */
+  /* =======================================================
+     CHOIX FORFAIT
+  ======================================================= */
 
   function choosePlan(
     cycle: BillingCycle,
   ) {
     const available =
-      cycle ===
-      "monthly"
+      cycle === "monthly"
         ? monthlyAvailable
         : yearlyAvailable;
 
     if (!available) {
       setPaymentMessage(
-        cycle ===
-          "monthly"
+        cycle === "monthly"
           ? t.monthlyPriceUnavailable
           : t.yearlyPriceUnavailable,
       );
@@ -1256,7 +1381,15 @@ export default function SubscriptionPage() {
       null,
     );
 
+    setMobileMoneyOperator(
+      null,
+    );
+
     setPaymentMessage(
+      "",
+    );
+
+    setPaymentReference(
       "",
     );
 
@@ -1265,11 +1398,53 @@ export default function SubscriptionPage() {
     );
   }
 
-  /*
-   * ============================================================
-   * PAIEMENT RÉEL
-   * ============================================================
-   */
+  /* =======================================================
+     CHOIX MÉTHODE
+  ======================================================= */
+
+  function choosePaymentMethod(
+    method: PaymentMethod,
+  ) {
+    setPaymentMessage("");
+
+    setPaymentReference("");
+
+    setPaymentMethod(
+      method,
+    );
+
+    /*
+     * L'opérateur ne concerne que Mobile Money.
+     */
+    if (
+      method !==
+      "mobile_money"
+    ) {
+      setMobileMoneyOperator(
+        null,
+      );
+    }
+  }
+
+  /* =======================================================
+     CHOIX OPÉRATEUR
+  ======================================================= */
+
+  function chooseMobileMoneyOperator(
+    operator: MobileMoneyOperator,
+  ) {
+    setPaymentMessage("");
+
+    setPaymentReference("");
+
+    setMobileMoneyOperator(
+      operator,
+    );
+  }
+
+  /* =======================================================
+     PAIEMENT
+  ======================================================= */
 
   async function startPayment() {
     if (
@@ -1305,6 +1480,22 @@ export default function SubscriptionPage() {
       return;
     }
 
+    /*
+     * Mobile Money :
+     * l'opérateur est obligatoire.
+     */
+    if (
+      paymentMethod ===
+        "mobile_money" &&
+      !mobileMoneyOperator
+    ) {
+      setPaymentMessage(
+        t.operatorRequired,
+      );
+
+      return;
+    }
+
     if (
       !hasCurrency
     ) {
@@ -1328,29 +1519,45 @@ export default function SubscriptionPage() {
     }
 
     try {
-      setProcessing(
-        true,
-      );
+      setProcessing(true);
 
-      setPaymentMessage(
-        "",
-      );
+      setPaymentMessage("");
+
+      setPaymentReference("");
 
       /*
        * IMPORTANT :
        *
-       * Le navigateur n'envoie PAS :
+       * Le navigateur ne transmet PAS :
        *
        * - le prix
        * - la devise
        * - pharmacy_id
-       * - les jours restants
-       * - la date d'expiration
-       * - les bonus
+       * - subscription_id
+       * - expiration
+       * - bonus
        *
-       * Le serveur détermine toutes
-       * ces informations.
+       * Le serveur calcule toutes ces données.
        */
+
+      const requestBody: {
+        billingCycle: BillingCycle;
+        paymentMethod: PaymentMethod;
+        mobileMoneyOperator?: MobileMoneyOperator;
+      } = {
+        billingCycle,
+
+        paymentMethod,
+      };
+
+      if (
+        paymentMethod ===
+          "mobile_money" &&
+        mobileMoneyOperator
+      ) {
+        requestBody.mobileMoneyOperator =
+          mobileMoneyOperator;
+      }
 
       const response =
         await fetch(
@@ -1367,25 +1574,14 @@ export default function SubscriptionPage() {
             },
 
             body:
-              JSON.stringify({
-                billingCycle,
-
-                paymentMethod,
-              }),
+              JSON.stringify(
+                requestBody,
+              ),
           },
         );
 
       const result =
-        (await response.json()) as {
-          success?: boolean;
-          message?: string;
-          checkoutUrl?: string | null;
-          redirectUrl?: string | null;
-          paymentUrl?: string | null;
-          status?: string;
-          providerTransactionId?: string | null;
-          merchantReference?: string | null;
-        };
+        (await response.json()) as CreatePaymentResponse;
 
       /*
        * Session expirée.
@@ -1414,16 +1610,40 @@ export default function SubscriptionPage() {
       }
 
       /*
-       * ======================================================
-       * CARTE / HOSTED CHECKOUT
-       * ======================================================
+       * ==================================================
+       * RÉFÉRENCE
+       * ==================================================
        */
 
+      const reference =
+        result.merchantReference ??
+        result.payment
+          ?.merchantReference ??
+        "";
+
+      if (reference) {
+        setPaymentReference(
+          reference,
+        );
+      }
+
+      /*
+       * ==================================================
+       * CARTE / HOSTED CHECKOUT
+       * ==================================================
+       */
+
+      const checkoutUrl =
+        result.checkoutUrl ??
+        result.payment
+          ?.checkoutUrl ??
+        null;
+
       if (
-        result.checkoutUrl
+        checkoutUrl
       ) {
         window.location.href =
-          result.checkoutUrl;
+          checkoutUrl;
 
         return;
       }
@@ -1447,35 +1667,20 @@ export default function SubscriptionPage() {
       }
 
       /*
-       * ======================================================
+       * ==================================================
        * MOBILE MONEY
+       * ==================================================
        *
-       * Le paiement n'est PAS considéré comme terminé
-       * simplement parce que /api/payments/create répond
-       * avec success=true.
+       * La création de la transaction n'est PAS une
+       * confirmation de paiement.
        *
-       * Il faut attendre la confirmation réelle côté serveur.
-       * ======================================================
+       * On attend la confirmation serveur.
        */
 
       setPaymentMessage(
         result.message ||
-          t.waitingPayment,
+          t.paymentCreated,
       );
-
-      /*
-       * On vérifie plusieurs fois le statut.
-       *
-       * Le serveur reste la source de vérité.
-       *
-       * Si l'abonnement devient actif :
-       *
-       *      → retour automatique vers redirectPath
-       *
-       * Sinon :
-       *
-       *      → l'utilisateur reste sur /abonnement
-       */
 
       const maxAttempts =
         12;
@@ -1539,11 +1744,6 @@ export default function SubscriptionPage() {
           break;
         }
       }
-
-      /*
-       * Si après les vérifications le paiement n'est toujours
-       * pas confirmé, on ne donne PAS l'accès.
-       */
     } catch (err) {
       console.error(
         "PharmaFlow payment creation:",
@@ -1562,28 +1762,17 @@ export default function SubscriptionPage() {
     }
   }
 
-  /*
-   * ============================================================
-   * DÉCONNEXION
-   * ============================================================
-   */
+  /* =======================================================
+     DÉCONNEXION
+  ======================================================= */
 
   async function handleLogout() {
     try {
-      /*
-       * On utilise l'endpoint existant.
-       *
-       * Aucun signOut automatique n'est effectué parce que
-       * l'abonnement est expiré.
-       *
-       * Ici seulement, l'utilisateur demande explicitement
-       * à se déconnecter.
-       */
-
       await fetch(
         "/api/auth/logout",
         {
           method: "POST",
+
           headers: {
             Accept:
               "application/json",
@@ -1597,19 +1786,14 @@ export default function SubscriptionPage() {
       );
     }
 
-    /*
-     * On retourne toujours au login.
-     */
     router.replace(
       "/login",
     );
   }
 
-  /*
-   * ============================================================
-   * ÉTAT ABONNEMENT
-   * ============================================================
-   */
+  /* =======================================================
+     ÉTAT ABONNEMENT
+  ======================================================= */
 
   const trialActive =
     data?.trial?.active ===
@@ -1628,24 +1812,9 @@ export default function SubscriptionPage() {
     trialActive &&
     countdown.days <= 3;
 
-  /*
-   * ============================================================
-   * REDIRECTION APRÈS ABONNEMENT DÉJÀ ACTIF
-   *
-   * Si quelqu'un arrive sur /abonnement alors qu'il a déjà
-   * un abonnement valide, on peut lui proposer de retourner
-   * dans son espace.
-   *
-   * On ne fait PAS une redirection automatique ici pour éviter
-   * les boucles.
-   * ============================================================
-   */
-
-  /*
-   * ============================================================
-   * CHARGEMENT
-   * ============================================================
-   */
+  /* =======================================================
+     CHARGEMENT
+  ======================================================= */
 
   if (
     loading ||
@@ -1672,11 +1841,9 @@ export default function SubscriptionPage() {
     );
   }
 
-  /*
-   * ============================================================
-   * ERREUR
-   * ============================================================
-   */
+  /* =======================================================
+     ERREUR
+  ======================================================= */
 
   if (
     error ||
@@ -1721,11 +1888,16 @@ export default function SubscriptionPage() {
     );
   }
 
+  /* =======================================================
+     RENDU
+  ======================================================= */
+
   return (
     <main className="pf-subscription-page">
-      {/* ========================================================
-          EN-TÊTE
-      ========================================================= */}
+
+      {/* ====================================================
+          HEADER
+      ==================================================== */}
 
       <header className="pf-subscription-header">
         <div className="pf-subscription-brand">
@@ -1783,11 +1955,16 @@ export default function SubscriptionPage() {
         </div>
       </header>
 
-      {/* ========================================================
+      {/* ====================================================
           CONTENU
-      ========================================================= */}
+      ==================================================== */}
 
       <div className="pf-subscription-container">
+
+        {/* ==================================================
+            INTRO
+        ================================================== */}
+
         <section className="pf-subscription-intro">
           <span className="pf-subscription-eyebrow">
             {t.pharmacy}
@@ -1823,9 +2000,9 @@ export default function SubscriptionPage() {
           </div>
         </section>
 
-        {/* ======================================================
-            ÉTAT ACTUEL
-        ======================================================= */}
+        {/* ==================================================
+            STATUT
+        ================================================== */}
 
         <section
           className={`pf-subscription-status-card ${
@@ -2012,11 +2189,12 @@ export default function SubscriptionPage() {
           )}
         </section>
 
-        {/* ======================================================
+        {/* ==================================================
             TARIFS
-        ======================================================= */}
+        ================================================== */}
 
         <section className="pf-subscription-pricing">
+
           <div className="pf-subscription-section-title">
             <span>
               {t.pricing}
@@ -2038,9 +2216,10 @@ export default function SubscriptionPage() {
           )}
 
           <div className="pf-subscription-plans">
-            {/* ==================================================
+
+            {/* =================================================
                 MENSUEL
-            ================================================== */}
+            ================================================= */}
 
             <article
               className={`pf-subscription-plan ${
@@ -2102,9 +2281,9 @@ export default function SubscriptionPage() {
               </button>
             </article>
 
-            {/* ==================================================
+            {/* =================================================
                 ANNUEL
-            ================================================== */}
+            ================================================= */}
 
             <article
               className={`pf-subscription-plan is-recommended ${
@@ -2174,9 +2353,9 @@ export default function SubscriptionPage() {
             </article>
           </div>
 
-          {/* ====================================================
+          {/* ==================================================
               PAIEMENT ANTICIPÉ
-          ===================================================== */}
+          ================================================== */}
 
           {accessAllowed && (
             <div className="pf-advance-payment-notice">
@@ -2202,12 +2381,13 @@ export default function SubscriptionPage() {
           )}
         </section>
 
-        {/* ======================================================
+        {/* ==================================================
             MOYENS DE PAIEMENT
-        ======================================================= */}
+        ================================================== */}
 
         {showPaymentMethods && (
           <section className="pf-payment-method-section">
+
             <div className="pf-subscription-section-title">
               <span>
                 {
@@ -2221,6 +2401,10 @@ export default function SubscriptionPage() {
                 }
               </p>
             </div>
+
+            {/* ================================================
+                RÉSUMÉ DU FORFAIT
+            ================================================= */}
 
             <div className="pf-selected-plan-summary">
               <span>
@@ -2238,10 +2422,15 @@ export default function SubscriptionPage() {
               </strong>
             </div>
 
+            {/* ================================================
+                MÉTHODES
+            ================================================= */}
+
             <div className="pf-payment-methods">
-              {/* ==================================================
+
+              {/* ==============================================
                   MOBILE MONEY
-              ================================================== */}
+              =============================================== */}
 
               <button
                 type="button"
@@ -2252,7 +2441,7 @@ export default function SubscriptionPage() {
                     : ""
                 }`}
                 onClick={() =>
-                  setPaymentMethod(
+                  choosePaymentMethod(
                     "mobile_money",
                   )
                 }
@@ -2289,9 +2478,9 @@ export default function SubscriptionPage() {
                 </span>
               </button>
 
-              {/* ==================================================
-                  CARTE BANCAIRE
-              ================================================== */}
+              {/* ==============================================
+                  CARTE
+              =============================================== */}
 
               <button
                 type="button"
@@ -2302,7 +2491,7 @@ export default function SubscriptionPage() {
                     : ""
                 }`}
                 onClick={() =>
-                  setPaymentMethod(
+                  choosePaymentMethod(
                     "card",
                   )
                 }
@@ -2311,9 +2500,6 @@ export default function SubscriptionPage() {
                   redirecting ||
                   !hasCurrency ||
                   !selectedPlanAvailable
-                }
-                aria-label={
-                  t.card
                 }
               >
                 <span className="pf-payment-method-icon">
@@ -2341,15 +2527,209 @@ export default function SubscriptionPage() {
               </button>
             </div>
 
-            {paymentMessage && (
-              <div className="pf-payment-message">
-                {
-                  paymentMessage
-                }
+            {/* ================================================
+                OPÉRATEURS MOBILE MONEY
+            ================================================= */}
+
+            {paymentMethod ===
+              "mobile_money" && (
+              <div className="pf-mobile-money-operators">
+
+                <div className="pf-mobile-money-operators-header">
+                  <strong>
+                    {
+                      t.chooseOperator
+                    }
+                  </strong>
+
+                  <span>
+                    {
+                      t.mobileMoneyOperatorHint
+                    }
+                  </span>
+                </div>
+
+                <div className="pf-mobile-money-operator-grid">
+
+                  {/* M-PESA */}
+
+                  <button
+                    type="button"
+                    className={`pf-mobile-money-operator ${
+                      mobileMoneyOperator ===
+                      "mpesa"
+                        ? "is-selected"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      chooseMobileMoneyOperator(
+                        "mpesa",
+                      )
+                    }
+                    disabled={
+                      processing ||
+                      redirecting
+                    }
+                  >
+                    <span>
+                      📲
+                    </span>
+
+                    <strong>
+                      {t.mpesa}
+                    </strong>
+
+                    <small>
+                      {mobileMoneyOperator ===
+                      "mpesa"
+                        ? "✓"
+                        : ""}
+                    </small>
+                  </button>
+
+                  {/* AIRTEL */}
+
+                  <button
+                    type="button"
+                    className={`pf-mobile-money-operator ${
+                      mobileMoneyOperator ===
+                      "airtel"
+                        ? "is-selected"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      chooseMobileMoneyOperator(
+                        "airtel",
+                      )
+                    }
+                    disabled={
+                      processing ||
+                      redirecting
+                    }
+                  >
+                    <span>
+                      📱
+                    </span>
+
+                    <strong>
+                      {t.airtel}
+                    </strong>
+
+                    <small>
+                      {mobileMoneyOperator ===
+                      "airtel"
+                        ? "✓"
+                        : ""}
+                    </small>
+                  </button>
+
+                  {/* ORANGE */}
+
+                  <button
+                    type="button"
+                    className={`pf-mobile-money-operator ${
+                      mobileMoneyOperator ===
+                      "orange"
+                        ? "is-selected"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      chooseMobileMoneyOperator(
+                        "orange",
+                      )
+                    }
+                    disabled={
+                      processing ||
+                      redirecting
+                    }
+                  >
+                    <span>
+                      🟠
+                    </span>
+
+                    <strong>
+                      {t.orange}
+                    </strong>
+
+                    <small>
+                      {mobileMoneyOperator ===
+                      "orange"
+                        ? "✓"
+                        : ""}
+                    </small>
+                  </button>
+
+                  {/* AFRICELL */}
+
+                  <button
+                    type="button"
+                    className={`pf-mobile-money-operator ${
+                      mobileMoneyOperator ===
+                      "africell"
+                        ? "is-selected"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      chooseMobileMoneyOperator(
+                        "africell",
+                      )
+                    }
+                    disabled={
+                      processing ||
+                      redirecting
+                    }
+                  >
+                    <span>
+                      📞
+                    </span>
+
+                    <strong>
+                      {t.africell}
+                    </strong>
+
+                    <small>
+                      {mobileMoneyOperator ===
+                      "africell"
+                        ? "✓"
+                        : ""}
+                    </small>
+                  </button>
+                </div>
               </div>
             )}
 
+            {/* ================================================
+                MESSAGE
+            ================================================= */}
+
+            {paymentMessage && (
+              <div className="pf-payment-message">
+                {paymentMessage}
+              </div>
+            )}
+
+            {/* ================================================
+                RÉFÉRENCE
+            ================================================= */}
+
+            {paymentReference && (
+              <div className="pf-payment-reference">
+                <span>
+                  {t.paymentReference}
+                </span>
+
+                <strong>
+                  {paymentReference}
+                </strong>
+              </div>
+            )}
+
+            {/* ================================================
+                ACTIONS
+            ================================================= */}
+
             <div className="pf-payment-actions">
+
               <button
                 type="button"
                 className="pf-btn pf-btn-secondary"
@@ -2362,7 +2742,15 @@ export default function SubscriptionPage() {
                     null,
                   );
 
+                  setMobileMoneyOperator(
+                    null,
+                  );
+
                   setPaymentMessage(
+                    "",
+                  );
+
+                  setPaymentReference(
                     "",
                   );
                 }}
@@ -2384,7 +2772,10 @@ export default function SubscriptionPage() {
                   processing ||
                   redirecting ||
                   !paymentMethod ||
-                  !selectedPlanAvailable
+                  !selectedPlanAvailable ||
+                  (paymentMethod ===
+                    "mobile_money" &&
+                    !mobileMoneyOperator)
                 }
               >
                 {processing
@@ -2392,6 +2783,10 @@ export default function SubscriptionPage() {
                   : t.continue}
               </button>
             </div>
+
+            {/* ================================================
+                SÉCURITÉ
+            ================================================= */}
 
             <div className="pf-payment-security">
               <span>
@@ -2421,9 +2816,9 @@ export default function SubscriptionPage() {
           </section>
         )}
 
-        {/* ======================================================
-            RETOUR VERS L'ESPACE
-        ======================================================= */}
+        {/* ==================================================
+            RETOUR
+        ================================================== */}
 
         {accessAllowed && (
           <section className="pf-subscription-return-section">
@@ -2443,11 +2838,12 @@ export default function SubscriptionPage() {
           </section>
         )}
 
-        {/* ======================================================
+        {/* ==================================================
             INFORMATIONS
-        ======================================================= */}
+        ================================================== */}
 
         <section className="pf-subscription-information">
+
           <div>
             <span>
               {t.currentPlan}
@@ -2486,9 +2882,9 @@ export default function SubscriptionPage() {
         </section>
       </div>
 
-      {/* ========================================================
+      {/* ====================================================
           FOOTER
-      ========================================================= */}
+      ==================================================== */}
 
       <footer className="pf-subscription-footer">
         <p>
