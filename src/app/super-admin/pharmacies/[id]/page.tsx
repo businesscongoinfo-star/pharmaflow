@@ -1,9 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { requireSuperAdmin } from "@/app/lib/super-admin/auth";
-import { createAdminClient } from "@/app/lib/supabase/admin";
-import ManualAccessActions from "../ManualAccessActions";
+import {
+  requireSuperAdmin,
+} from "@/app/lib/super-admin/auth";
+
+import {
+  createAdminClient,
+} from "@/app/lib/supabase/admin";
+
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 type Pharmacy = {
   id: string;
@@ -13,42 +23,96 @@ type Pharmacy = {
   address: string | null;
   currency_code: string;
   owner_id: string | null;
-  status: string;
-  language: string;
+  status: string | null;
+  language: string | null;
   created_at: string;
-  updated_at: string;
-
-  manual_access_enabled: boolean;
+  updated_at: string | null;
+  manual_access_enabled: boolean | null;
   manual_access_until: string | null;
-  manual_access_reason: string | null;
-  manual_access_by: string | null;
 };
 
-type PageProps = {
-  params: Promise<{
+type Subscription = {
+  id: string;
+  status: string | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  expires_at: string | null;
+  created_at: string | null;
+  plan: {
     id: string;
-  }>;
+    name: string;
+    code: string;
+    price: number;
+    currency_code: string;
+  } | null;
 };
 
-function formatDate(value: string | null) {
+type OwnerProfile = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  role: string | null;
+  language: string | null;
+};
+
+function formatDate(
+  value: string | null | undefined,
+): string {
   if (!value) {
     return "—";
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    !Number.isFinite(
+      date.getTime(),
+    )
+  ) {
     return "—";
   }
 
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "fr-FR",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ).format(date);
 }
 
-function getStatusLabel(status: string) {
-  switch (status) {
+function formatPrice(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+): string {
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(value)
+  ) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat(
+    "fr-FR",
+    {
+      style: "currency",
+      currency:
+        currency || "XAF",
+      maximumFractionDigits: 0,
+    },
+  ).format(value);
+}
+
+function getStatusLabel(
+  status: string | null,
+): string {
+  switch (
+    String(status || "")
+      .toLowerCase()
+      .trim()
+  ) {
     case "active":
       return "Active";
 
@@ -59,45 +123,61 @@ function getStatusLabel(status: string) {
       return "Suspendue";
 
     default:
-      return status || "Inconnue";
+      return status || "Inconnu";
   }
 }
 
-function getStatusClass(status: string) {
-  switch (status) {
+function getStatusClass(
+  status: string | null,
+): string {
+  switch (
+    String(status || "")
+      .toLowerCase()
+      .trim()
+  ) {
     case "active":
-      return "status active";
+      return "status-active";
 
     case "inactive":
-      return "status inactive";
+      return "status-inactive";
 
     case "suspended":
-      return "status suspended";
+      return "status-suspended";
 
     default:
-      return "status";
+      return "status-neutral";
   }
 }
 
-function manualAccessIsActive(
-  pharmacy: Pharmacy,
-) {
-  if (!pharmacy.manual_access_enabled) {
-    return false;
+function getSubscriptionLabel(
+  status: string | null,
+): string {
+  switch (
+    String(status || "")
+      .toLowerCase()
+      .trim()
+  ) {
+    case "trial":
+      return "Essai gratuit";
+
+    case "active":
+      return "Actif";
+
+    case "paid":
+      return "Payé";
+
+    case "past_due":
+      return "Impayé";
+
+    case "cancelled":
+      return "Annulé";
+
+    case "suspended":
+      return "Suspendu";
+
+    default:
+      return status || "Inconnu";
   }
-
-  if (!pharmacy.manual_access_until) {
-    return false;
-  }
-
-  const until = new Date(
-    pharmacy.manual_access_until,
-  ).getTime();
-
-  return (
-    Number.isFinite(until) &&
-    until > Date.now()
-  );
 }
 
 export default async function PharmacyDetailsPage({
@@ -105,57 +185,260 @@ export default async function PharmacyDetailsPage({
 }: PageProps) {
   await requireSuperAdmin();
 
-  const { id } = await params;
+  const {
+    id,
+  } = await params;
 
-  const supabase = createAdminClient();
-
-  const { data, error } = await supabase
-    .from("pharmacies")
-    .select(`
-      id,
-      name,
-      country_code,
-      city,
-      address,
-      currency_code,
-      owner_id,
-      status,
-      language,
-      created_at,
-      updated_at,
-      manual_access_enabled,
-      manual_access_until,
-      manual_access_reason,
-      manual_access_by
-    `)
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(
-      `Impossible de récupérer la pharmacie : ${error.message}`,
-    );
-  }
-
-  if (!data) {
+  if (!id) {
     notFound();
   }
 
-  const pharmacy = data as Pharmacy;
+  const supabase =
+    createAdminClient();
 
-  const manualAccessActive =
-    manualAccessIsActive(pharmacy);
+  /**
+   * ==========================================================
+   * PHARMACIE
+   * ==========================================================
+   */
+
+  const {
+    data: pharmacyData,
+    error: pharmacyError,
+  } =
+    await supabase
+      .from("pharmacies")
+      .select(
+        `
+          id,
+          name,
+          country_code,
+          city,
+          address,
+          currency_code,
+          owner_id,
+          status,
+          language,
+          created_at,
+          updated_at,
+          manual_access_enabled,
+          manual_access_until
+        `,
+      )
+      .eq(
+        "id",
+        id,
+      )
+      .maybeSingle();
+
+  if (pharmacyError) {
+    console.error(
+      "[PHARMACY DETAILS] PHARMACY ERROR:",
+      pharmacyError,
+    );
+
+    throw new Error(
+      "Impossible de récupérer la pharmacie.",
+    );
+  }
+
+  if (!pharmacyData) {
+    notFound();
+  }
+
+  const pharmacy =
+    pharmacyData as Pharmacy;
+
+  /**
+   * ==========================================================
+   * PROFIL OWNER
+   * ==========================================================
+   *
+   * IMPORTANT :
+   *
+   * owner_id est nullable.
+   *
+   * Nous ne l'utilisons JAMAIS directement comme
+   * string obligatoire.
+   *
+   * On vérifie d'abord sa présence.
+   * ==========================================================
+   */
+
+  let ownerProfile:
+    | OwnerProfile
+    | null = null;
+
+  if (pharmacy.owner_id) {
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from("profiles")
+        .select(
+          `
+            id,
+            full_name,
+            phone,
+            role,
+            language
+          `,
+        )
+        .eq(
+          "id",
+          pharmacy.owner_id,
+        )
+        .maybeSingle();
+
+    if (error) {
+      console.error(
+        "[PHARMACY DETAILS] OWNER PROFILE ERROR:",
+        error,
+      );
+    }
+
+    if (data) {
+      ownerProfile =
+        data as OwnerProfile;
+    }
+  }
+
+  /**
+   * ==========================================================
+   * ABONNEMENT
+   * ==========================================================
+   */
+
+  let subscription:
+    | Subscription
+    | null = null;
+
+  const {
+    data:
+      subscriptionData,
+    error:
+      subscriptionError,
+  } =
+    await supabase
+      .from("subscriptions")
+      .select(
+        `
+          id,
+          status,
+          trial_started_at,
+          trial_ends_at,
+          expires_at,
+          created_at,
+          subscription_plans (
+            id,
+            name,
+            code,
+            price,
+            currency_code
+          )
+        `,
+      )
+      .eq(
+        "pharmacy_id",
+        pharmacy.id,
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      )
+      .limit(1)
+      .maybeSingle();
+
+  if (subscriptionError) {
+    console.error(
+      "[PHARMACY DETAILS] SUBSCRIPTION ERROR:",
+      subscriptionError,
+    );
+  }
+
+  if (subscriptionData) {
+    const rawPlan =
+      Array.isArray(
+        subscriptionData.subscription_plans,
+      )
+        ? subscriptionData
+            .subscription_plans[0]
+        : subscriptionData.subscription_plans;
+
+    subscription = {
+      id:
+        subscriptionData.id,
+
+      status:
+        subscriptionData.status,
+
+      trial_started_at:
+        subscriptionData.trial_started_at,
+
+      trial_ends_at:
+        subscriptionData.trial_ends_at,
+
+      expires_at:
+        subscriptionData.expires_at,
+
+      created_at:
+        subscriptionData.created_at,
+
+      plan: rawPlan
+        ? {
+            id:
+              rawPlan.id,
+
+            name:
+              rawPlan.name,
+
+            code:
+              rawPlan.code,
+
+            price:
+              Number(
+                rawPlan.price,
+              ),
+
+            currency_code:
+              rawPlan.currency_code,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * ==========================================================
+   * ACCÈS MANUEL
+   * ==========================================================
+   */
+
+  const manualAccessValid =
+    pharmacy.manual_access_enabled ===
+      true &&
+    !!pharmacy.manual_access_until &&
+    new Date(
+      pharmacy.manual_access_until,
+    ).getTime() >
+      Date.now();
 
   return (
-    <main className="details-page">
-      <div className="details-container">
-        {/* =====================================================
-            HEADER
-        ===================================================== */}
+    <main className="pf-page">
+      <div className="pf-container">
 
-        <header className="page-header">
+        {/* ================================================= */}
+        {/* HEADER */}
+        {/* ================================================= */}
+
+        <header className="pf-header">
+
           <div>
-            <div className="breadcrumb">
+
+            <div className="pf-breadcrumb">
+
               <Link href="/super-admin">
                 Super Admin
               </Link>
@@ -168,597 +451,791 @@ export default async function PharmacyDetailsPage({
 
               <span>/</span>
 
-              <span>Détails</span>
+              <strong>
+                {pharmacy.name}
+              </strong>
+
             </div>
 
-            <h1>{pharmacy.name}</h1>
+            <h1>
+              {pharmacy.name}
+            </h1>
 
             <p>
-              Informations détaillées de la
-              pharmacie.
+              Fiche détaillée de la pharmacie
+              et de son abonnement.
             </p>
+
           </div>
 
-          <div className="header-actions">
+          <div className="pf-header-actions">
+
             <Link
               href="/super-admin/pharmacies"
-              className="btn btn-secondary"
+              className="pf-button pf-button-secondary"
             >
               ← Retour
             </Link>
 
             <Link
               href={`/super-admin/pharmacies/${pharmacy.id}/edit`}
-              className="btn btn-primary"
+              className="pf-button pf-button-primary"
             >
-              ✏️ Modifier
+              ✎ Modifier
             </Link>
+
           </div>
+
         </header>
 
-        {/* =====================================================
-            INFORMATIONS
-        ===================================================== */}
+        {/* ================================================= */}
+        {/* STATUS */}
+        {/* ================================================= */}
 
-        <section className="content-grid">
-          <div className="main-card">
-            <div className="card-header">
+        <section className="pf-status-banner">
+
+          <div>
+
+            <span className="pf-overline">
+              STATUT DE LA PHARMACIE
+            </span>
+
+            <strong
+              className={`pf-status ${getStatusClass(
+                pharmacy.status,
+              )}`}
+            >
+              <span className="pf-status-dot" />
+
+              {getStatusLabel(
+                pharmacy.status,
+              )}
+            </strong>
+
+          </div>
+
+          <div className="pf-status-right">
+
+            {manualAccessValid && (
+              <span className="pf-manual-badge">
+                🔓 Accès manuel actif
+              </span>
+            )}
+
+            {subscription && (
+              <span className="pf-subscription-badge">
+                {getSubscriptionLabel(
+                  subscription.status,
+                )}
+              </span>
+            )}
+
+          </div>
+
+        </section>
+
+        {/* ================================================= */}
+        {/* GRID */}
+        {/* ================================================= */}
+
+        <div className="pf-grid">
+
+          {/* =============================================== */}
+          {/* INFORMATIONS PHARMACIE */}
+          {/* =============================================== */}
+
+          <section className="pf-card">
+
+            <div className="pf-card-header">
+
+              <div className="pf-card-icon">
+                🏥
+              </div>
+
               <div>
                 <h2>
                   Informations de la pharmacie
                 </h2>
 
                 <p>
-                  Informations générales
-                  enregistrées dans PharmaFlow.
+                  Informations générales de
+                  l'établissement.
                 </p>
               </div>
 
-              <span
-                className={getStatusClass(
-                  pharmacy.status,
-                )}
-              >
-                <span className="status-dot" />
-
-                {getStatusLabel(
-                  pharmacy.status,
-                )}
-              </span>
             </div>
 
-            <div className="information-grid">
-              <div className="information-item">
-                <span>Nom</span>
+            <div className="pf-info-grid">
 
-                <strong>
-                  {pharmacy.name}
-                </strong>
-              </div>
+              <Info
+                label="Nom"
+                value={pharmacy.name}
+              />
 
-              <div className="information-item">
-                <span>ID</span>
+              <Info
+                label="Pays"
+                value={
+                  pharmacy.country_code
+                }
+              />
 
-                <strong className="break">
-                  {pharmacy.id}
-                </strong>
-              </div>
+              <Info
+                label="Ville"
+                value={
+                  pharmacy.city
+                }
+              />
 
-              <div className="information-item">
-                <span>Pays</span>
+              <Info
+                label="Devise"
+                value={
+                  pharmacy.currency_code
+                }
+              />
 
-                <strong>
-                  {pharmacy.country_code}
-                </strong>
-              </div>
+              <Info
+                label="Langue"
+                value={
+                  pharmacy.language ===
+                  "en"
+                    ? "English"
+                    : "Français"
+                }
+              />
 
-              <div className="information-item">
-                <span>Ville</span>
+              <Info
+                label="Adresse"
+                value={
+                  pharmacy.address ||
+                  "—"
+                }
+                full
+              />
 
-                <strong>
-                  {pharmacy.city}
-                </strong>
-              </div>
+              <Info
+                label="Créée le"
+                value={formatDate(
+                  pharmacy.created_at,
+                )}
+              />
 
-              <div className="information-item">
-                <span>Adresse</span>
+              <Info
+                label="Dernière modification"
+                value={formatDate(
+                  pharmacy.updated_at,
+                )}
+              />
 
-                <strong>
-                  {pharmacy.address ||
-                    "Non renseignée"}
-                </strong>
-              </div>
-
-              <div className="information-item">
-                <span>Devise</span>
-
-                <strong>
-                  {pharmacy.currency_code}
-                </strong>
-              </div>
-
-              <div className="information-item">
-                <span>Langue</span>
-
-                <strong>
-                  {pharmacy.language || "fr"}
-                </strong>
-              </div>
-
-              <div className="information-item">
-                <span>Owner ID</span>
-
-                <strong className="break">
-                  {pharmacy.owner_id ||
-                    "Non renseigné"}
-                </strong>
-              </div>
-
-              <div className="information-item">
-                <span>Créée le</span>
-
-                <strong>
-                  {formatDate(
-                    pharmacy.created_at,
-                  )}
-                </strong>
-              </div>
-
-              <div className="information-item">
-                <span>Modifiée le</span>
-
-                <strong>
-                  {formatDate(
-                    pharmacy.updated_at,
-                  )}
-                </strong>
-              </div>
             </div>
-          </div>
 
-          {/* ===================================================
-              ACCÈS MANUEL
-          =================================================== */}
+          </section>
 
-          <div className="side-card">
-            <div className="card-header">
+          {/* =============================================== */}
+          {/* RESPONSABLE */}
+          {/* =============================================== */}
+
+          <section className="pf-card">
+
+            <div className="pf-card-header">
+
+              <div className="pf-card-icon">
+                👤
+              </div>
+
               <div>
-                <h2>Accès manuel</h2>
+                <h2>
+                  Responsable
+                </h2>
 
                 <p>
-                  Gestion de l'accès
-                  exceptionnel.
+                  Compte propriétaire de la
+                  pharmacie.
                 </p>
+              </div>
+
+            </div>
+
+            {ownerProfile ? (
+              <div className="pf-info-grid">
+
+                <Info
+                  label="Nom complet"
+                  value={
+                    ownerProfile.full_name ||
+                    "—"
+                  }
+                />
+
+                <Info
+                  label="Téléphone"
+                  value={
+                    ownerProfile.phone ||
+                    "—"
+                  }
+                />
+
+                <Info
+                  label="Rôle"
+                  value={
+                    ownerProfile.role ||
+                    "owner"
+                  }
+                />
+
+                <Info
+                  label="Langue"
+                  value={
+                    ownerProfile.language ===
+                    "en"
+                      ? "English"
+                      : "Français"
+                  }
+                />
+
+                <Info
+                  label="Identifiant utilisateur"
+                  value={
+                    ownerProfile.id
+                  }
+                  full
+                  mono
+                />
+
+              </div>
+            ) : (
+              <div className="pf-empty">
+                Aucun profil responsable
+                associé à cette pharmacie.
+              </div>
+            )}
+
+          </section>
+
+          {/* =============================================== */}
+          {/* ABONNEMENT */}
+          {/* =============================================== */}
+
+          <section className="pf-card">
+
+            <div className="pf-card-header">
+
+              <div className="pf-card-icon">
+                🎁
+              </div>
+
+              <div>
+                <h2>
+                  Abonnement
+                </h2>
+
+                <p>
+                  État actuel de l'accès
+                  PharmaFlow.
+                </p>
+              </div>
+
+            </div>
+
+            {subscription ? (
+              <div className="pf-info-grid">
+
+                <Info
+                  label="Plan"
+                  value={
+                    subscription.plan?.name ||
+                    "—"
+                  }
+                />
+
+                <Info
+                  label="Code"
+                  value={
+                    subscription.plan?.code ||
+                    "—"
+                  }
+                />
+
+                <Info
+                  label="Statut"
+                  value={getSubscriptionLabel(
+                    subscription.status,
+                  )}
+                />
+
+                <Info
+                  label="Prix"
+                  value={
+                    subscription.plan
+                      ? formatPrice(
+                          subscription.plan
+                            .price,
+                          subscription.plan
+                            .currency_code,
+                        )
+                      : "—"
+                  }
+                />
+
+                <Info
+                  label="Début"
+                  value={formatDate(
+                    subscription.trial_started_at,
+                  )}
+                />
+
+                <Info
+                  label="Fin de l'essai"
+                  value={formatDate(
+                    subscription.trial_ends_at,
+                  )}
+                />
+
+                <Info
+                  label="Expiration"
+                  value={formatDate(
+                    subscription.expires_at,
+                  )}
+                />
+
+              </div>
+            ) : (
+              <div className="pf-empty">
+                Aucun abonnement trouvé.
+              </div>
+            )}
+
+          </section>
+
+          {/* =============================================== */}
+          {/* ACCÈS MANUEL */}
+          {/* =============================================== */}
+
+          <section className="pf-card">
+
+            <div className="pf-card-header">
+
+              <div className="pf-card-icon">
+                🔐
+              </div>
+
+              <div>
+                <h2>
+                  Accès manuel
+                </h2>
+
+                <p>
+                  Accès accordé indépendamment
+                  de l'abonnement.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="pf-manual-box">
+
+              <div>
+
+                <strong>
+                  {manualAccessValid
+                    ? "Accès manuel actif"
+                    : "Accès manuel inactif"}
+                </strong>
+
+                <span>
+                  {pharmacy.manual_access_until
+                    ? `Jusqu'au ${formatDate(
+                        pharmacy.manual_access_until,
+                      )}`
+                    : "Aucune date d'expiration configurée."}
+                </span>
+
               </div>
 
               <span
                 className={
-                  manualAccessActive
-                    ? "access-badge active"
-                    : "access-badge inactive"
+                  manualAccessValid
+                    ? "pf-access-on"
+                    : "pf-access-off"
                 }
               >
-                {manualAccessActive
-                  ? "Actif"
-                  : "Inactif"}
+                {manualAccessValid
+                  ? "ACTIF"
+                  : "INACTIF"}
               </span>
+
             </div>
 
-            <div className="access-summary">
-              <div className="access-row">
-                <span>État</span>
+          </section>
 
-                <strong>
-                  {manualAccessActive
-                    ? "Accès autorisé"
-                    : "Accès non autorisé"}
-                </strong>
-              </div>
+        </div>
 
-              <div className="access-row">
-                <span>Expiration</span>
-
-                <strong>
-                  {pharmacy.manual_access_until
-                    ? formatDate(
-                        pharmacy.manual_access_until,
-                      )
-                    : "Aucune"}
-                </strong>
-              </div>
-
-              <div className="access-row">
-                <span>Motif</span>
-
-                <strong>
-                  {pharmacy.manual_access_reason ||
-                    "Aucun motif enregistré"}
-                </strong>
-              </div>
-            </div>
-
-            {/* =================================================
-                CORRECTION IMPORTANTE
-            ================================================= */}
-
-            <div className="manual-actions">
-              <ManualAccessActions
-                pharmacyId={pharmacy.id}
-                pharmacyName={pharmacy.name}
-                manualAccessEnabled={
-                  pharmacy.manual_access_enabled
-                }
-                manualAccessUntil={
-                  pharmacy.manual_access_until
-                }
-                manualAccessReason={
-                  pharmacy.manual_access_reason
-                }
-                manualAccessActive={
-                  manualAccessActive
-                }
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* =====================================================
-            INFORMATIONS TECHNIQUES
-        ===================================================== */}
-
-        <section className="technical-card">
-          <div className="card-header">
-            <div>
-              <h2>
-                Informations techniques
-              </h2>
-
-              <p>
-                Identifiants utilisés par
-                PharmaFlow.
-              </p>
-            </div>
-          </div>
-
-          <div className="technical-grid">
-            <div>
-              <span>Pharmacy ID</span>
-
-              <code>
-                {pharmacy.id}
-              </code>
-            </div>
-
-            <div>
-              <span>Owner ID</span>
-
-              <code>
-                {pharmacy.owner_id || "—"}
-              </code>
-            </div>
-
-            <div>
-              <span>Manual access by</span>
-
-              <code>
-                {pharmacy.manual_access_by ||
-                  "—"}
-              </code>
-            </div>
-          </div>
-        </section>
       </div>
 
       <style>{`
-        .details-page {
+        .pf-page {
           min-height: 100vh;
-          background: #f6f8fb;
+          background: #f5f8f7;
           padding: 32px;
         }
 
-        .details-container {
+        .pf-container {
           width: 100%;
-          max-width: 1400px;
+          max-width: 1180px;
           margin: 0 auto;
         }
 
-        .page-header {
+        .pf-header {
           display: flex;
-          align-items: flex-start;
           justify-content: space-between;
+          align-items: flex-start;
           gap: 24px;
-          margin-bottom: 28px;
+          margin-bottom: 26px;
         }
 
-        .breadcrumb {
+        .pf-breadcrumb {
           display: flex;
           flex-wrap: wrap;
-          align-items: center;
           gap: 8px;
-          margin-bottom: 10px;
+          align-items: center;
+          margin-bottom: 12px;
+          color: #81918d;
           font-size: 13px;
-          color: #7b8494;
         }
 
-        .breadcrumb a {
-          color: #2563eb;
+        .pf-breadcrumb a {
+          color: #18796e;
           text-decoration: none;
-          font-weight: 600;
+          font-weight: 700;
         }
 
-        .page-header h1 {
+        .pf-header h1 {
           margin: 0;
-          color: #111827;
+          color: #173b37;
           font-size: 32px;
           font-weight: 800;
+          letter-spacing: -0.6px;
         }
 
-        .page-header p {
-          margin: 8px 0 0;
-          color: #687386;
-          font-size: 15px;
+        .pf-header p {
+          margin: 7px 0 0;
+          color: #71817d;
+          font-size: 14px;
         }
 
-        .header-actions {
+        .pf-header-actions {
           display: flex;
           gap: 10px;
         }
 
-        .btn {
-          min-height: 42px;
-          padding: 0 16px;
+        .pf-button {
+          min-height: 44px;
+          padding: 0 17px;
           border-radius: 10px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           text-decoration: none;
           font-size: 13px;
-          font-weight: 700;
-        }
-
-        .btn-secondary {
-          background: #fff;
-          border: 1px solid #dbe1ea;
-          color: #374151;
-        }
-
-        .btn-primary {
-          background: #2563eb;
-          color: #fff;
-        }
-
-        .content-grid {
-          display: grid;
-          grid-template-columns:
-            minmax(0, 1.6fr)
-            minmax(320px, 0.8fr);
-          gap: 20px;
-        }
-
-        .main-card,
-        .side-card,
-        .technical-card {
-          background: #fff;
-          border: 1px solid #e5e9f0;
-          border-radius: 16px;
-          box-shadow:
-            0 3px 12px
-              rgba(15, 23, 42, 0.04);
-        }
-
-        .card-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 20px;
-          padding: 22px 24px;
-          border-bottom: 1px solid #edf0f4;
-        }
-
-        .card-header h2 {
-          margin: 0;
-          color: #111827;
-          font-size: 18px;
           font-weight: 800;
         }
 
-        .card-header p {
-          margin: 5px 0 0;
-          color: #7b8494;
-          font-size: 13px;
+        .pf-button-secondary {
+          border: 1px solid #d8e3e0;
+          background: #ffffff;
+          color: #405a55;
         }
 
-        .information-grid {
-          display: grid;
-          grid-template-columns:
-            repeat(2, minmax(0, 1fr));
+        .pf-button-primary {
+          background: #18796e;
+          color: #ffffff;
         }
 
-        .information-item {
-          min-width: 0;
-          padding: 19px 24px;
-          border-bottom: 1px solid #f0f2f5;
+        .pf-status-banner {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 20px;
+          padding: 18px 20px;
+          margin-bottom: 20px;
+          border: 1px solid #dce9e6;
+          border-radius: 14px;
+          background: #ffffff;
         }
 
-        .information-item:nth-child(odd) {
-          border-right: 1px solid #f0f2f5;
-        }
-
-        .information-item span {
+        .pf-overline {
           display: block;
-          margin-bottom: 6px;
-          color: #8a94a6;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
+          margin-bottom: 7px;
+          color: #8a9895;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.8px;
         }
 
-        .information-item strong {
-          display: block;
-          color: #374151;
-          font-size: 14px;
-          line-height: 1.45;
-        }
-
-        .break {
-          word-break: break-all;
-        }
-
-        .status {
+        .pf-status {
           display: inline-flex;
           align-items: center;
-          gap: 7px;
-          padding: 7px 10px;
-          border-radius: 8px;
-          background: #f3f4f6;
-          color: #4b5563;
-          font-size: 11px;
-          font-weight: 700;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 800;
         }
 
-        .status.active {
-          background: #ecfdf3;
-          color: #047857;
-        }
-
-        .status.inactive {
-          background: #f3f4f6;
-          color: #6b7280;
-        }
-
-        .status.suspended {
-          background: #fff1f2;
-          color: #be123c;
-        }
-
-        .status-dot {
-          width: 7px;
-          height: 7px;
+        .pf-status-dot {
+          width: 8px;
+          height: 8px;
           border-radius: 50%;
           background: currentColor;
         }
 
-        .access-badge {
-          padding: 6px 10px;
-          border-radius: 8px;
+        .status-active {
+          color: #16805c;
+        }
+
+        .status-inactive {
+          color: #8b6a16;
+        }
+
+        .status-suspended {
+          color: #b33c35;
+        }
+
+        .status-neutral {
+          color: #66736f;
+        }
+
+        .pf-status-right {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .pf-manual-badge,
+        .pf-subscription-badge {
+          display: inline-flex;
+          align-items: center;
+          min-height: 30px;
+          padding: 0 11px;
+          border-radius: 999px;
           font-size: 11px;
           font-weight: 800;
         }
 
-        .access-badge.active {
-          background: #ecfdf3;
-          color: #047857;
+        .pf-manual-badge {
+          background: #edf8f4;
+          color: #167453;
         }
 
-        .access-badge.inactive {
-          background: #f3f4f6;
-          color: #6b7280;
+        .pf-subscription-badge {
+          background: #eef4ff;
+          color: #3c61a2;
         }
 
-        .access-summary {
-          padding: 10px 24px;
-        }
-
-        .access-row {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-          padding: 14px 0;
-          border-bottom: 1px solid #f0f2f5;
-        }
-
-        .access-row span {
-          color: #8a94a6;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-        }
-
-        .access-row strong {
-          color: #374151;
-          font-size: 13px;
-          line-height: 1.5;
-        }
-
-        .manual-actions {
-          padding: 0 24px 24px;
-        }
-
-        .technical-card {
-          margin-top: 20px;
-        }
-
-        .technical-grid {
+        .pf-grid {
           display: grid;
-          grid-template-columns:
-            repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 20px;
         }
 
-        .technical-grid > div {
-          padding: 20px 24px;
-          border-right: 1px solid #f0f2f5;
+        .pf-card {
+          background: #ffffff;
+          border: 1px solid #e0e9e6;
+          border-radius: 15px;
+          padding: 24px;
+          box-shadow: 0 8px 25px rgba(23, 59, 55, 0.04);
         }
 
-        .technical-grid span {
+        .pf-card-header {
+          display: flex;
+          gap: 12px;
+          align-items: flex-start;
+          margin-bottom: 22px;
+        }
+
+        .pf-card-icon {
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 40px;
+          border-radius: 10px;
+          background: #eaf6f3;
+          font-size: 19px;
+        }
+
+        .pf-card h2 {
+          margin: 0;
+          color: #1c403b;
+          font-size: 17px;
+          font-weight: 800;
+        }
+
+        .pf-card-header p {
+          margin: 4px 0 0;
+          color: #7b8986;
+          font-size: 12px;
+        }
+
+        .pf-info-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .pf-info-full {
+          grid-column: 1 / -1;
+        }
+
+        .pf-info-label {
           display: block;
-          margin-bottom: 8px;
-          color: #8a94a6;
+          margin-bottom: 5px;
+          color: #8a9895;
           font-size: 11px;
           font-weight: 700;
-          text-transform: uppercase;
         }
 
-        .technical-grid code {
+        .pf-info-value {
           display: block;
-          padding: 9px 10px;
-          background: #f7f8fa;
-          border-radius: 7px;
-          color: #4b5563;
+          color: #304b46;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.5;
+          overflow-wrap: anywhere;
+        }
+
+        .pf-mono {
+          font-family: monospace;
           font-size: 11px;
-          word-break: break-all;
         }
 
-        @media (max-width: 1000px) {
-          .content-grid {
-            grid-template-columns: 1fr;
-          }
+        .pf-empty {
+          padding: 18px;
+          border-radius: 10px;
+          background: #f7faf9;
+          color: #7a8985;
+          font-size: 13px;
         }
 
-        @media (max-width: 700px) {
-          .details-page {
+        .pf-manual-box {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          padding: 16px;
+          border-radius: 11px;
+          background: #f7faf9;
+          border: 1px solid #e2ece9;
+        }
+
+        .pf-manual-box strong {
+          display: block;
+          color: #34524d;
+          font-size: 13px;
+        }
+
+        .pf-manual-box span:not(.pf-access-on):not(.pf-access-off) {
+          display: block;
+          margin-top: 5px;
+          color: #7b8985;
+          font-size: 11px;
+        }
+
+        .pf-access-on,
+        .pf-access-off {
+          min-height: 28px;
+          padding: 0 9px;
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .pf-access-on {
+          background: #e9f7f0;
+          color: #167653;
+        }
+
+        .pf-access-off {
+          background: #f2f4f4;
+          color: #77817f;
+        }
+
+        @media (max-width: 800px) {
+          .pf-page {
             padding: 18px;
           }
 
-          .page-header {
+          .pf-header {
             flex-direction: column;
           }
 
-          .header-actions {
+          .pf-header-actions {
             width: 100%;
           }
 
-          .header-actions .btn {
+          .pf-button {
             flex: 1;
           }
 
-          .information-grid {
+          .pf-grid {
             grid-template-columns: 1fr;
           }
 
-          .information-item:nth-child(odd) {
-            border-right: none;
-          }
-
-          .technical-grid {
+          .pf-info-grid {
             grid-template-columns: 1fr;
           }
 
-          .technical-grid > div {
-            border-right: none;
-            border-bottom: 1px solid #f0f2f5;
+          .pf-info-full {
+            grid-column: auto;
+          }
+
+          .pf-status-banner {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .pf-status-right {
+            justify-content: flex-start;
           }
         }
       `}</style>
     </main>
+  );
+}
+
+function Info({
+  label,
+  value,
+  full = false,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  full?: boolean;
+  mono?: boolean;
+}) {
+  return (
+    <div
+      className={
+        full
+          ? "pf-info-full"
+          : undefined
+      }
+    >
+      <span className="pf-info-label">
+        {label}
+      </span>
+
+      <span
+        className={`pf-info-value ${
+          mono
+            ? "pf-mono"
+            : ""
+        }`}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
