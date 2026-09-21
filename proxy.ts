@@ -23,6 +23,12 @@ type ProfileRow = {
   role: string | null;
 };
 
+/**
+ * ============================================================
+ * PHARMAFLOW — ROUTES PUBLIQUES
+ * ============================================================
+ */
+
 const PUBLIC_PATHS = [
   "/",
   "/login",
@@ -31,6 +37,12 @@ const PUBLIC_PATHS = [
   "/reset-password",
   "/abonnement",
 ];
+
+/**
+ * ============================================================
+ * PHARMAFLOW — ROUTES PROTÉGÉES
+ * ============================================================
+ */
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -45,26 +57,34 @@ const PROTECTED_PREFIXES = [
   "/pharmacien",
 ];
 
-function isPublicPath(pathname: string): boolean {
+/**
+ * ============================================================
+ * UTILITAIRES
+ * ============================================================
+ */
+
+function isPublicPath(
+  pathname: string,
+): boolean {
   if (pathname === "/") {
     return true;
   }
 
-  return PUBLIC_PATHS.some((path) => {
-    return (
+  return PUBLIC_PATHS.some(
+    (path) =>
       pathname === path ||
-      pathname.startsWith(`${path}/`)
-    );
-  });
+      pathname.startsWith(`${path}/`),
+  );
 }
 
-function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((prefix) => {
-    return (
+function isProtectedPath(
+  pathname: string,
+): boolean {
+  return PROTECTED_PREFIXES.some(
+    (prefix) =>
       pathname === prefix ||
-      pathname.startsWith(`${prefix}/`)
-    );
-  });
+      pathname.startsWith(`${prefix}/`),
+  );
 }
 
 function isValidFutureDate(
@@ -74,7 +94,8 @@ function isValidFutureDate(
     return false;
   }
 
-  const timestamp = new Date(value).getTime();
+  const timestamp =
+    new Date(value).getTime();
 
   return (
     Number.isFinite(timestamp) &&
@@ -90,25 +111,17 @@ function subscriptionAllowsAccess(
   }
 
   const status = String(
-    subscription.status || "",
+    subscription.status ?? "",
   )
     .trim()
     .toLowerCase();
 
-  // ------------------------------------------------------------
-  // ESSAI GRATUIT
-  // ------------------------------------------------------------
-
   if (status === "trial") {
     return isValidFutureDate(
-      subscription.trial_ends_at ||
+      subscription.trial_ends_at ??
         subscription.expires_at,
     );
   }
-
-  // ------------------------------------------------------------
-  // ABONNEMENT PAYANT
-  // ------------------------------------------------------------
 
   if (status === "active") {
     return isValidFutureDate(
@@ -116,21 +129,46 @@ function subscriptionAllowsAccess(
     );
   }
 
-  // ------------------------------------------------------------
-  // TOUS LES AUTRES STATUTS
-  // ------------------------------------------------------------
-
   return false;
 }
+
+/**
+ * ============================================================
+ * REDIRECTION LOGIN
+ * ============================================================
+ */
+
+function redirectToLogin(
+  request: NextRequest,
+) {
+  const url =
+    request.nextUrl.clone();
+
+  url.pathname = "/login";
+  url.search = "";
+
+  url.searchParams.set(
+    "redirect",
+    request.nextUrl.pathname,
+  );
+
+  return NextResponse.redirect(url);
+}
+
+/**
+ * ============================================================
+ * REDIRECTION ABONNEMENT
+ * ============================================================
+ */
 
 function redirectToSubscription(
   request: NextRequest,
   reason: string,
 ) {
-  const url = request.nextUrl.clone();
+  const url =
+    request.nextUrl.clone();
 
   url.pathname = "/abonnement";
-
   url.search = "";
 
   url.searchParams.set(
@@ -141,35 +179,70 @@ function redirectToSubscription(
   return NextResponse.redirect(url);
 }
 
+/**
+ * ============================================================
+ * PROXY
+ * ============================================================
+ */
+
 export async function proxy(
   request: NextRequest,
 ) {
   const pathname =
     request.nextUrl.pathname;
 
-  // ------------------------------------------------------------
-  // 1. IGNORER LES ROUTES PUBLIQUES
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 1. ROUTES PUBLIQUES
+   * ----------------------------------------------------------
+   */
 
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
-  // ------------------------------------------------------------
-  // 2. IGNORER LES ROUTES QUI NE SONT PAS DES ESPACES
-  // ------------------------------------------------------------
-  //
-  // Les API possèdent leurs propres contrôles d'authentification.
-  // Le Proxy ne doit pas intercepter leurs réponses JSON.
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 2. ROUTES NON PROTÉGÉES
+   * ----------------------------------------------------------
+   *
+   * Les API sont déjà exclues par le matcher ci-dessous.
+   */
 
   if (!isProtectedPath(pathname)) {
     return NextResponse.next();
   }
 
-  // ------------------------------------------------------------
-  // 3. CLIENT SUPABASE SSR
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 3. VÉRIFICATION DES VARIABLES
+   * ----------------------------------------------------------
+   */
+
+  const supabaseUrl =
+    process.env
+      .NEXT_PUBLIC_SUPABASE_URL;
+
+  const supabasePublishableKey =
+    process.env
+      .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (
+    !supabaseUrl ||
+    !supabasePublishableKey
+  ) {
+    console.error(
+      "PHARMAFLOW PROXY: variables Supabase manquantes.",
+    );
+
+    return redirectToLogin(request);
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * 4. CLIENT SUPABASE SSR
+   * ----------------------------------------------------------
+   */
 
   let supabaseResponse =
     NextResponse.next({
@@ -178,17 +251,17 @@ export async function proxy(
 
   const supabase =
     createServerClient(
-      process.env
-        .NEXT_PUBLIC_SUPABASE_URL!,
-      process.env
-        .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      supabaseUrl,
+      supabasePublishableKey,
       {
         cookies: {
           getAll() {
             return request.cookies.getAll();
           },
 
-          setAll(cookiesToSet) {
+          setAll(
+            cookiesToSet,
+          ) {
             cookiesToSet.forEach(
               ({
                 name,
@@ -224,13 +297,11 @@ export async function proxy(
       },
     );
 
-  // ------------------------------------------------------------
-  // 4. VÉRIFICATION DE LA SESSION
-  // ------------------------------------------------------------
-  //
-  // Supabase recommande getClaims() pour protéger les pages
-  // côté serveur.
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 5. SESSION SUPABASE
+   * ----------------------------------------------------------
+   */
 
   const {
     data: claimsData,
@@ -238,13 +309,28 @@ export async function proxy(
   } =
     await supabase.auth.getClaims();
 
+  /**
+   * ----------------------------------------------------------
+   * 6. SESSION INVALIDE / EXPIRÉE
+   * ----------------------------------------------------------
+   *
+   * IMPORTANT :
+   * On ne laisse pas une erreur de refresh token casser
+   * toute l'application.
+   */
+
   if (
     claimsError ||
     !claimsData?.claims
   ) {
-    return redirectToLogin(
-      request,
-    );
+    if (claimsError) {
+      console.warn(
+        "PHARMAFLOW PROXY AUTH:",
+        claimsError.message,
+      );
+    }
+
+    return redirectToLogin(request);
   }
 
   const userId =
@@ -254,46 +340,47 @@ export async function proxy(
       : null;
 
   if (!userId) {
-    return redirectToLogin(
-      request,
-    );
+    return redirectToLogin(request);
   }
 
-  // ------------------------------------------------------------
-  // 5. RÉCUPÉRER LE PROFIL
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 7. PROFIL
+   * ----------------------------------------------------------
+   */
 
   const {
     data: profile,
     error: profileError,
-  } = await supabase
-    .from("profiles")
-    .select(
-      "id, pharmacy_id, role",
-    )
-    .eq("id", userId)
-    .maybeSingle<ProfileRow>();
+  } =
+    await supabase
+      .from("profiles")
+      .select(
+        "id, pharmacy_id, role",
+      )
+      .eq("id", userId)
+      .maybeSingle<ProfileRow>();
 
   if (
     profileError ||
     !profile ||
     !profile.pharmacy_id
   ) {
-    return redirectToLogin(
-      request,
-    );
+    if (profileError) {
+      console.error(
+        "PHARMAFLOW PROXY PROFILE:",
+        profileError.message,
+      );
+    }
+
+    return redirectToLogin(request);
   }
 
-  // ------------------------------------------------------------
-  // 6. RÉCUPÉRER LE DERNIER ABONNEMENT
-  // ------------------------------------------------------------
-  //
-  // IMPORTANT :
-  // pharmacy_id vient du profil authentifié.
-  //
-  // Le navigateur ne peut pas envoyer un pharmacy_id arbitraire
-  // pour contourner l'isolation entre pharmacies.
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 8. ABONNEMENT
+   * ----------------------------------------------------------
+   */
 
   const {
     data: subscription,
@@ -325,20 +412,16 @@ export async function proxy(
       .limit(1)
       .maybeSingle<SubscriptionRow>();
 
-  // ------------------------------------------------------------
-  // 7. ERREUR DE VÉRIFICATION
-  // ------------------------------------------------------------
-  //
-  // On ne laisse pas le Proxy inventer un abonnement.
-  //
-  // Les API et pages serveur continueront également à vérifier
-  // l'abonnement.
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 9. ERREUR ABONNEMENT
+   * ----------------------------------------------------------
+   */
 
   if (subscriptionError) {
     console.error(
-      "PharmaFlow proxy subscription error:",
-      subscriptionError,
+      "PHARMAFLOW PROXY SUBSCRIPTION:",
+      subscriptionError.message,
     );
 
     return redirectToSubscription(
@@ -347,18 +430,16 @@ export async function proxy(
     );
   }
 
-  // ------------------------------------------------------------
-  // 8. VÉRIFICATION DE L'ABONNEMENT
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 10. CONTRÔLE DE L'ABONNEMENT
+   * ----------------------------------------------------------
+   */
 
   const hasAccess =
     subscriptionAllowsAccess(
       subscription,
     );
-
-  // ------------------------------------------------------------
-  // 9. ABONNEMENT EXPIRÉ / ABSENT
-  // ------------------------------------------------------------
 
   if (!hasAccess) {
     let reason = "expired";
@@ -366,13 +447,16 @@ export async function proxy(
     if (!subscription) {
       reason = "no_subscription";
     } else {
-      const status = String(
-        subscription.status || "",
-      )
-        .trim()
-        .toLowerCase();
+      const status =
+        String(
+          subscription.status ?? "",
+        )
+          .trim()
+          .toLowerCase();
 
-      if (status === "past_due") {
+      if (
+        status === "past_due"
+      ) {
         reason = "past_due";
       } else if (
         status === "suspended"
@@ -395,45 +479,33 @@ export async function proxy(
     );
   }
 
-  // ------------------------------------------------------------
-  // 10. ACCÈS AUTORISÉ
-  // ------------------------------------------------------------
+  /**
+   * ----------------------------------------------------------
+   * 11. ACCÈS AUTORISÉ
+   * ----------------------------------------------------------
+   */
 
   return supabaseResponse;
 }
 
-function redirectToLogin(
-  request: NextRequest,
-) {
-  const url =
-    request.nextUrl.clone();
-
-  url.pathname = "/login";
-
-  url.search = "";
-
-  url.searchParams.set(
-    "redirect",
-    request.nextUrl.pathname,
-  );
-
-  return NextResponse.redirect(
-    url,
-  );
-}
-
-// ------------------------------------------------------------
-// MATCHER NEXT.JS 16
-// ------------------------------------------------------------
-//
-// Le Proxy ignore :
-// - fichiers statiques
-// - images Next.js
-// - favicon
-// - API
-//
-// Les routes API disposent de leur propre authentification.
-// ------------------------------------------------------------
+/**
+ * ============================================================
+ * NEXT.JS 16 — MATCHER
+ * ============================================================
+ *
+ * IMPORTANT :
+ *
+ * "api" est exclu.
+ *
+ * Donc :
+ *
+ * /api/inscription
+ * /api/payments/*
+ * /api/support/*
+ *
+ * ne passent PAS dans ce Proxy.
+ * ============================================================
+ */
 
 export const config = {
   matcher: [
