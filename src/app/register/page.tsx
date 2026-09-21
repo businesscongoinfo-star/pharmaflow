@@ -1,8 +1,17 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useMemo,
+  useState,
+} from "react";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+/* ============================================================
+   TYPES
+============================================================ */
 
 type Locale = "fr" | "en";
 
@@ -11,6 +20,43 @@ type Country = {
   name: string;
   currency: string;
 };
+
+type ApiResponse = {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  user?: {
+    id?: string;
+    email?: string;
+    full_name?: string;
+    phone?: string;
+    language?: Locale;
+  };
+  pharmacy?: {
+    id?: string;
+    name?: string;
+    address?: string;
+    country_code?: string;
+    city?: string;
+    currency_code?: string;
+    status?: string;
+  };
+  trial?: {
+    subscription_id?: string;
+    status?: string;
+    plan_id?: string;
+    plan_code?: string;
+    plan_name?: string;
+    duration_days?: number;
+    trial_started_at?: string;
+    trial_ends_at?: string;
+    expires_at?: string;
+  };
+};
+
+/* ============================================================
+   PAYS
+============================================================ */
 
 const COUNTRIES: Country[] = [
   {
@@ -120,80 +166,114 @@ const COUNTRIES: Country[] = [
   },
 ];
 
+/* ============================================================
+   TRADUCTIONS
+============================================================ */
+
 const TEXT = {
   fr: {
     brand: "PharmaFlow",
-    subtitle: "Gestion intelligente des pharmacies",
+    subtitle:
+      "Gestion intelligente des pharmacies",
 
     badge: "CRÉATION DE PHARMACIE",
 
-    title: "Créez votre espace pharmacie 🏥",
+    title:
+      "Créez votre espace pharmacie 🏥",
+
     description:
       "Commencez gratuitement et gérez votre pharmacie depuis une seule plateforme.",
 
-    trialTitle: "7 jours gratuits",
+    trialTitle:
+      "7 jours gratuits",
+
     trialDescription:
       "Votre essai gratuit est activé automatiquement dès la création de votre compte.",
+
     trialPoint1:
       "Aucun paiement nécessaire pour commencer",
+
     trialPoint2:
       "Accès à votre espace professionnel pendant 7 jours",
+
     trialPoint3:
       "Choisissez ensuite un abonnement mensuel ou annuel",
 
-    pharmacySection: "Informations de la pharmacie",
+    pharmacySection:
+      "Informations de la pharmacie",
 
-    pharmacyName: "Nom de la pharmacie",
+    pharmacyName:
+      "Nom de la pharmacie",
+
     pharmacyNamePlaceholder:
       "Ex. Pharmacie Centrale",
 
     country: "Pays",
+
     countryPlaceholder:
       "Sélectionnez votre pays",
 
     city: "Ville",
+
     cityPlaceholder:
       "Ex. Brazzaville",
 
     address: "Adresse",
+
     addressPlaceholder:
       "Adresse complète de la pharmacie",
 
-    accountSection: "Informations du responsable",
+    accountSection:
+      "Informations du responsable",
 
     fullName: "Nom complet",
+
     fullNamePlaceholder:
       "Nom et prénom du responsable",
 
     phone: "Téléphone",
+
     phonePlaceholder:
       "Ex. +242 06 000 00 00",
 
     email: "Adresse e-mail",
+
     emailPlaceholder:
       "exemple@pharmacie.com",
 
     password: "Mot de passe",
+
     passwordPlaceholder:
       "Créez un mot de passe sécurisé",
 
-    confirmation: "Confirmer le mot de passe",
+    confirmation:
+      "Confirmer le mot de passe",
+
     confirmationPlaceholder:
       "Répétez votre mot de passe",
 
-    language: "Langue de votre compte",
+    language:
+      "Langue de votre compte",
+
     languageDescription:
       "Cette langue sera enregistrée pour votre compte personnel.",
 
     french: "Français",
+
     english: "English",
 
     currency: "Devise de facturation",
 
     termsIntro: "J'accepte les",
-    termsLink: "Conditions d'utilisation",
+
+    termsLink:
+      "Conditions d'utilisation",
+
     privacyAnd: "et la",
-    privacyLink: "Politique de confidentialité",
+
+    privacyLink:
+      "Politique de confidentialité",
+
     termsEnd: "de PharmaFlow.",
 
     termsRequired:
@@ -202,15 +282,21 @@ const TEXT = {
     termsHint:
       "Vous devez accepter ces conditions pour créer votre compte.",
 
-    createAccount: "Créer ma pharmacie",
-    creating: "Création de votre pharmacie...",
+    createAccount:
+      "Créer ma pharmacie",
+
+    creating:
+      "Création de votre pharmacie...",
 
     alreadyAccount:
       "Vous avez déjà un compte ?",
+
     login: "Se connecter",
 
     passwordWeak: "Faible",
+
     passwordMedium: "Moyen",
+
     passwordStrong: "Fort",
 
     passwordRequirements:
@@ -231,6 +317,15 @@ const TEXT = {
     registerError:
       "Impossible de créer votre compte. Veuillez réessayer.",
 
+    networkError:
+      "Impossible de contacter le serveur. Vérifiez votre connexion Internet puis réessayez.",
+
+    serverError:
+      "Le serveur n'a pas pu terminer la création de votre pharmacie. Veuillez réessayer.",
+
+    emailAlreadyUsed:
+      "Cette adresse e-mail est déjà utilisée. Connectez-vous ou utilisez une autre adresse.",
+
     successTitle:
       "Votre pharmacie est créée ! 🎉",
 
@@ -245,82 +340,127 @@ const TEXT = {
 
     footer:
       "©️ 2026 PharmaFlow. Tous droits réservés.",
+
+    showPassword:
+      "Afficher le mot de passe",
+
+    hidePassword:
+      "Masquer le mot de passe",
+
+    showConfirmation:
+      "Afficher la confirmation",
+
+    hideConfirmation:
+      "Masquer la confirmation",
   },
 
   en: {
     brand: "PharmaFlow",
-    subtitle: "Smart pharmacy management",
 
-    badge: "PHARMACY REGISTRATION",
+    subtitle:
+      "Smart pharmacy management",
 
-    title: "Create your pharmacy workspace 🏥",
+    badge:
+      "PHARMACY REGISTRATION",
+
+    title:
+      "Create your pharmacy workspace 🏥",
+
     description:
       "Start for free and manage your pharmacy from one professional platform.",
 
-    trialTitle: "7 days free",
+    trialTitle:
+      "7 days free",
+
     trialDescription:
       "Your free trial is automatically activated as soon as your account is created.",
+
     trialPoint1:
       "No payment required to get started",
+
     trialPoint2:
       "Access your professional workspace for 7 days",
+
     trialPoint3:
       "Then choose a monthly or yearly subscription",
 
-    pharmacySection: "Pharmacy information",
+    pharmacySection:
+      "Pharmacy information",
 
-    pharmacyName: "Pharmacy name",
+    pharmacyName:
+      "Pharmacy name",
+
     pharmacyNamePlaceholder:
       "e.g. Central Pharmacy",
 
     country: "Country",
+
     countryPlaceholder:
       "Select your country",
 
     city: "City",
+
     cityPlaceholder:
       "e.g. Brazzaville",
 
     address: "Address",
+
     addressPlaceholder:
       "Full pharmacy address",
 
-    accountSection: "Manager information",
+    accountSection:
+      "Manager information",
 
     fullName: "Full name",
+
     fullNamePlaceholder:
       "Manager's full name",
 
     phone: "Phone number",
+
     phonePlaceholder:
       "e.g. +242 06 000 00 00",
 
     email: "Email address",
+
     emailPlaceholder:
       "example@pharmacy.com",
 
     password: "Password",
+
     passwordPlaceholder:
       "Create a secure password",
 
-    confirmation: "Confirm password",
+    confirmation:
+      "Confirm password",
+
     confirmationPlaceholder:
       "Repeat your password",
 
-    language: "Your account language",
+    language:
+      "Your account language",
+
     languageDescription:
       "This language will be saved for your personal account.",
 
     french: "Français",
+
     english: "English",
 
     currency: "Billing currency",
 
     termsIntro: "I accept the",
-    termsLink: "Terms of Use",
+
+    termsLink:
+      "Terms of Use",
+
     privacyAnd: "and",
-    privacyLink: "Privacy Policy",
-    termsEnd: "of PharmaFlow.",
+
+    privacyLink:
+      "Privacy Policy",
+
+    termsEnd:
+      "of PharmaFlow.",
 
     termsRequired:
       "You must accept the terms of use and privacy policy.",
@@ -328,16 +468,24 @@ const TEXT = {
     termsHint:
       "You must accept these terms to create your account.",
 
-    createAccount: "Create my pharmacy",
-    creating: "Creating your pharmacy...",
+    createAccount:
+      "Create my pharmacy",
+
+    creating:
+      "Creating your pharmacy...",
 
     alreadyAccount:
       "Already have an account?",
+
     login: "Sign in",
 
     passwordWeak: "Weak",
-    passwordMedium: "Medium",
-    passwordStrong: "Strong",
+
+    passwordMedium:
+      "Medium",
+
+    passwordStrong:
+      "Strong",
 
     passwordRequirements:
       "Use at least 8 characters with letters and numbers.",
@@ -357,6 +505,15 @@ const TEXT = {
     registerError:
       "Unable to create your account. Please try again.",
 
+    networkError:
+      "Unable to contact the server. Please check your internet connection and try again.",
+
+    serverError:
+      "The server could not complete your pharmacy registration. Please try again.",
+
+    emailAlreadyUsed:
+      "This email address is already in use. Please sign in or use another email address.",
+
     successTitle:
       "Your pharmacy has been created! 🎉",
 
@@ -371,18 +528,44 @@ const TEXT = {
 
     footer:
       "©️ 2026 PharmaFlow. All rights reserved.",
+
+    showPassword:
+      "Show password",
+
+    hidePassword:
+      "Hide password",
+
+    showConfirmation:
+      "Show confirmation",
+
+    hideConfirmation:
+      "Hide confirmation",
   },
 } as const;
 
-function cleanEmail(value: string) {
-  return value.trim().toLowerCase();
+/* ============================================================
+   UTILITAIRES
+============================================================ */
+
+function cleanEmail(
+  value: string,
+): string {
+  return value
+    .trim()
+    .toLowerCase();
 }
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+function isValidEmail(
+  value: string,
+): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value,
+  );
 }
 
-function setLocaleCookie(locale: Locale) {
+function setLocaleCookie(
+  locale: Locale,
+) {
   document.cookie = [
     `pf_locale=${locale}`,
     "Path=/",
@@ -391,17 +574,29 @@ function setLocaleCookie(locale: Locale) {
   ].join("; ");
 }
 
+/* ============================================================
+   PAGE
+============================================================ */
+
 export default function RegisterPage() {
   const router = useRouter();
+
+  /* ==========================================================
+     ÉTATS
+  ========================================================== */
 
   const [locale, setLocale] =
     useState<Locale>("fr");
 
-  const [pharmacyName, setPharmacyName] =
-    useState("");
+  const [
+    pharmacyName,
+    setPharmacyName,
+  ] = useState("");
 
-  const [countryCode, setCountryCode] =
-    useState("");
+  const [
+    countryCode,
+    setCountryCode,
+  ] = useState("");
 
   const [city, setCity] =
     useState("");
@@ -421,22 +616,28 @@ export default function RegisterPage() {
   const [password, setPassword] =
     useState("");
 
-  const [confirmation, setConfirmation] =
-    useState("");
+  const [
+    confirmation,
+    setConfirmation,
+  ] = useState("");
 
   const [language, setLanguage] =
     useState<Locale>("fr");
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
 
   const [
     showConfirmation,
     setShowConfirmation,
   ] = useState(false);
 
-  const [acceptTerms, setAcceptTerms] =
-    useState(false);
+  const [
+    acceptTerms,
+    setAcceptTerms,
+  ] = useState(false);
 
   const [loading, setLoading] =
     useState(false);
@@ -449,15 +650,24 @@ export default function RegisterPage() {
 
   const t = TEXT[locale];
 
-  const selectedCountry = useMemo(
-    () =>
-      COUNTRIES.find(
-        (country) =>
-          country.code ===
-          countryCode,
-      ),
-    [countryCode],
-  );
+  /* ==========================================================
+     PAYS SÉLECTIONNÉ
+  ========================================================== */
+
+  const selectedCountry =
+    useMemo(
+      () =>
+        COUNTRIES.find(
+          (country) =>
+            country.code ===
+            countryCode,
+        ),
+      [countryCode],
+    );
+
+  /* ==========================================================
+     FORCE DU MOT DE PASSE
+  ========================================================== */
 
   const passwordStrength =
     useMemo(() => {
@@ -497,22 +707,39 @@ export default function RegisterPage() {
       if (score <= 2) {
         return {
           level: 1,
-          label: t.passwordWeak,
+          label:
+            t.passwordWeak,
         };
       }
 
       if (score <= 4) {
         return {
           level: 2,
-          label: t.passwordMedium,
+          label:
+            t.passwordMedium,
         };
       }
 
       return {
         level: 3,
-        label: t.passwordStrong,
+        label:
+          t.passwordStrong,
       };
     }, [password, t]);
+
+  /* ==========================================================
+     EFFACER ERREUR
+  ========================================================== */
+
+  function clearError() {
+    if (error) {
+      setError("");
+    }
+  }
+
+  /* ==========================================================
+     CHANGEMENT LANGUE INTERFACE
+  ========================================================== */
 
   function handleLocaleChange(
     nextLocale: Locale,
@@ -521,12 +748,22 @@ export default function RegisterPage() {
       return;
     }
 
-    setLocale(nextLocale);
-    setLanguage(nextLocale);
-    setError("");
+    setLocale(
+      nextLocale,
+    );
+
+    setLanguage(
+      nextLocale,
+    );
+
+    clearError();
   }
 
-  function validateForm() {
+  /* ==========================================================
+     VALIDATION
+  ========================================================== */
+
+  function validateForm(): boolean {
     const cleanEmailValue =
       cleanEmail(email);
 
@@ -542,6 +779,7 @@ export default function RegisterPage() {
       !confirmation
     ) {
       setError(t.required);
+
       return false;
     }
 
@@ -550,7 +788,10 @@ export default function RegisterPage() {
         cleanEmailValue,
       )
     ) {
-      setError(t.invalidEmail);
+      setError(
+        t.invalidEmail,
+      );
+
       return false;
     }
 
@@ -558,6 +799,7 @@ export default function RegisterPage() {
       setError(
         t.passwordTooShort,
       );
+
       return false;
     }
 
@@ -568,6 +810,7 @@ export default function RegisterPage() {
       setError(
         t.passwordMismatch,
       );
+
       return false;
     }
 
@@ -575,16 +818,25 @@ export default function RegisterPage() {
       setError(
         t.termsRequired,
       );
+
       return false;
     }
 
     return true;
   }
 
+  /* ==========================================================
+     SOUMISSION
+  ========================================================== */
+
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+
+    if (loading) {
+      return;
+    }
 
     setError("");
 
@@ -598,6 +850,12 @@ export default function RegisterPage() {
       const cleanEmailValue =
         cleanEmail(email);
 
+      /*
+       * --------------------------------------------------------
+       * APPEL API
+       * --------------------------------------------------------
+       */
+
       const response =
         await fetch(
           "/api/inscription",
@@ -607,6 +865,7 @@ export default function RegisterPage() {
             headers: {
               "Content-Type":
                 "application/json",
+
               Accept:
                 "application/json",
             },
@@ -618,7 +877,10 @@ export default function RegisterPage() {
               address:
                 address.trim(),
 
-              countryCode,
+              countryCode:
+                countryCode
+                  .trim()
+                  .toUpperCase(),
 
               city:
                 city.trim(),
@@ -636,82 +898,209 @@ export default function RegisterPage() {
 
               language,
 
-              /*
-               * L'API peut également enregistrer
-               * l'acceptation des conditions.
-               */
-              acceptTerms: true,
+              acceptTerms,
 
               termsAcceptedAt:
-                new Date().toISOString(),
+                acceptTerms
+                  ? new Date().toISOString()
+                  : null,
             }),
           },
         );
 
-      const data =
-        await response.json();
+      /*
+       * --------------------------------------------------------
+       * LECTURE RÉPONSE
+       * --------------------------------------------------------
+       */
+
+      let data: ApiResponse =
+        {};
+
+      const contentType =
+        response.headers.get(
+          "content-type",
+        ) ?? "";
+
+      if (
+        contentType.includes(
+          "application/json",
+        )
+      ) {
+        try {
+          data =
+            (await response.json()) as ApiResponse;
+        } catch (jsonError) {
+          console.error(
+            "PHARMAFLOW REGISTER JSON ERROR:",
+            jsonError,
+          );
+        }
+      } else {
+        const rawResponse =
+          await response.text();
+
+        console.error(
+          "PHARMAFLOW REGISTER NON JSON RESPONSE:",
+          rawResponse,
+        );
+      }
+
+      /*
+       * --------------------------------------------------------
+       * ERREUR API
+       * --------------------------------------------------------
+       */
 
       if (
         !response.ok ||
-        !data?.success
+        data.success !== true
       ) {
         console.error(
-          "REGISTER ERROR:",
-          data,
+          "PHARMAFLOW REGISTER API ERROR:",
+          {
+            status:
+              response.status,
+
+            statusText:
+              response.statusText,
+
+            data,
+          },
         );
 
-        setError(
-          data?.error ||
-            data?.message ||
-            t.registerError,
-        );
+        const serverMessage =
+          typeof data.message ===
+          "string"
+            ? data.message
+            : typeof data.error ===
+                "string"
+              ? data.error
+              : "";
+
+        /*
+         * Erreur email déjà utilisé
+         */
+
+        if (
+          response.status ===
+          409
+        ) {
+          setError(
+            serverMessage ||
+              t.emailAlreadyUsed,
+          );
+        }
+
+        /*
+         * Erreur serveur
+         */
+
+        else if (
+          response.status >=
+          500
+        ) {
+          setError(
+            serverMessage ||
+              t.serverError,
+          );
+        }
+
+        /*
+         * Autres erreurs
+         */
+
+        else {
+          setError(
+            serverMessage ||
+              t.registerError,
+          );
+        }
 
         setLoading(false);
 
         return;
       }
 
+      /*
+       * --------------------------------------------------------
+       * SUCCÈS
+       * --------------------------------------------------------
+       */
+
+      console.log(
+        "PHARMAFLOW REGISTER SUCCESS:",
+        data,
+      );
+
       setLocaleCookie(
         language,
       );
 
       setSuccess(true);
+
+      setError("");
+
       setLoading(false);
 
-      window.setTimeout(() => {
-        router.replace(
-          `/login?locale=${language}`,
-        );
+      /*
+       * --------------------------------------------------------
+       * REDIRECTION
+       * --------------------------------------------------------
+       */
 
-        router.refresh();
-      }, 2200);
-    } catch (err) {
+      window.setTimeout(
+        () => {
+          router.replace(
+            `/login?locale=${language}`,
+          );
+
+          router.refresh();
+        },
+        2200,
+      );
+    } catch (requestError) {
+      /*
+       * --------------------------------------------------------
+       * ERREUR RÉSEAU
+       * --------------------------------------------------------
+       */
+
       console.error(
-        "REGISTER:",
-        err,
+        "PHARMAFLOW REGISTER REQUEST ERROR:",
+        requestError,
       );
 
       setError(
-        t.registerError,
+        t.networkError,
       );
 
       setLoading(false);
     }
   }
 
+  /* ==========================================================
+     RENDER
+  ========================================================== */
+
   return (
     <main className="pf-auth-page">
+      {/* ======================================================
+          BACKGROUND
+      ======================================================= */}
+
       <div className="pf-auth-background">
         <div className="pf-auth-orb pf-auth-orb-one" />
+
         <div className="pf-auth-orb pf-auth-orb-two" />
       </div>
 
       <div className="pf-auth-container">
         <section className="pf-auth-card">
 
-          {/* =====================================================
+          {/* ==================================================
               LOGO
-          ====================================================== */}
+          =================================================== */}
 
           <Link
             href="/"
@@ -732,16 +1121,17 @@ export default function RegisterPage() {
             </div>
           </Link>
 
-          {/* =====================================================
-              LANGUE
-          ====================================================== */}
+          {/* ==================================================
+              LANGUE INTERFACE
+          =================================================== */}
 
           <div
             style={{
               display: "flex",
               justifyContent:
                 "flex-end",
-              marginBottom: "18px",
+              marginBottom:
+                "18px",
             }}
           >
             <div
@@ -769,8 +1159,7 @@ export default function RegisterPage() {
                 }
                 disabled={loading}
                 aria-pressed={
-                  locale ===
-                  "fr"
+                  locale === "fr"
                 }
                 style={{
                   border:
@@ -816,8 +1205,7 @@ export default function RegisterPage() {
                 }
                 disabled={loading}
                 aria-pressed={
-                  locale ===
-                  "en"
+                  locale === "en"
                 }
                 style={{
                   border:
@@ -856,9 +1244,9 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* =====================================================
+          {/* ==================================================
               HEADER
-          ====================================================== */}
+          =================================================== */}
 
           <div className="pf-auth-header">
             <div className="pf-auth-badge">
@@ -871,22 +1259,27 @@ export default function RegisterPage() {
               </span>
             </div>
 
-            <h1>{t.title}</h1>
+            <h1>
+              {t.title}
+            </h1>
 
             <p>
               {t.description}
             </p>
           </div>
 
-          {/* =====================================================
+          {/* ==================================================
               ESSAI GRATUIT
-          ====================================================== */}
+          =================================================== */}
 
           <div
             style={{
-              marginTop: "20px",
-              marginBottom: "24px",
-              padding: "18px",
+              marginTop:
+                "20px",
+              marginBottom:
+                "24px",
+              padding:
+                "18px",
               borderRadius:
                 "16px",
               border:
@@ -906,8 +1299,10 @@ export default function RegisterPage() {
             >
               <div
                 style={{
-                  width: "42px",
-                  height: "42px",
+                  width:
+                    "42px",
+                  height:
+                    "42px",
                   minWidth:
                     "42px",
                   borderRadius:
@@ -966,7 +1361,8 @@ export default function RegisterPage() {
               style={{
                 display:
                   "grid",
-                gap: "7px",
+                gap:
+                  "7px",
                 marginTop:
                   "14px",
                 fontSize:
@@ -977,24 +1373,30 @@ export default function RegisterPage() {
             >
               <div>
                 ✓{" "}
-                {t.trialPoint1}
+                {
+                  t.trialPoint1
+                }
               </div>
 
               <div>
                 ✓{" "}
-                {t.trialPoint2}
+                {
+                  t.trialPoint2
+                }
               </div>
 
               <div>
                 ✓{" "}
-                {t.trialPoint3}
+                {
+                  t.trialPoint3
+                }
               </div>
             </div>
           </div>
 
-          {/* =====================================================
+          {/* ==================================================
               SUCCÈS
-          ====================================================== */}
+          =================================================== */}
 
           {success && (
             <div
@@ -1040,14 +1442,19 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* =====================================================
+          {/* ==================================================
               ERREUR
-          ====================================================== */}
+          =================================================== */}
 
           {error && (
             <div
               className="pf-alert pf-alert-danger"
               role="alert"
+              aria-live="polite"
+              style={{
+                marginBottom:
+                  "20px",
+              }}
             >
               <span className="pf-alert-icon">
                 !
@@ -1059,12 +1466,17 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* ==================================================
+              FORMULAIRE
+          =================================================== */}
+
           {!success && (
             <form
               onSubmit={
                 handleSubmit
               }
               className="pf-auth-form"
+              noValidate
             >
 
               {/* =================================================
@@ -1094,7 +1506,7 @@ export default function RegisterPage() {
                 </h2>
               </div>
 
-              {/* NOM PHARMACIE */}
+              {/* NOM */}
 
               <div className="pf-form-group">
                 <label
@@ -1125,23 +1537,18 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setPharmacyName(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.pharmacyNamePlaceholder
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="organization"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   />
                 </div>
@@ -1175,19 +1582,14 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setCountryCode(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     className="pf-form-input pf-form-input-with-icon"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   >
                     <option value="">
@@ -1249,23 +1651,18 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setCity(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.cityPlaceholder
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="address-level2"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   />
                 </div>
@@ -1298,23 +1695,18 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setAddress(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.addressPlaceholder
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="street-address"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   />
                 </div>
@@ -1353,7 +1745,7 @@ export default function RegisterPage() {
                 </h2>
               </div>
 
-              {/* NOM */}
+              {/* NOM RESPONSABLE */}
 
               <div className="pf-form-group">
                 <label
@@ -1380,23 +1772,18 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setFullName(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.fullNamePlaceholder
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="name"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   />
                 </div>
@@ -1429,23 +1816,18 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setPhone(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.phonePlaceholder
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="tel"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   />
                 </div>
@@ -1478,14 +1860,11 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setEmail(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.emailPlaceholder
@@ -1493,12 +1872,8 @@ export default function RegisterPage() {
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="email"
                     autoCapitalize="none"
-                    spellCheck={
-                      false
-                    }
-                    disabled={
-                      loading
-                    }
+                    spellCheck={false}
+                    disabled={loading}
                     required
                   />
                 </div>
@@ -1535,23 +1910,18 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setPassword(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.passwordPlaceholder
                     }
                     className="pf-form-input pf-form-input-with-icon pf-form-input-with-action"
                     autoComplete="new-password"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   />
 
@@ -1566,13 +1936,11 @@ export default function RegisterPage() {
                           !value,
                       )
                     }
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     aria-label={
                       showPassword
-                        ? "Masquer le mot de passe"
-                        : "Afficher le mot de passe"
+                        ? t.hidePassword
+                        : t.showPassword
                     }
                   >
                     {showPassword
@@ -1695,23 +2063,18 @@ export default function RegisterPage() {
                       event,
                     ) => {
                       setConfirmation(
-                        event
-                          .target
+                        event.target
                           .value,
                       );
 
-                      if (error) {
-                        setError("");
-                      }
+                      clearError();
                     }}
                     placeholder={
                       t.confirmationPlaceholder
                     }
                     className="pf-form-input pf-form-input-with-icon pf-form-input-with-action"
                     autoComplete="new-password"
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     required
                   />
 
@@ -1726,13 +2089,11 @@ export default function RegisterPage() {
                           !value,
                       )
                     }
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     aria-label={
                       showConfirmation
-                        ? "Masquer la confirmation"
-                        : "Afficher la confirmation"
+                        ? t.hideConfirmation
+                        : t.showConfirmation
                     }
                   >
                     {showConfirmation
@@ -1743,7 +2104,7 @@ export default function RegisterPage() {
               </div>
 
               {/* =================================================
-                  LANGUE
+                  LANGUE DU COMPTE
               ================================================== */}
 
               <div className="pf-form-group">
@@ -1768,9 +2129,7 @@ export default function RegisterPage() {
                         "fr",
                       )
                     }
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     style={{
                       padding:
                         "12px",
@@ -1813,9 +2172,7 @@ export default function RegisterPage() {
                         "en",
                       )
                     }
-                    disabled={
-                      loading
-                    }
+                    disabled={loading}
                     style={{
                       padding:
                         "12px",
@@ -1902,7 +2259,7 @@ export default function RegisterPage() {
               )}
 
               {/* =================================================
-                  CONDITIONS D'UTILISATION
+                  CONDITIONS
               ================================================== */}
 
               <div
@@ -1942,8 +2299,6 @@ export default function RegisterPage() {
                       "none",
                   }}
                 >
-                  {/* CASE À COCHER */}
-
                   <span
                     style={{
                       position:
@@ -1969,20 +2324,13 @@ export default function RegisterPage() {
                         event,
                       ) => {
                         setAcceptTerms(
-                          event
-                            .target
+                          event.target
                             .checked,
                         );
 
-                        if (error) {
-                          setError(
-                            "",
-                          );
-                        }
+                        clearError();
                       }}
-                      disabled={
-                        loading
-                      }
+                      disabled={loading}
                       required
                       style={{
                         position:
@@ -2000,8 +2348,6 @@ export default function RegisterPage() {
                         zIndex: 2,
                       }}
                     />
-
-                    {/* CASE VISUELLE */}
 
                     <span
                       aria-hidden="true"
@@ -2046,12 +2392,9 @@ export default function RegisterPage() {
                     </span>
                   </span>
 
-                  {/* TEXTE */}
-
                   <span
                     style={{
-                      flex:
-                        1,
+                      flex: 1,
                       fontSize:
                         "13px",
                       lineHeight:
@@ -2186,7 +2529,7 @@ export default function RegisterPage() {
               </div>
 
               {/* =================================================
-                  BOUTON CRÉATION
+                  BOUTON
               ================================================== */}
 
               <button
@@ -2213,6 +2556,7 @@ export default function RegisterPage() {
                 {loading ? (
                   <>
                     <span className="pf-spinner pf-spinner-small" />
+
                     {
                       t.creating
                     }
@@ -2222,6 +2566,7 @@ export default function RegisterPage() {
                     <span>
                       🚀
                     </span>
+
                     {
                       t.createAccount
                     }
@@ -2231,9 +2576,9 @@ export default function RegisterPage() {
             </form>
           )}
 
-          {/* =====================================================
+          {/* ==================================================
               CONNEXION
-          ====================================================== */}
+          =================================================== */}
 
           <div
             style={{
@@ -2268,9 +2613,9 @@ export default function RegisterPage() {
             </Link>
           </div>
 
-          {/* =====================================================
+          {/* ==================================================
               SÉCURITÉ
-          ====================================================== */}
+          =================================================== */}
 
           <div className="pf-auth-security">
             <span className="pf-auth-security-icon">
@@ -2298,9 +2643,9 @@ export default function RegisterPage() {
           </div>
         </section>
 
-        {/* =======================================================
+        {/* ====================================================
             FOOTER
-        ======================================================== */}
+        ===================================================== */}
 
         <footer className="pf-auth-page-footer">
           {t.footer}
