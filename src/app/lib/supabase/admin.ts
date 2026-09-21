@@ -7,13 +7,15 @@ import { createClient } from "@supabase/supabase-js";
  * PHARMAFLOW — SUPABASE ADMIN CLIENT
  * ============================================================
  *
- * Client Supabase réservé au serveur.
+ * Client Supabase strictement réservé au serveur.
  *
- * Utilise :
- *   NEXT_PUBLIC_SUPABASE_URL
- *   SUPABASE_SECRET_KEY
+ * Variables nécessaires :
+ *
+ * NEXT_PUBLIC_SUPABASE_URL
+ * SUPABASE_SECRET_KEY
  *
  * IMPORTANT :
+ *
  * - Ne jamais importer ce fichier dans un composant client.
  * - Ne jamais exposer SUPABASE_SECRET_KEY.
  * - Ne jamais utiliser SUPABASE_SECRET_KEY dans NEXT_PUBLIC_*.
@@ -22,7 +24,7 @@ import { createClient } from "@supabase/supabase-js";
 
 /**
  * ============================================================
- * RÉCUPÉRATION DE LA CONFIGURATION
+ * CONFIGURATION SUPABASE
  * ============================================================
  */
 
@@ -55,17 +57,6 @@ function getSupabaseConfig() {
  * ============================================================
  * CRÉATION DU CLIENT ADMIN
  * ============================================================
- *
- * Cette fonction est appelée uniquement côté serveur.
- *
- * Exemple :
- *
- * const supabaseAdmin = createAdminClient();
- *
- * const { data, error } =
- *   await supabaseAdmin.auth.admin.createUser(...);
- *
- * ============================================================
  */
 
 export function createAdminClient() {
@@ -92,3 +83,29 @@ export function createAdminClient() {
     },
   );
 }
+
+/**
+ * ============================================================
+ * CLIENT ADMIN PARTAGÉ
+ * ============================================================
+ *
+ * IMPORTANT :
+ *
+ * Cette exportation est conservée parce que plusieurs anciennes
+ * et nouvelles routes PharmaFlow utilisent directement :
+ *
+ * import { supabaseAdmin } from "@/app/lib/supabase/admin";
+ *
+ * Cela permet de conserver la compatibilité avec :
+ *
+ * - API support
+ * - API tickets
+ * - API paiements
+ * - Webhooks
+ * - Vérification des paiements
+ * - Administration
+ * ============================================================
+ */
+
+export const supabaseAdmin =
+  createAdminClient();
