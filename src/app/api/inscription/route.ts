@@ -16,6 +16,27 @@ type SubscriptionPlan = {
 
 /**
  * ============================================================
+ * PHARMAFLOW — INSCRIPTION
+ * ============================================================
+ *
+ * Flux :
+ *
+ * 1. Validation des données
+ * 2. Création du compte Supabase Auth
+ * 3. Création de la pharmacie
+ * 4. Création du profil propriétaire
+ * 5. Recherche du plan Trial
+ * 6. Création de l'abonnement Trial
+ * 7. Nettoyage automatique en cas d'échec
+ *
+ * IMPORTANT :
+ * - Cette route est strictement serveur.
+ * - SUPABASE_SECRET_KEY n'est jamais envoyée au navigateur.
+ * ============================================================
+ */
+
+/**
+ * ============================================================
  * NORMALISATION
  * ============================================================
  */
@@ -30,23 +51,19 @@ function normalizeEmail(value: unknown): string {
     .toLowerCase();
 }
 
-function normalizeCountryCode(
-  value: unknown,
-): string {
+function normalizeCountryCode(value: unknown): string {
   return String(value ?? "")
     .trim()
     .toUpperCase();
 }
 
-function normalizeLanguage(
-  value: unknown,
-): Locale {
+function normalizeLanguage(value: unknown): Locale {
   return value === "en" ? "en" : "fr";
 }
 
 /**
  * ============================================================
- * DEVISE SELON LE PAYS
+ * DEVISE
  * ============================================================
  */
 
@@ -54,9 +71,7 @@ function getCurrencyForCountry(
   countryCode: string,
 ): string {
   const currencies: Record<string, string> = {
-    /*
-     * Afrique centrale
-     */
+    // CEMAC
     CG: "XAF",
     CM: "XAF",
     GA: "XAF",
@@ -64,14 +79,10 @@ function getCurrencyForCountry(
     CF: "XAF",
     GQ: "XAF",
 
-    /*
-     * République démocratique du Congo
-     */
+    // RDC
     CD: "CDF",
 
-    /*
-     * Afrique de l'Ouest
-     */
+    // UEMOA
     CI: "XOF",
     SN: "XOF",
     BJ: "XOF",
@@ -80,22 +91,16 @@ function getCurrencyForCountry(
     ML: "XOF",
     NE: "XOF",
 
-    /*
-     * Guinée
-     */
+    // Guinée
     GN: "GNF",
 
-    /*
-     * Afrique de l'Est
-     */
+    // Afrique de l'Est
     RW: "RWF",
     KE: "KES",
     TZ: "TZS",
     UG: "UGX",
 
-    /*
-     * Afrique australe
-     */
+    // Afrique australe
     ZA: "ZAR",
   };
 
@@ -125,7 +130,7 @@ function errorResponse(
 
 /**
  * ============================================================
- * INSCRIPTION
+ * POST /api/inscription
  * ============================================================
  */
 
@@ -134,21 +139,30 @@ export async function POST(
 ) {
   /**
    * ==========================================================
-   * 1. LECTURE DES DONNÉES
+   * 1. LECTURE DU BODY
    * ==========================================================
    */
 
   let body: Record<string, unknown>;
 
   try {
-    body =
-      (await request.json()) as Record<
-        string,
-        unknown
-      >;
+    const parsed = await request.json();
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return errorResponse(
+        "Les données envoyées sont invalides.",
+        400,
+      );
+    }
+
+    body = parsed as Record<string, unknown>;
   } catch (error) {
     console.error(
-      "REGISTER JSON:",
+      "[PHARMAFLOW REGISTER] JSON_ERROR:",
       error,
     );
 
@@ -160,58 +174,49 @@ export async function POST(
 
   /**
    * ==========================================================
-   * 2. RÉCUPÉRATION DES CHAMPS
+   * 2. RÉCUPÉRATION DES DONNÉES
    * ==========================================================
    */
 
-  const pharmacyName =
-    normalizeText(
-      body.pharmacyName,
-    );
+  const pharmacyName = normalizeText(
+    body.pharmacyName,
+  );
 
-  const address =
-    normalizeText(
-      body.address,
-    );
+  const address = normalizeText(
+    body.address,
+  );
 
-  const countryCode =
-    normalizeCountryCode(
-      body.countryCode,
-    );
+  const countryCode = normalizeCountryCode(
+    body.countryCode,
+  );
 
-  const city =
-    normalizeText(
-      body.city,
-    );
+  const city = normalizeText(
+    body.city,
+  );
 
-  const fullName =
-    normalizeText(
-      body.fullName,
-    );
+  const fullName = normalizeText(
+    body.fullName,
+  );
 
-  const phone =
-    normalizeText(
-      body.phone,
-    );
+  const phone = normalizeText(
+    body.phone,
+  );
 
-  const email =
-    normalizeEmail(
-      body.email,
-    );
+  const email = normalizeEmail(
+    body.email,
+  );
 
-  const password =
-    String(
-      body.password ?? "",
-    );
+  const password = String(
+    body.password ?? "",
+  );
 
-  const language =
-    normalizeLanguage(
-      body.language,
-    );
+  const language = normalizeLanguage(
+    body.language,
+  );
 
   /**
    * ==========================================================
-   * 3. VALIDATION DES CHAMPS
+   * 3. VALIDATION
    * ==========================================================
    */
 
@@ -251,7 +256,7 @@ export async function POST(
 
   /**
    * ==========================================================
-   * 4. DEVISE DE LA PHARMACIE
+   * 4. DEVISE
    * ==========================================================
    */
 
@@ -262,11 +267,8 @@ export async function POST(
 
   /**
    * ==========================================================
-   * 5. CLIENT ADMIN SUPABASE
+   * 5. CLIENT ADMIN
    * ==========================================================
-   *
-   * Le client Admin Supabase est utilisé uniquement côté
-   * serveur.
    */
 
   let supabaseAdmin;
@@ -276,71 +278,118 @@ export async function POST(
       createAdminClient();
   } catch (error) {
     console.error(
-      "REGISTER ADMIN CLIENT:",
+      "[PHARMAFLOW REGISTER] ADMIN_CLIENT_ERROR:",
       error,
     );
 
     return errorResponse(
-      "La configuration sécurisée du serveur est incomplète.",
+      "Le serveur PharmaFlow n'est pas correctement configuré. Veuillez réessayer plus tard.",
       500,
     );
   }
 
   /**
    * ==========================================================
-   * 6. CRÉATION DU COMPTE AUTH
+   * 6. CRÉATION AUTH
    * ==========================================================
    */
 
-  const {
-    data: authData,
-    error: authError,
-  } =
-    await supabaseAdmin.auth.admin.createUser(
-      {
-        email,
-        password,
+  let authData;
 
-        /*
-         * Le compte peut se connecter immédiatement.
-         */
-        email_confirm: true,
+  try {
+    const result =
+      await supabaseAdmin.auth.admin.createUser(
+        {
+          email,
+          password,
 
-        user_metadata: {
-          full_name:
-            fullName,
+          email_confirm: true,
 
-          phone,
+          user_metadata: {
+            full_name:
+              fullName,
 
-          pharmacy_name:
-            pharmacyName,
+            phone,
 
-          country_code:
-            countryCode,
+            pharmacy_name:
+              pharmacyName,
 
-          city,
+            country_code:
+              countryCode,
 
-          language,
+            city,
+
+            language,
+          },
         },
-      },
-    );
+      );
 
-  if (
-    authError ||
-    !authData.user
-  ) {
+    if (result.error) {
+      console.error(
+        "[PHARMAFLOW REGISTER] AUTH_CREATE_ERROR:",
+        {
+          message:
+            result.error.message,
+          status:
+            result.error.status,
+          code:
+            result.error.code,
+        },
+      );
+
+      /**
+       * E-mail déjà utilisé
+       */
+      const normalizedAuthMessage =
+        result.error.message
+          ?.toLowerCase()
+          .trim();
+
+      if (
+        normalizedAuthMessage?.includes(
+          "already registered",
+        ) ||
+        normalizedAuthMessage?.includes(
+          "already exists",
+        ) ||
+        normalizedAuthMessage?.includes(
+          "already been registered",
+        )
+      ) {
+        return errorResponse(
+          "Cette adresse e-mail est déjà utilisée. Connectez-vous ou utilisez une autre adresse.",
+          409,
+        );
+      }
+
+      return errorResponse(
+        "Impossible de créer votre compte. Vérifiez vos informations puis réessayez.",
+        400,
+      );
+    }
+
+    if (!result.data.user) {
+      console.error(
+        "[PHARMAFLOW REGISTER] AUTH_USER_MISSING",
+      );
+
+      return errorResponse(
+        "Le compte utilisateur n'a pas pu être créé.",
+        500,
+      );
+    }
+
+    authData =
+      result.data;
+  } catch (error) {
     console.error(
-      "REGISTER AUTH:",
-      authError,
+      "[PHARMAFLOW REGISTER] AUTH_EXCEPTION:",
+      error,
     );
-
-    const message =
-      authError?.message ??
-      "Impossible de créer votre compte.";
 
     return errorResponse(
-      message,
-      400,
+      "Une erreur est survenue lors de la création du compte.",
+      500,
     );
   }
 
@@ -355,30 +404,21 @@ export async function POST(
     | string
     | null = null;
 
-  let profileCreated =
-    false;
+  let profileCreated = false;
 
   /**
    * ==========================================================
-   * 7. CRÉATION PHARMACIE + PROFIL + TRIAL
+   * 7. PHARMACIE
    * ==========================================================
    */
 
   try {
-    /**
-     * ========================================================
-     * 7.1 CRÉATION DE LA PHARMACIE
-     * ========================================================
-     */
-
     const {
       data: pharmacyData,
       error: pharmacyError,
     } =
       await supabaseAdmin
-        .from(
-          "pharmacies",
-        )
+        .from("pharmacies")
         .insert({
           name:
             pharmacyName,
@@ -399,9 +439,7 @@ export async function POST(
           status:
             "active",
         })
-        .select(
-          "id",
-        )
+        .select("id")
         .single();
 
     if (
@@ -409,7 +447,7 @@ export async function POST(
       !pharmacyData
     ) {
       console.error(
-        "REGISTER PHARMACY:",
+        "[PHARMAFLOW REGISTER] PHARMACY_ERROR:",
         pharmacyError,
       );
 
@@ -423,7 +461,7 @@ export async function POST(
 
     /**
      * ========================================================
-     * 7.2 CRÉATION DU PROFIL
+     * 8. PROFIL
      * ========================================================
      */
 
@@ -431,9 +469,7 @@ export async function POST(
       error: profileError,
     } =
       await supabaseAdmin
-        .from(
-          "profiles",
-        )
+        .from("profiles")
         .upsert(
           {
             id:
@@ -460,7 +496,7 @@ export async function POST(
 
     if (profileError) {
       console.error(
-        "REGISTER PROFILE:",
+        "[PHARMAFLOW REGISTER] PROFILE_ERROR:",
         profileError,
       );
 
@@ -474,18 +510,8 @@ export async function POST(
 
     /**
      * ========================================================
-     * 7.3 RECHERCHE DU PLAN TRIAL
+     * 9. PLAN TRIAL
      * ========================================================
-     *
-     * Structure réelle de subscription_plans :
-     *
-     * id
-     * name
-     * code
-     * duration_days
-     * price
-     * currency_code
-     * is_active
      */
 
     const {
@@ -493,9 +519,7 @@ export async function POST(
       error: trialPlanError,
     } =
       await supabaseAdmin
-        .from(
-          "subscription_plans",
-        )
+        .from("subscription_plans")
         .select(
           "id, name, code, duration_days, price, currency_code, is_active",
         )
@@ -511,7 +535,7 @@ export async function POST(
 
     if (trialPlanError) {
       console.error(
-        "REGISTER TRIAL PLAN:",
+        "[PHARMAFLOW REGISTER] TRIAL_PLAN_ERROR:",
         trialPlanError,
       );
 
@@ -522,7 +546,7 @@ export async function POST(
 
     if (!trialPlanData) {
       console.error(
-        "REGISTER TRIAL PLAN: aucun plan trial actif.",
+        "[PHARMAFLOW REGISTER] TRIAL_PLAN_NOT_FOUND",
       );
 
       throw new Error(
@@ -535,10 +559,8 @@ export async function POST(
 
     /**
      * ========================================================
-     * 7.4 VÉRIFICATION DU TRIAL
+     * 10. VÉRIFICATION DU TRIAL
      * ========================================================
-     *
-     * PharmaFlow doit fournir exactement 7 jours gratuits.
      */
 
     const trialDurationDays =
@@ -553,7 +575,7 @@ export async function POST(
       trialDurationDays !== 7
     ) {
       console.error(
-        "REGISTER INVALID TRIAL DURATION:",
+        "[PHARMAFLOW REGISTER] INVALID_TRIAL_DURATION:",
         trialPlan.duration_days,
       );
 
@@ -564,14 +586,8 @@ export async function POST(
 
     /**
      * ========================================================
-     * 7.5 CALCUL DES DATES DU TRIAL
+     * 11. DATES DU TRIAL
      * ========================================================
-     *
-     * Début :
-     *   maintenant
-     *
-     * Fin :
-     *   maintenant + 7 jours
      */
 
     const trialStartedAt =
@@ -589,20 +605,8 @@ export async function POST(
 
     /**
      * ========================================================
-     * 7.6 CRÉATION DE L'ABONNEMENT TRIAL
+     * 12. ABONNEMENT
      * ========================================================
-     *
-     * status :
-     *   trial
-     *
-     * trial_started_at :
-     *   maintenant
-     *
-     * trial_ends_at :
-     *   maintenant + 7 jours
-     *
-     * expires_at :
-     *   fin du trial
      */
 
     const {
@@ -610,9 +614,7 @@ export async function POST(
       error: subscriptionError,
     } =
       await supabaseAdmin
-        .from(
-          "subscriptions",
-        )
+        .from("subscriptions")
         .insert({
           pharmacy_id:
             pharmacyId,
@@ -650,7 +652,7 @@ export async function POST(
       !subscriptionData
     ) {
       console.error(
-        "REGISTER SUBSCRIPTION:",
+        "[PHARMAFLOW REGISTER] SUBSCRIPTION_ERROR:",
         subscriptionError,
       );
 
@@ -664,9 +666,19 @@ export async function POST(
 
     /**
      * ========================================================
-     * 7.7 RÉPONSE DE SUCCÈS
+     * 13. SUCCÈS
      * ========================================================
      */
+
+    console.log(
+      "[PHARMAFLOW REGISTER] SUCCESS:",
+      {
+        userId,
+        pharmacyId,
+        subscriptionId,
+        email,
+      },
+    );
 
     return NextResponse.json(
       {
@@ -742,30 +754,28 @@ export async function POST(
   } catch (error) {
     /**
      * ==========================================================
-     * 8. NETTOYAGE EN CAS D'ÉCHEC
+     * 14. ERREUR GLOBALE
      * ==========================================================
      */
 
     console.error(
-      "REGISTER TRANSACTION:",
+      "[PHARMAFLOW REGISTER] TRANSACTION_ERROR:",
       error,
     );
 
     /**
-     * ----------------------------------------------------------
-     * 8.1 SUPPRESSION DE L'ABONNEMENT
-     * ----------------------------------------------------------
+     * ==========================================================
+     * 15. NETTOYAGE ABONNEMENT
+     * ==========================================================
      */
 
     if (subscriptionId) {
       const {
         error:
-          deleteSubscriptionError,
+          cleanupSubscriptionError,
       } =
         await supabaseAdmin
-          .from(
-            "subscriptions",
-          )
+          .from("subscriptions")
           .delete()
           .eq(
             "id",
@@ -773,30 +783,28 @@ export async function POST(
           );
 
       if (
-        deleteSubscriptionError
+        cleanupSubscriptionError
       ) {
         console.error(
-          "REGISTER CLEANUP SUBSCRIPTION:",
-          deleteSubscriptionError,
+          "[PHARMAFLOW CLEANUP] SUBSCRIPTION:",
+          cleanupSubscriptionError,
         );
       }
     }
 
     /**
-     * ----------------------------------------------------------
-     * 8.2 SUPPRESSION DU PROFIL
-     * ----------------------------------------------------------
+     * ==========================================================
+     * 16. NETTOYAGE PROFIL
+     * ==========================================================
      */
 
     if (profileCreated) {
       const {
         error:
-          deleteProfileError,
+          cleanupProfileError,
       } =
         await supabaseAdmin
-          .from(
-            "profiles",
-          )
+          .from("profiles")
           .delete()
           .eq(
             "id",
@@ -804,30 +812,28 @@ export async function POST(
           );
 
       if (
-        deleteProfileError
+        cleanupProfileError
       ) {
         console.error(
-          "REGISTER CLEANUP PROFILE:",
-          deleteProfileError,
+          "[PHARMAFLOW CLEANUP] PROFILE:",
+          cleanupProfileError,
         );
       }
     }
 
     /**
-     * ----------------------------------------------------------
-     * 8.3 SUPPRESSION DE LA PHARMACIE
-     * ----------------------------------------------------------
+     * ==========================================================
+     * 17. NETTOYAGE PHARMACIE
+     * ==========================================================
      */
 
     if (pharmacyId) {
       const {
         error:
-          deletePharmacyError,
+          cleanupPharmacyError,
       } =
         await supabaseAdmin
-          .from(
-            "pharmacies",
-          )
+          .from("pharmacies")
           .delete()
           .eq(
             "id",
@@ -835,46 +841,44 @@ export async function POST(
           );
 
       if (
-        deletePharmacyError
+        cleanupPharmacyError
       ) {
         console.error(
-          "REGISTER CLEANUP PHARMACY:",
-          deletePharmacyError,
+          "[PHARMAFLOW CLEANUP] PHARMACY:",
+          cleanupPharmacyError,
         );
       }
     }
 
     /**
-     * ----------------------------------------------------------
-     * 8.4 SUPPRESSION DU COMPTE AUTH
-     * ----------------------------------------------------------
+     * ==========================================================
+     * 18. NETTOYAGE AUTH
+     * ==========================================================
      */
 
     const {
       error:
-        deleteAuthError,
+        cleanupAuthError,
     } =
       await supabaseAdmin.auth.admin.deleteUser(
         userId,
       );
 
-    if (deleteAuthError) {
+    if (cleanupAuthError) {
       console.error(
-        "REGISTER CLEANUP AUTH:",
-        deleteAuthError,
+        "[PHARMAFLOW CLEANUP] AUTH:",
+        cleanupAuthError,
       );
     }
 
     /**
-     * ----------------------------------------------------------
-     * 8.5 MESSAGE UTILISATEUR
-     * ----------------------------------------------------------
-     *
-     * Les détails techniques restent côté serveur.
+     * ==========================================================
+     * 19. RÉPONSE UTILISATEUR
+     * ==========================================================
      */
 
     return errorResponse(
-      "Impossible de terminer la création de votre pharmacie. Aucun abonnement n'a été activé.",
+      "Impossible de terminer la création de votre pharmacie. Veuillez réessayer.",
       500,
     );
   }
