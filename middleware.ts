@@ -12,26 +12,21 @@ import {
  * RESPONSABILITÉS
  *
  * 1. Routes publiques
- * 2. Authentification Supabase
- * 3. Super Admin
- * 4. Agent plateforme
- * 5. Profils pharmacie
- * 6. Autorisation par rôle
- * 7. Statut administratif pharmacie
- * 8. Accès manuel accordé par Super Admin
- * 9. Abonnement actif / essai valide
- * 10. Blocage si abonnement expiré
+ * 2. API publiques
+ * 3. Authentification Supabase
+ * 4. Super Admin
+ * 5. Agent plateforme
+ * 6. Profils pharmacie
+ * 7. Autorisation par rôle
+ * 8. Statut administratif pharmacie
+ * 9. Accès manuel accordé par Super Admin
+ * 10. Abonnement actif / essai valide
+ * 11. Blocage si abonnement expiré
  *
  * IMPORTANT :
  *
- * Le middleware NE DÉCONNECTE JAMAIS l'utilisateur lorsqu'un
- * abonnement expire.
- *
- * L'utilisateur reste connecté afin de pouvoir :
- *
- *     /abonnement
- *
- * et régulariser son accès.
+ * Le middleware ne déconnecte jamais automatiquement
+ * l'utilisateur lorsqu'un abonnement expire.
  * ============================================================
  */
 
@@ -85,13 +80,22 @@ const PUBLIC_ROUTES = [
 
 /**
  * ============================================================
- * ROUTES PUBLIQUES API
+ * API PUBLIQUES
+ * ============================================================
+ *
+ * IMPORTANT :
+ *
+ * /api/inscription est l'endpoint réellement utilisé
+ * par la page /register.
+ *
+ * Il doit rester accessible sans session Supabase.
  * ============================================================
  */
 
 const PUBLIC_API_ROUTES = [
   "/api/auth/platform-access",
   "/api/auth/inscription",
+  "/api/inscription",
   "/api/subscription/status",
   "/api/support/ai",
   "/api/support/tickets",
@@ -109,6 +113,7 @@ const PHARMACY_MODULES = [
   "/pharmacien",
   "/caisse",
   "/employe",
+  "/employee",
   "/produits",
   "/products",
   "/stock",
@@ -121,7 +126,7 @@ const PHARMACY_MODULES = [
 
 /**
  * ============================================================
- * ROUTES PUBLIQUES ?
+ * ROUTE PUBLIQUE ?
  * ============================================================
  */
 
@@ -276,7 +281,9 @@ function isAllowedByRole(
 
   if (
     pathname === "/employe" ||
-    pathname.startsWith("/employe/")
+    pathname.startsWith("/employe/") ||
+    pathname === "/employee" ||
+    pathname.startsWith("/employee/")
   ) {
     return (
       role === "owner" ||
@@ -345,30 +352,6 @@ function isFutureDate(
  * ============================================================
  * ACCÈS MANUEL
  * ============================================================
- *
- * Une pharmacie bénéficie de l'accès manuel lorsque :
- *
- * manual_access_enabled = true
- *
- * ET
- *
- * manual_access_until > maintenant
- *
- * Exemple :
- *
- * Paiement reçu par Mobile Money / espèces / virement
- *     ↓
- * Super Admin active l'accès
- *     ↓
- * manual_access_enabled = true
- * manual_access_until = date future
- *     ↓
- * accès autorisé
- *
- * Une fois la date dépassée :
- *
- * accès automatiquement bloqué.
- * ============================================================
  */
 
 function hasManualAccess(
@@ -405,9 +388,7 @@ function hasValidSubscription(
       .toLowerCase();
 
   /**
-   * ----------------------------------------------------------
-   * ESSAI
-   * ----------------------------------------------------------
+   * ESSAI GRATUIT
    */
 
   if (
@@ -421,9 +402,7 @@ function hasValidSubscription(
   }
 
   /**
-   * ----------------------------------------------------------
    * ABONNEMENT PAYÉ
-   * ----------------------------------------------------------
    */
 
   if (
@@ -459,9 +438,15 @@ function redirectToLogin(
     request.nextUrl.pathname,
   );
 
-  return NextResponse.redirect(
-    url,
+  const response =
+    NextResponse.redirect(url);
+
+  response.headers.set(
+    "Cache-Control",
+    "private, no-store, max-age=0",
   );
+
+  return response;
 }
 
 /**
@@ -492,9 +477,7 @@ function redirectToSubscription(
   );
 
   const response =
-    NextResponse.redirect(
-      url,
-    );
+    NextResponse.redirect(url);
 
   response.headers.set(
     "Cache-Control",
@@ -520,14 +503,28 @@ export async function middleware(
    * ==========================================================
    * 1. API PUBLIQUE
    * ==========================================================
+   *
+   * IMPORTANT :
+   *
+   * Cette condition est exécutée AVANT toute tentative
+   * d'authentification Supabase.
+   *
+   * Cela empêche notamment /api/inscription d'être redirigé
+   * vers /login lorsqu'il n'existe pas encore de session.
    */
 
-  if (
-    isPublicApi(pathname)
-  ) {
-    return NextResponse.next({
-      request,
-    });
+  if (isPublicApi(pathname)) {
+    const response =
+      NextResponse.next({
+        request,
+      });
+
+    response.headers.set(
+      "Cache-Control",
+      "private, no-store, max-age=0",
+    );
+
+    return response;
   }
 
   /**
@@ -536,9 +533,7 @@ export async function middleware(
    * ==========================================================
    */
 
-  if (
-    isPublicRoute(pathname)
-  ) {
+  if (isPublicRoute(pathname)) {
     const response =
       NextResponse.next({
         request,
@@ -558,6 +553,33 @@ export async function middleware(
    * ==========================================================
    */
 
+  const supabaseUrl =
+    process.env
+      .NEXT_PUBLIC_SUPABASE_URL;
+
+  const supabasePublishableKey =
+    process.env
+      .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  /**
+   * Si les variables publiques Supabase ne sont pas présentes,
+   * on ne tente pas d'appeler Supabase avec des valeurs
+   * undefined.
+   */
+
+  if (
+    !supabaseUrl ||
+    !supabasePublishableKey
+  ) {
+    console.error(
+      "PharmaFlow middleware: variables Supabase manquantes.",
+    );
+
+    return redirectToLogin(
+      request,
+    );
+  }
+
   let response =
     NextResponse.next({
       request,
@@ -565,10 +587,8 @@ export async function middleware(
 
   const supabase =
     createServerClient(
-      process.env
-        .NEXT_PUBLIC_SUPABASE_URL!,
-      process.env
-        .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      supabaseUrl,
+      supabasePublishableKey,
       {
         cookies: {
           getAll() {
@@ -638,34 +658,8 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 5. LOGIN / REGISTER
+   * 5. SUPER ADMIN
    * ==========================================================
-   */
-
-  if (
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/register") ||
-    pathname.startsWith(
-      "/forgot-password",
-    )
-  ) {
-    return response;
-  }
-
-  /**
-   * ==========================================================
-   * 6. SUPER ADMIN
-   * ==========================================================
-   *
-   * IMPORTANT :
-   *
-   * Le Super Admin ne dépend PAS d'une pharmacie.
-   *
-   * Le contrôle définitif est effectué dans :
-   *
-   * src/app/lib/super-admin/auth.ts
-   *
-   * avec platform_admins.
    */
 
   if (
@@ -678,7 +672,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 7. AGENT PLATEFORME
+   * 6. AGENT PLATEFORME
    * ==========================================================
    */
 
@@ -692,7 +686,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 8. SI CE N'EST PAS UNE ROUTE PHARMACIE
+   * 7. SI CE N'EST PAS UNE ROUTE PHARMACIE
    * ==========================================================
    */
 
@@ -704,7 +698,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 9. PROFIL PHARMACIE
+   * 8. PROFIL PHARMACIE
    * ==========================================================
    */
 
@@ -732,12 +726,6 @@ export async function middleware(
       profileError,
     );
 
-    /**
-     * IMPORTANT :
-     *
-     * On ne déconnecte pas automatiquement l'utilisateur
-     * uniquement parce que l'abonnement est absent.
-     */
     return redirectToLogin(
       request,
     );
@@ -745,7 +733,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 10. PHARMACY_ID
+   * 9. PHARMACY_ID
    * ==========================================================
    */
 
@@ -760,7 +748,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 11. RÔLE
+   * 10. RÔLE
    * ==========================================================
    */
 
@@ -773,7 +761,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 12. AUTORISATION DU RÔLE
+   * 11. AUTORISATION DU RÔLE
    * ==========================================================
    */
 
@@ -796,7 +784,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 13. RÉCUPÉRER LA PHARMACIE
+   * 12. RÉCUPÉRER LA PHARMACIE
    * ==========================================================
    */
 
@@ -837,31 +825,8 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 14. STATUT ADMINISTRATIF
+   * 13. STATUT ADMINISTRATIF
    * ==========================================================
-   *
-   * C'est ici que le Super Admin contrôle réellement l'accès.
-   *
-   * ACTIVE
-   *    → peut continuer
-   *
-   * INACTIVE
-   *    → accès bloqué
-   *
-   * SUSPENDED
-   *    → accès bloqué
-   *
-   * IMPORTANT :
-   *
-   * Le statut est vérifié AVANT l'accès manuel.
-   *
-   * Donc :
-   *
-   * pharmacie inactive
-   * +
-   * accès manuel actif
-   *
-   * = accès BLOQUÉ.
    */
 
   const pharmacyStatus =
@@ -903,11 +868,8 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 15. ACCÈS MANUEL SUPER ADMIN
+   * 14. ACCÈS MANUEL SUPER ADMIN
    * ==========================================================
-   *
-   * Si le Super Admin a accordé un accès manuel valide,
-   * l'abonnement n'est pas nécessaire.
    */
 
   if (
@@ -920,7 +882,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 16. RÉCUPÉRER LE DERNIER ABONNEMENT
+   * 15. DERNIER ABONNEMENT
    * ==========================================================
    */
 
@@ -977,7 +939,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 17. ABONNEMENT VALIDE
+   * 16. ABONNEMENT VALIDE
    * ==========================================================
    */
 
@@ -991,7 +953,7 @@ export async function middleware(
 
   /**
    * ==========================================================
-   * 18. ABONNEMENT REFUSÉ
+   * 17. ABONNEMENT EXPIRÉ / INVALIDE
    * ==========================================================
    */
 
@@ -1034,21 +996,13 @@ export async function middleware(
   }
 
   /**
-   * ==========================================================
-   * IMPORTANT
-   * ==========================================================
+   * IMPORTANT :
    *
-   * NE PAS FAIRE :
+   * Ne jamais faire :
    *
    * await supabase.auth.signOut()
    *
    * L'utilisateur reste connecté.
-   *
-   * Il peut donc aller sur :
-   *
-   * /abonnement
-   *
-   * pour régulariser son accès.
    */
 
   return redirectToSubscription(
@@ -1060,6 +1014,17 @@ export async function middleware(
 /**
  * ============================================================
  * MATCHER
+ * ============================================================
+ *
+ * Le middleware peut intercepter les API, mais les API
+ * déclarées dans PUBLIC_API_ROUTES sont immédiatement
+ * autorisées avant toute vérification de session.
+ *
+ * Cela permet notamment à :
+ *
+ * /api/inscription
+ *
+ * de fonctionner sans utilisateur connecté.
  * ============================================================
  */
 
