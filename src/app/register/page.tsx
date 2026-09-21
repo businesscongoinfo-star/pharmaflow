@@ -190,8 +190,17 @@ const TEXT = {
 
     currency: "Devise de facturation",
 
-    terms:
-      "J'accepte les conditions d'utilisation et la politique de confidentialité de PharmaFlow.",
+    termsIntro: "J'accepte les",
+    termsLink: "Conditions d'utilisation",
+    privacyAnd: "et la",
+    privacyLink: "Politique de confidentialité",
+    termsEnd: "de PharmaFlow.",
+
+    termsRequired:
+      "Vous devez accepter les conditions d'utilisation et la politique de confidentialité.",
+
+    termsHint:
+      "Vous devez accepter ces conditions pour créer votre compte.",
 
     createAccount: "Créer ma pharmacie",
     creating: "Création de votre pharmacie...",
@@ -218,9 +227,6 @@ const TEXT = {
 
     passwordMismatch:
       "Les mots de passe ne correspondent pas.",
-
-    termsRequired:
-      "Vous devez accepter les conditions d'utilisation.",
 
     registerError:
       "Impossible de créer votre compte. Veuillez réessayer.",
@@ -310,8 +316,17 @@ const TEXT = {
 
     currency: "Billing currency",
 
-    terms:
-      "I accept PharmaFlow's terms of use and privacy policy.",
+    termsIntro: "I accept the",
+    termsLink: "Terms of Use",
+    privacyAnd: "and",
+    privacyLink: "Privacy Policy",
+    termsEnd: "of PharmaFlow.",
+
+    termsRequired:
+      "You must accept the terms of use and privacy policy.",
+
+    termsHint:
+      "You must accept these terms to create your account.",
 
     createAccount: "Create my pharmacy",
     creating: "Creating your pharmacy...",
@@ -338,9 +353,6 @@ const TEXT = {
 
     passwordMismatch:
       "Passwords do not match.",
-
-    termsRequired:
-      "You must accept the terms of use.",
 
     registerError:
       "Unable to create your account. Please try again.",
@@ -382,19 +394,35 @@ function setLocaleCookie(locale: Locale) {
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [locale, setLocale] = useState<Locale>("fr");
+  const [locale, setLocale] =
+    useState<Locale>("fr");
 
-  const [pharmacyName, setPharmacyName] = useState("");
-  const [countryCode, setCountryCode] = useState("");
-  const [city, setCity] = useState("");
-  const [address, setAddress] = useState("");
+  const [pharmacyName, setPharmacyName] =
+    useState("");
 
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [countryCode, setCountryCode] =
+    useState("");
 
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
+  const [city, setCity] =
+    useState("");
+
+  const [address, setAddress] =
+    useState("");
+
+  const [fullName, setFullName] =
+    useState("");
+
+  const [phone, setPhone] =
+    useState("");
+
+  const [email, setEmail] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [confirmation, setConfirmation] =
+    useState("");
 
   const [language, setLanguage] =
     useState<Locale>("fr");
@@ -402,8 +430,10 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] =
     useState(false);
 
-  const [showConfirmation, setShowConfirmation] =
-    useState(false);
+  const [
+    showConfirmation,
+    setShowConfirmation,
+  ] = useState(false);
 
   const [acceptTerms, setAcceptTerms] =
     useState(false);
@@ -422,65 +452,74 @@ export default function RegisterPage() {
   const selectedCountry = useMemo(
     () =>
       COUNTRIES.find(
-        (country) => country.code === countryCode,
+        (country) =>
+          country.code ===
+          countryCode,
       ),
     [countryCode],
   );
 
-  const passwordStrength = useMemo(() => {
-    if (!password) {
+  const passwordStrength =
+    useMemo(() => {
+      if (!password) {
+        return {
+          level: 0,
+          label: "",
+        };
+      }
+
+      let score = 0;
+
+      if (password.length >= 8) {
+        score++;
+      }
+
+      if (/[A-Z]/.test(password)) {
+        score++;
+      }
+
+      if (/[a-z]/.test(password)) {
+        score++;
+      }
+
+      if (/[0-9]/.test(password)) {
+        score++;
+      }
+
+      if (
+        /[^A-Za-z0-9]/.test(
+          password,
+        )
+      ) {
+        score++;
+      }
+
+      if (score <= 2) {
+        return {
+          level: 1,
+          label: t.passwordWeak,
+        };
+      }
+
+      if (score <= 4) {
+        return {
+          level: 2,
+          label: t.passwordMedium,
+        };
+      }
+
       return {
-        level: 0,
-        label: "",
+        level: 3,
+        label: t.passwordStrong,
       };
-    }
-
-    let score = 0;
-
-    if (password.length >= 8) {
-      score++;
-    }
-
-    if (/[A-Z]/.test(password)) {
-      score++;
-    }
-
-    if (/[a-z]/.test(password)) {
-      score++;
-    }
-
-    if (/[0-9]/.test(password)) {
-      score++;
-    }
-
-    if (/[^A-Za-z0-9]/.test(password)) {
-      score++;
-    }
-
-    if (score <= 2) {
-      return {
-        level: 1,
-        label: t.passwordWeak,
-      };
-    }
-
-    if (score <= 4) {
-      return {
-        level: 2,
-        label: t.passwordMedium,
-      };
-    }
-
-    return {
-      level: 3,
-      label: t.passwordStrong,
-    };
-  }, [password, t]);
+    }, [password, t]);
 
   function handleLocaleChange(
     nextLocale: Locale,
   ) {
-    if (loading) return;
+    if (loading) {
+      return;
+    }
 
     setLocale(nextLocale);
     setLanguage(nextLocale);
@@ -506,23 +545,36 @@ export default function RegisterPage() {
       return false;
     }
 
-    if (!isValidEmail(cleanEmailValue)) {
+    if (
+      !isValidEmail(
+        cleanEmailValue,
+      )
+    ) {
       setError(t.invalidEmail);
       return false;
     }
 
     if (password.length < 8) {
-      setError(t.passwordTooShort);
+      setError(
+        t.passwordTooShort,
+      );
       return false;
     }
 
-    if (password !== confirmation) {
-      setError(t.passwordMismatch);
+    if (
+      password !==
+      confirmation
+    ) {
+      setError(
+        t.passwordMismatch,
+      );
       return false;
     }
 
     if (!acceptTerms) {
-      setError(t.termsRequired);
+      setError(
+        t.termsRequired,
+      );
       return false;
     }
 
@@ -546,62 +598,63 @@ export default function RegisterPage() {
       const cleanEmailValue =
         cleanEmail(email);
 
-      /*
-       * ==========================================================
-       * INSCRIPTION
-       * ==========================================================
-       *
-       * L'API /api/inscription crée :
-       *
-       * 1. le compte Supabase Auth
-       * 2. la pharmacie
-       * 3. le profil du responsable
-       * 4. l'abonnement TRIAL
-       * 5. une période gratuite de 7 jours
-       *
-       * Le calcul de la durée du trial est effectué côté serveur.
-       */
+      const response =
+        await fetch(
+          "/api/inscription",
+          {
+            method: "POST",
 
-      const response = await fetch(
-        "/api/inscription",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Accept: "application/json",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Accept:
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              pharmacyName:
+                pharmacyName.trim(),
+
+              address:
+                address.trim(),
+
+              countryCode,
+
+              city:
+                city.trim(),
+
+              fullName:
+                fullName.trim(),
+
+              phone:
+                phone.trim(),
+
+              email:
+                cleanEmailValue,
+
+              password,
+
+              language,
+
+              /*
+               * L'API peut également enregistrer
+               * l'acceptation des conditions.
+               */
+              acceptTerms: true,
+
+              termsAcceptedAt:
+                new Date().toISOString(),
+            }),
           },
-          body: JSON.stringify({
-            pharmacyName:
-              pharmacyName.trim(),
+        );
 
-            address:
-              address.trim(),
+      const data =
+        await response.json();
 
-            countryCode,
-
-            city:
-              city.trim(),
-
-            fullName:
-              fullName.trim(),
-
-            phone:
-              phone.trim(),
-
-            email:
-              cleanEmailValue,
-
-            password,
-
-            language,
-          }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data?.success) {
+      if (
+        !response.ok ||
+        !data?.success
+      ) {
         console.error(
           "REGISTER ERROR:",
           data,
@@ -618,28 +671,12 @@ export default function RegisterPage() {
         return;
       }
 
-      /*
-       * ==========================================================
-       * SUCCÈS
-       * ==========================================================
-       *
-       * Le serveur vient de créer l'essai gratuit.
-       *
-       * Nous ne créons PAS l'abonnement côté navigateur.
-       * Nous ne faisons PAS de paiement ici.
-       */
-
-      setLocaleCookie(language);
+      setLocaleCookie(
+        language,
+      );
 
       setSuccess(true);
       setLoading(false);
-
-      /*
-       * Redirection vers la connexion.
-       *
-       * Le pharmacien pourra ensuite se connecter.
-       * Le système vérifiera alors son trial de 7 jours.
-       */
 
       window.setTimeout(() => {
         router.replace(
@@ -654,10 +691,14 @@ export default function RegisterPage() {
         err,
       );
 
-      setError(t.registerError);
+      setError(
+        t.registerError,
+      );
+
       setLoading(false);
     }
   }
+
   return (
     <main className="pf-auth-page">
       <div className="pf-auth-background">
@@ -692,57 +733,73 @@ export default function RegisterPage() {
           </Link>
 
           {/* =====================================================
-              SÉLECTEUR DE LANGUE
+              LANGUE
           ====================================================== */}
 
           <div
             style={{
               display: "flex",
-              justifyContent: "flex-end",
+              justifyContent:
+                "flex-end",
               marginBottom: "18px",
             }}
           >
             <div
               style={{
-                display: "inline-flex",
-                alignItems: "center",
+                display:
+                  "inline-flex",
+                alignItems:
+                  "center",
                 gap: "4px",
                 padding: "4px",
-                borderRadius: "12px",
-                background: "#f1f5f9",
-                border: "1px solid #e2e8f0",
+                borderRadius:
+                  "12px",
+                background:
+                  "#f1f5f9",
+                border:
+                  "1px solid #e2e8f0",
               }}
             >
               <button
                 type="button"
                 onClick={() =>
-                  handleLocaleChange("fr")
+                  handleLocaleChange(
+                    "fr",
+                  )
                 }
                 disabled={loading}
                 aria-pressed={
-                  locale === "fr"
+                  locale ===
+                  "fr"
                 }
                 style={{
-                  border: "none",
-                  borderRadius: "9px",
-                  padding: "7px 11px",
+                  border:
+                    "none",
+                  borderRadius:
+                    "9px",
+                  padding:
+                    "7px 11px",
                   cursor: loading
                     ? "not-allowed"
                     : "pointer",
                   background:
-                    locale === "fr"
+                    locale ===
+                    "fr"
                       ? "#ffffff"
                       : "transparent",
                   color:
-                    locale === "fr"
+                    locale ===
+                    "fr"
                       ? "#0f766e"
                       : "#64748b",
                   fontWeight:
-                    locale === "fr"
+                    locale ===
+                    "fr"
                       ? 700
                       : 500,
                   boxShadow:
-                    locale === "fr"
+                    locale ===
+                    "fr"
                       ? "0 1px 4px rgba(15, 23, 42, 0.10)"
                       : "none",
                 }}
@@ -753,33 +810,43 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() =>
-                  handleLocaleChange("en")
+                  handleLocaleChange(
+                    "en",
+                  )
                 }
                 disabled={loading}
                 aria-pressed={
-                  locale === "en"
+                  locale ===
+                  "en"
                 }
                 style={{
-                  border: "none",
-                  borderRadius: "9px",
-                  padding: "7px 11px",
+                  border:
+                    "none",
+                  borderRadius:
+                    "9px",
+                  padding:
+                    "7px 11px",
                   cursor: loading
                     ? "not-allowed"
                     : "pointer",
                   background:
-                    locale === "en"
+                    locale ===
+                    "en"
                       ? "#ffffff"
                       : "transparent",
                   color:
-                    locale === "en"
+                    locale ===
+                    "en"
                       ? "#0f766e"
                       : "#64748b",
                   fontWeight:
-                    locale === "en"
+                    locale ===
+                    "en"
                       ? 700
                       : 500,
                   boxShadow:
-                    locale === "en"
+                    locale ===
+                    "en"
                       ? "0 1px 4px rgba(15, 23, 42, 0.10)"
                       : "none",
                 }}
@@ -799,12 +866,16 @@ export default function RegisterPage() {
                 🏥
               </span>
 
-              <span>{t.badge}</span>
+              <span>
+                {t.badge}
+              </span>
             </div>
 
             <h1>{t.title}</h1>
 
-            <p>{t.description}</p>
+            <p>
+              {t.description}
+            </p>
           </div>
 
           {/* =====================================================
@@ -816,16 +887,20 @@ export default function RegisterPage() {
               marginTop: "20px",
               marginBottom: "24px",
               padding: "18px",
-              borderRadius: "16px",
-              border: "1px solid #99f6e4",
+              borderRadius:
+                "16px",
+              border:
+                "1px solid #99f6e4",
               background:
                 "linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%)",
             }}
           >
             <div
               style={{
-                display: "flex",
-                alignItems: "flex-start",
+                display:
+                  "flex",
+                alignItems:
+                  "flex-start",
                 gap: "12px",
               }}
             >
@@ -833,13 +908,20 @@ export default function RegisterPage() {
                 style={{
                   width: "42px",
                   height: "42px",
-                  minWidth: "42px",
-                  borderRadius: "12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "#ccfbf1",
-                  fontSize: "21px",
+                  minWidth:
+                    "42px",
+                  borderRadius:
+                    "12px",
+                  display:
+                    "flex",
+                  alignItems:
+                    "center",
+                  justifyContent:
+                    "center",
+                  background:
+                    "#ccfbf1",
+                  fontSize:
+                    "21px",
                 }}
               >
                 🎁
@@ -848,10 +930,14 @@ export default function RegisterPage() {
               <div>
                 <strong
                   style={{
-                    display: "block",
-                    fontSize: "17px",
-                    color: "#115e59",
-                    marginBottom: "4px",
+                    display:
+                      "block",
+                    fontSize:
+                      "17px",
+                    color:
+                      "#115e59",
+                    marginBottom:
+                      "4px",
                   }}
                 >
                   {t.trialTitle}
@@ -859,29 +945,50 @@ export default function RegisterPage() {
 
                 <span
                   style={{
-                    display: "block",
-                    fontSize: "13px",
-                    lineHeight: 1.5,
-                    color: "#475569",
+                    display:
+                      "block",
+                    fontSize:
+                      "13px",
+                    lineHeight:
+                      1.5,
+                    color:
+                      "#475569",
                   }}
                 >
-                  {t.trialDescription}
+                  {
+                    t.trialDescription
+                  }
                 </span>
               </div>
             </div>
 
             <div
               style={{
-                display: "grid",
+                display:
+                  "grid",
                 gap: "7px",
-                marginTop: "14px",
-                fontSize: "13px",
-                color: "#334155",
+                marginTop:
+                  "14px",
+                fontSize:
+                  "13px",
+                color:
+                  "#334155",
               }}
             >
-              <div>✓ {t.trialPoint1}</div>
-              <div>✓ {t.trialPoint2}</div>
-              <div>✓ {t.trialPoint3}</div>
+              <div>
+                ✓{" "}
+                {t.trialPoint1}
+              </div>
+
+              <div>
+                ✓{" "}
+                {t.trialPoint2}
+              </div>
+
+              <div>
+                ✓{" "}
+                {t.trialPoint3}
+              </div>
             </div>
           </div>
 
@@ -894,7 +1001,8 @@ export default function RegisterPage() {
               className="pf-alert"
               role="status"
               style={{
-                marginBottom: "20px",
+                marginBottom:
+                  "20px",
                 border:
                   "1px solid #86efac",
                 background:
@@ -903,25 +1011,30 @@ export default function RegisterPage() {
                   "#166534",
               }}
             >
-              <span
-                className="pf-alert-icon"
-              >
+              <span className="pf-alert-icon">
                 ✓
               </span>
 
               <div>
                 <strong>
-                  {t.successTitle}
+                  {
+                    t.successTitle
+                  }
                 </strong>
 
                 <span
                   style={{
-                    display: "block",
-                    marginTop: "4px",
-                    lineHeight: 1.5,
+                    display:
+                      "block",
+                    marginTop:
+                      "4px",
+                    lineHeight:
+                      1.5,
                   }}
                 >
-                  {t.successDescription}
+                  {
+                    t.successDescription
+                  }
                 </span>
               </div>
             </div>
@@ -940,36 +1053,44 @@ export default function RegisterPage() {
                 !
               </span>
 
-              <span>{error}</span>
+              <span>
+                {error}
+              </span>
             </div>
           )}
 
           {!success && (
             <form
-              onSubmit={handleSubmit}
+              onSubmit={
+                handleSubmit
+              }
               className="pf-auth-form"
             >
 
               {/* =================================================
-                  INFORMATIONS PHARMACIE
+                  PHARMACIE
               ================================================== */}
 
               <div
                 style={{
-                  marginBottom: "4px",
-                  paddingBottom: "4px",
+                  marginBottom:
+                    "4px",
                 }}
               >
                 <h2
                   style={{
                     margin: 0,
-                    fontSize: "16px",
-                    fontWeight: 700,
+                    fontSize:
+                      "16px",
+                    fontWeight:
+                      700,
                     color:
                       "var(--pf-text, #0f172a)",
                   }}
                 >
-                  {t.pharmacySection}
+                  {
+                    t.pharmacySection
+                  }
                 </h2>
               </div>
 
@@ -980,7 +1101,9 @@ export default function RegisterPage() {
                   htmlFor="pharmacyName"
                   className="pf-form-label"
                 >
-                  {t.pharmacyName}
+                  {
+                    t.pharmacyName
+                  }
                 </label>
 
                 <div className="pf-input-wrapper">
@@ -995,10 +1118,16 @@ export default function RegisterPage() {
                     id="pharmacyName"
                     name="pharmacyName"
                     type="text"
-                    value={pharmacyName}
-                    onChange={(event) => {
+                    value={
+                      pharmacyName
+                    }
+                    onChange={(
+                      event,
+                    ) => {
                       setPharmacyName(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1010,7 +1139,9 @@ export default function RegisterPage() {
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="organization"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   />
                 </div>
@@ -1037,10 +1168,16 @@ export default function RegisterPage() {
                   <select
                     id="countryCode"
                     name="countryCode"
-                    value={countryCode}
-                    onChange={(event) => {
+                    value={
+                      countryCode
+                    }
+                    onChange={(
+                      event,
+                    ) => {
                       setCountryCode(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1048,21 +1185,36 @@ export default function RegisterPage() {
                       }
                     }}
                     className="pf-form-input pf-form-input-with-icon"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   >
                     <option value="">
-                      {t.countryPlaceholder}
+                      {
+                        t.countryPlaceholder
+                      }
                     </option>
 
                     {COUNTRIES.map(
-                      (country) => (
+                      (
+                        country,
+                      ) => (
                         <option
-                          key={country.code}
-                          value={country.code}
+                          key={
+                            country.code
+                          }
+                          value={
+                            country.code
+                          }
                         >
-                          {country.name} —{" "}
-                          {country.currency}
+                          {
+                            country.name
+                          }{" "}
+                          —{" "}
+                          {
+                            country.currency
+                          }
                         </option>
                       ),
                     )}
@@ -1093,9 +1245,13 @@ export default function RegisterPage() {
                     name="city"
                     type="text"
                     value={city}
-                    onChange={(event) => {
+                    onChange={(
+                      event,
+                    ) => {
                       setCity(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1107,7 +1263,9 @@ export default function RegisterPage() {
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="address-level2"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   />
                 </div>
@@ -1136,9 +1294,13 @@ export default function RegisterPage() {
                     name="address"
                     type="text"
                     value={address}
-                    onChange={(event) => {
+                    onChange={(
+                      event,
+                    ) => {
                       setAddress(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1150,21 +1312,26 @@ export default function RegisterPage() {
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="street-address"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   />
                 </div>
               </div>
 
               {/* =================================================
-                  INFORMATIONS RESPONSABLE
+                  RESPONSABLE
               ================================================== */}
 
               <div
                 style={{
-                  marginTop: "10px",
-                  marginBottom: "4px",
-                  paddingTop: "12px",
+                  marginTop:
+                    "10px",
+                  marginBottom:
+                    "4px",
+                  paddingTop:
+                    "12px",
                   borderTop:
                     "1px solid var(--pf-border, #e2e8f0)",
                 }}
@@ -1172,17 +1339,21 @@ export default function RegisterPage() {
                 <h2
                   style={{
                     margin: 0,
-                    fontSize: "16px",
-                    fontWeight: 700,
+                    fontSize:
+                      "16px",
+                    fontWeight:
+                      700,
                     color:
                       "var(--pf-text, #0f172a)",
                   }}
                 >
-                  {t.accountSection}
+                  {
+                    t.accountSection
+                  }
                 </h2>
               </div>
 
-              {/* NOM COMPLET */}
+              {/* NOM */}
 
               <div className="pf-form-group">
                 <label
@@ -1205,9 +1376,13 @@ export default function RegisterPage() {
                     name="fullName"
                     type="text"
                     value={fullName}
-                    onChange={(event) => {
+                    onChange={(
+                      event,
+                    ) => {
                       setFullName(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1219,7 +1394,9 @@ export default function RegisterPage() {
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="name"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   />
                 </div>
@@ -1248,9 +1425,13 @@ export default function RegisterPage() {
                     name="phone"
                     type="tel"
                     value={phone}
-                    onChange={(event) => {
+                    onChange={(
+                      event,
+                    ) => {
                       setPhone(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1262,7 +1443,9 @@ export default function RegisterPage() {
                     }
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="tel"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   />
                 </div>
@@ -1291,9 +1474,13 @@ export default function RegisterPage() {
                     name="email"
                     type="email"
                     value={email}
-                    onChange={(event) => {
+                    onChange={(
+                      event,
+                    ) => {
                       setEmail(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1306,8 +1493,12 @@ export default function RegisterPage() {
                     className="pf-form-input pf-form-input-with-icon"
                     autoComplete="email"
                     autoCapitalize="none"
-                    spellCheck={false}
-                    disabled={loading}
+                    spellCheck={
+                      false
+                    }
+                    disabled={
+                      loading
+                    }
                     required
                   />
                 </div>
@@ -1340,9 +1531,13 @@ export default function RegisterPage() {
                         : "password"
                     }
                     value={password}
-                    onChange={(event) => {
+                    onChange={(
+                      event,
+                    ) => {
                       setPassword(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1354,7 +1549,9 @@ export default function RegisterPage() {
                     }
                     className="pf-form-input pf-form-input-with-icon pf-form-input-with-action"
                     autoComplete="new-password"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   />
 
@@ -1363,14 +1560,19 @@ export default function RegisterPage() {
                     className="pf-input-action"
                     onClick={() =>
                       setShowPassword(
-                        (value) => !value,
+                        (
+                          value,
+                        ) =>
+                          !value,
                       )
                     }
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     aria-label={
                       showPassword
-                        ? "Masquer"
-                        : "Afficher"
+                        ? "Masquer le mot de passe"
+                        : "Afficher le mot de passe"
                     }
                   >
                     {showPassword
@@ -1382,31 +1584,42 @@ export default function RegisterPage() {
                 {password && (
                   <div
                     style={{
-                      marginTop: "8px",
+                      marginTop:
+                        "8px",
                     }}
                   >
                     <div
                       style={{
-                        display: "flex",
-                        gap: "4px",
-                        marginBottom: "5px",
+                        display:
+                          "flex",
+                        gap:
+                          "4px",
+                        marginBottom:
+                          "5px",
                       }}
                     >
                       {[1, 2, 3].map(
-                        (level) => (
+                        (
+                          level,
+                        ) => (
                           <div
-                            key={level}
+                            key={
+                              level
+                            }
                             style={{
-                              height: "4px",
+                              height:
+                                "4px",
                               flex: 1,
                               borderRadius:
                                 "999px",
                               background:
                                 passwordStrength.level >=
                                 level
-                                  ? level === 1
+                                  ? level ===
+                                    1
                                     ? "#ef4444"
-                                    : level === 2
+                                    : level ===
+                                        2
                                       ? "#f59e0b"
                                       : "#22c55e"
                                   : "#e2e8f0",
@@ -1418,23 +1631,32 @@ export default function RegisterPage() {
 
                     <div
                       style={{
-                        fontSize: "12px",
-                        color: "#64748b",
+                        fontSize:
+                          "12px",
+                        color:
+                          "#64748b",
                       }}
                     >
-                      {passwordStrength.label}
+                      {
+                        passwordStrength.label
+                      }
                     </div>
                   </div>
                 )}
 
                 <div
                   style={{
-                    marginTop: "6px",
-                    fontSize: "12px",
-                    color: "#64748b",
+                    marginTop:
+                      "6px",
+                    fontSize:
+                      "12px",
+                    color:
+                      "#64748b",
                   }}
                 >
-                  {t.passwordRequirements}
+                  {
+                    t.passwordRequirements
+                  }
                 </div>
               </div>
 
@@ -1445,7 +1667,9 @@ export default function RegisterPage() {
                   htmlFor="confirmation"
                   className="pf-form-label"
                 >
-                  {t.confirmation}
+                  {
+                    t.confirmation
+                  }
                 </label>
 
                 <div className="pf-input-wrapper">
@@ -1464,10 +1688,16 @@ export default function RegisterPage() {
                         ? "text"
                         : "password"
                     }
-                    value={confirmation}
-                    onChange={(event) => {
+                    value={
+                      confirmation
+                    }
+                    onChange={(
+                      event,
+                    ) => {
                       setConfirmation(
-                        event.target.value,
+                        event
+                          .target
+                          .value,
                       );
 
                       if (error) {
@@ -1479,7 +1709,9 @@ export default function RegisterPage() {
                     }
                     className="pf-form-input pf-form-input-with-icon pf-form-input-with-action"
                     autoComplete="new-password"
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     required
                   />
 
@@ -1488,14 +1720,19 @@ export default function RegisterPage() {
                     className="pf-input-action"
                     onClick={() =>
                       setShowConfirmation(
-                        (value) => !value,
+                        (
+                          value,
+                        ) =>
+                          !value,
                       )
                     }
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     aria-label={
                       showConfirmation
-                        ? "Masquer"
-                        : "Afficher"
+                        ? "Masquer la confirmation"
+                        : "Afficher la confirmation"
                     }
                   >
                     {showConfirmation
@@ -1510,95 +1747,124 @@ export default function RegisterPage() {
               ================================================== */}
 
               <div className="pf-form-group">
-                <label
-                  className="pf-form-label"
-                >
+                <label className="pf-form-label">
                   {t.language}
                 </label>
 
                 <div
                   style={{
-                    display: "grid",
+                    display:
+                      "grid",
                     gridTemplateColumns:
                       "1fr 1fr",
-                    gap: "10px",
+                    gap:
+                      "10px",
                   }}
                 >
                   <button
                     type="button"
                     onClick={() =>
-                      setLanguage("fr")
+                      setLanguage(
+                        "fr",
+                      )
                     }
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     style={{
-                      padding: "12px",
-                      borderRadius: "12px",
+                      padding:
+                        "12px",
+                      borderRadius:
+                        "12px",
                       border:
-                        language === "fr"
+                        language ===
+                        "fr"
                           ? "2px solid #0f766e"
                           : "1px solid #e2e8f0",
                       background:
-                        language === "fr"
+                        language ===
+                        "fr"
                           ? "#f0fdfa"
                           : "#ffffff",
                       color:
-                        language === "fr"
+                        language ===
+                        "fr"
                           ? "#0f766e"
                           : "#475569",
                       fontWeight:
-                        language === "fr"
+                        language ===
+                        "fr"
                           ? 700
                           : 500,
-                      cursor: loading
-                        ? "not-allowed"
-                        : "pointer",
+                      cursor:
+                        loading
+                          ? "not-allowed"
+                          : "pointer",
                     }}
                   >
-                    🇫🇷 {t.french}
+                    🇫🇷{" "}
+                    {t.french}
                   </button>
 
                   <button
                     type="button"
                     onClick={() =>
-                      setLanguage("en")
+                      setLanguage(
+                        "en",
+                      )
                     }
-                    disabled={loading}
+                    disabled={
+                      loading
+                    }
                     style={{
-                      padding: "12px",
-                      borderRadius: "12px",
+                      padding:
+                        "12px",
+                      borderRadius:
+                        "12px",
                       border:
-                        language === "en"
+                        language ===
+                        "en"
                           ? "2px solid #0f766e"
                           : "1px solid #e2e8f0",
                       background:
-                        language === "en"
+                        language ===
+                        "en"
                           ? "#f0fdfa"
                           : "#ffffff",
                       color:
-                        language === "en"
+                        language ===
+                        "en"
                           ? "#0f766e"
                           : "#475569",
                       fontWeight:
-                        language === "en"
+                        language ===
+                        "en"
                           ? 700
                           : 500,
-                      cursor: loading
-                        ? "not-allowed"
-                        : "pointer",
+                      cursor:
+                        loading
+                          ? "not-allowed"
+                          : "pointer",
                     }}
                   >
-                    🇬🇧 {t.english}
+                    🇬🇧{" "}
+                    {t.english}
                   </button>
                 </div>
 
                 <div
                   style={{
-                    marginTop: "7px",
-                    fontSize: "12px",
-                    color: "#64748b",
+                    marginTop:
+                      "7px",
+                    fontSize:
+                      "12px",
+                    color:
+                      "#64748b",
                   }}
                 >
-                  {t.languageDescription}
+                  {
+                    t.languageDescription
+                  }
                 </div>
               </div>
 
@@ -1609,79 +1875,356 @@ export default function RegisterPage() {
               {selectedCountry && (
                 <div
                   style={{
-                    padding: "12px 14px",
-                    borderRadius: "12px",
-                    background: "#f8fafc",
+                    padding:
+                      "12px 14px",
+                    borderRadius:
+                      "12px",
+                    background:
+                      "#f8fafc",
                     border:
                       "1px solid #e2e8f0",
-                    fontSize: "13px",
-                    color: "#475569",
+                    fontSize:
+                      "13px",
+                    color:
+                      "#475569",
                   }}
                 >
                   <strong>
-                    {t.currency} :
+                    {
+                      t.currency
+                    }{" "}
+                    :
                   </strong>{" "}
-                  {selectedCountry.currency}
+                  {
+                    selectedCountry.currency
+                  }
                 </div>
               )}
 
               {/* =================================================
-                  CONDITIONS
+                  CONDITIONS D'UTILISATION
               ================================================== */}
 
-              <label
+              <div
                 style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "10px",
-                  cursor: loading
-                    ? "not-allowed"
-                    : "pointer",
-                  fontSize: "13px",
-                  lineHeight: 1.5,
-                  color: "#475569",
+                  marginTop:
+                    "8px",
+                  padding:
+                    "16px",
+                  borderRadius:
+                    "14px",
+                  border:
+                    acceptTerms
+                      ? "1px solid #99f6e4"
+                      : "1px solid #e2e8f0",
+                  background:
+                    acceptTerms
+                      ? "#f0fdfa"
+                      : "#f8fafc",
+                  transition:
+                    "all 0.2s ease",
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={acceptTerms}
-                  onChange={(event) => {
-                    setAcceptTerms(
-                      event.target.checked,
-                    );
-
-                    if (error) {
-                      setError("");
-                    }
-                  }}
-                  disabled={loading}
+                <label
+                  htmlFor="acceptTerms"
                   style={{
-                    marginTop: "3px",
+                    display:
+                      "flex",
+                    alignItems:
+                      "flex-start",
+                    gap:
+                      "12px",
+                    cursor:
+                      loading
+                        ? "not-allowed"
+                        : "pointer",
+                    userSelect:
+                      "none",
                   }}
-                  required
-                />
+                >
+                  {/* CASE À COCHER */}
 
-                <span>{t.terms}</span>
-              </label>
+                  <span
+                    style={{
+                      position:
+                        "relative",
+                      width:
+                        "22px",
+                      minWidth:
+                        "22px",
+                      height:
+                        "22px",
+                      marginTop:
+                        "1px",
+                    }}
+                  >
+                    <input
+                      id="acceptTerms"
+                      name="acceptTerms"
+                      type="checkbox"
+                      checked={
+                        acceptTerms
+                      }
+                      onChange={(
+                        event,
+                      ) => {
+                        setAcceptTerms(
+                          event
+                            .target
+                            .checked,
+                        );
+
+                        if (error) {
+                          setError(
+                            "",
+                          );
+                        }
+                      }}
+                      disabled={
+                        loading
+                      }
+                      required
+                      style={{
+                        position:
+                          "absolute",
+                        opacity: 0,
+                        width:
+                          "22px",
+                        height:
+                          "22px",
+                        margin: 0,
+                        cursor:
+                          loading
+                            ? "not-allowed"
+                            : "pointer",
+                        zIndex: 2,
+                      }}
+                    />
+
+                    {/* CASE VISUELLE */}
+
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width:
+                          "22px",
+                        height:
+                          "22px",
+                        minWidth:
+                          "22px",
+                        borderRadius:
+                          "6px",
+                        border:
+                          acceptTerms
+                            ? "2px solid #0f766e"
+                            : "2px solid #94a3b8",
+                        background:
+                          acceptTerms
+                            ? "#0f766e"
+                            : "#ffffff",
+                        display:
+                          "flex",
+                        alignItems:
+                          "center",
+                        justifyContent:
+                          "center",
+                        color:
+                          "#ffffff",
+                        fontSize:
+                          "14px",
+                        fontWeight:
+                          800,
+                        transition:
+                          "all 0.2s ease",
+                        boxSizing:
+                          "border-box",
+                      }}
+                    >
+                      {acceptTerms
+                        ? "✓"
+                        : ""}
+                    </span>
+                  </span>
+
+                  {/* TEXTE */}
+
+                  <span
+                    style={{
+                      flex:
+                        1,
+                      fontSize:
+                        "13px",
+                      lineHeight:
+                        1.55,
+                      color:
+                        "#475569",
+                    }}
+                  >
+                    {locale ===
+                    "fr" ? (
+                      <>
+                        {
+                          t.termsIntro
+                        }{" "}
+                        <Link
+                          href="/conditions-utilisation"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color:
+                              "#0f766e",
+                            fontWeight:
+                              700,
+                            textDecoration:
+                              "underline",
+                            textUnderlineOffset:
+                              "2px",
+                          }}
+                        >
+                          {
+                            t.termsLink
+                          }
+                        </Link>{" "}
+                        {
+                          t.privacyAnd
+                        }{" "}
+                        <Link
+                          href="/politique-confidentialite"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color:
+                              "#0f766e",
+                            fontWeight:
+                              700,
+                            textDecoration:
+                              "underline",
+                            textUnderlineOffset:
+                              "2px",
+                          }}
+                        >
+                          {
+                            t.privacyLink
+                          }
+                        </Link>{" "}
+                        {
+                          t.termsEnd
+                        }
+                      </>
+                    ) : (
+                      <>
+                        {
+                          t.termsIntro
+                        }{" "}
+                        <Link
+                          href="/terms-of-use"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color:
+                              "#0f766e",
+                            fontWeight:
+                              700,
+                            textDecoration:
+                              "underline",
+                            textUnderlineOffset:
+                              "2px",
+                          }}
+                        >
+                          {
+                            t.termsLink
+                          }
+                        </Link>{" "}
+                        {
+                          t.privacyAnd
+                        }{" "}
+                        <Link
+                          href="/privacy-policy"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color:
+                              "#0f766e",
+                            fontWeight:
+                              700,
+                            textDecoration:
+                              "underline",
+                            textUnderlineOffset:
+                              "2px",
+                          }}
+                        >
+                          {
+                            t.privacyLink
+                          }
+                        </Link>{" "}
+                        {
+                          t.termsEnd
+                        }
+                      </>
+                    )}
+                  </span>
+                </label>
+
+                {!acceptTerms && (
+                  <div
+                    style={{
+                      marginTop:
+                        "10px",
+                      marginLeft:
+                        "34px",
+                      fontSize:
+                        "11px",
+                      color:
+                        "#64748b",
+                    }}
+                  >
+                    {
+                      t.termsHint
+                    }
+                  </div>
+                )}
+              </div>
 
               {/* =================================================
-                  BOUTON
+                  BOUTON CRÉATION
               ================================================== */}
 
               <button
                 type="submit"
                 className="pf-btn pf-btn-primary pf-btn-full pf-auth-submit"
-                disabled={loading}
+                disabled={
+                  loading ||
+                  !acceptTerms
+                }
+                style={{
+                  opacity:
+                    !acceptTerms
+                      ? 0.55
+                      : 1,
+                  cursor:
+                    loading ||
+                    !acceptTerms
+                      ? "not-allowed"
+                      : "pointer",
+                  transition:
+                    "all 0.2s ease",
+                }}
               >
                 {loading ? (
                   <>
                     <span className="pf-spinner pf-spinner-small" />
-                    {t.creating}
+                    {
+                      t.creating
+                    }
                   </>
                 ) : (
                   <>
-                    <span>🚀</span>
-                    {t.createAccount}
+                    <span>
+                      🚀
+                    </span>
+                    {
+                      t.createAccount
+                    }
                   </>
                 )}
               </button>
@@ -1694,21 +2237,27 @@ export default function RegisterPage() {
 
           <div
             style={{
-              marginTop: "24px",
-              paddingTop: "22px",
+              marginTop:
+                "24px",
+              paddingTop:
+                "22px",
               borderTop:
                 "1px solid var(--pf-border, #e2e8f0)",
-              textAlign: "center",
+              textAlign:
+                "center",
             }}
           >
             <span
               style={{
                 color:
                   "var(--pf-text-soft, #64748b)",
-                fontSize: "14px",
+                fontSize:
+                  "14px",
               }}
             >
-              {t.alreadyAccount}
+              {
+                t.alreadyAccount
+              }
             </span>{" "}
 
             <Link
@@ -1729,19 +2278,24 @@ export default function RegisterPage() {
             </span>
 
             <div>
-              <strong>{t.security}</strong>
+              <strong>
+                {t.security}
+              </strong>
 
               <span
                 style={{
-                  display: "block",
-                  marginTop: "3px",
+                  display:
+                    "block",
+                  marginTop:
+                    "3px",
                 }}
               >
-                {t.securityDescription}
+                {
+                  t.securityDescription
+                }
               </span>
             </div>
           </div>
-
         </section>
 
         {/* =======================================================
