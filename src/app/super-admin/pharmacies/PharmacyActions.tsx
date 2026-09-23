@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * ============================================================
@@ -22,11 +22,34 @@ type Props = {
   pharmacy: Pharmacy;
 };
 
+type SubscriptionPlan = {
+  id: string;
+  name: string;
+  code: string;
+  duration_days: number;
+  price: number | string;
+  currency_code: string;
+  is_active: boolean;
+};
+
+type PlansApiResponse = {
+  success?: boolean;
+  error?: string;
+  plans?: SubscriptionPlan[];
+};
+
 type ApiResponse = {
   success?: boolean;
   message?: string;
   error?: string;
   pharmacy?: unknown;
+  subscription?: unknown;
+  plan?: SubscriptionPlan;
+  access?: {
+    enabled?: boolean;
+    started_at?: string;
+    expires_at?: string;
+  };
 };
 
 /**
@@ -46,6 +69,23 @@ export default function PharmacyActions({
   const [loading, setLoading] =
     useState(false);
 
+  const [
+    subscriptionLoading,
+    setSubscriptionLoading,
+  ] = useState(false);
+
+  const [
+    plans,
+    setPlans,
+  ] = useState<SubscriptionPlan[]>(
+    [],
+  );
+
+  const [
+    plansLoaded,
+    setPlansLoaded,
+  ] = useState(false);
+
   /**
    * ==========================================================
    * FERMER LE MENU
@@ -60,13 +100,6 @@ export default function PharmacyActions({
    * ==========================================================
    * LIRE UNE RÉPONSE API
    * ==========================================================
-   *
-   * Cette fonction évite l'erreur :
-   *
-   * Unexpected token '<', "<!DOCTYPE..." is not valid JSON
-   *
-   * lorsqu'une route renvoie accidentellement une page HTML
-   * au lieu d'un JSON.
    */
 
   async function readApiResponse(
@@ -80,10 +113,586 @@ export default function PharmacyActions({
     }
 
     try {
-      return JSON.parse(text) as ApiResponse;
+      return JSON.parse(
+        text,
+      ) as ApiResponse;
     } catch {
       throw new Error(
         `Le serveur a renvoyé une réponse invalide (${response.status}). Vérifiez que la route API existe.`,
+      );
+    }
+  }
+
+  /**
+   * ==========================================================
+   * CHARGER LES FORFAITS
+   * ==========================================================
+   *
+   * Les forfaits sont récupérés depuis l'API.
+   *
+   * Nous n'écrivons donc pas en dur les IDs Supabase
+   * dans le composant.
+   */
+
+  async function loadPlans() {
+    if (plansLoaded) {
+      return plans;
+    }
+
+    try {
+      setSubscriptionLoading(
+        true,
+      );
+
+      const response =
+        await fetch(
+          "/api/super-admin/pharmacies/manual-subscription",
+          {
+            method: "GET",
+            headers: {
+              Accept:
+                "application/json",
+            },
+
+            cache: "no-store",
+          },
+        );
+
+      const data =
+        (await readApiResponse(
+          response,
+        )) as PlansApiResponse;
+
+      if (
+        !response.ok ||
+        data.success !== true
+      ) {
+        throw new Error(
+          data.error ||
+            "Impossible de récupérer les forfaits.",
+        );
+      }
+
+      const activePlans =
+        Array.isArray(
+          data.plans,
+        )
+          ? data.plans.filter(
+              (plan) =>
+                plan &&
+                plan.is_active ===
+                  true &&
+                Number.isFinite(
+                  Number(
+                    plan.duration_days,
+                  ),
+                ) &&
+                Number(
+                  plan.duration_days,
+                ) > 0,
+            )
+          : [];
+
+      setPlans(
+        activePlans,
+      );
+
+      setPlansLoaded(
+        true,
+      );
+
+      return activePlans;
+    } catch (error) {
+      console.error(
+        "Erreur chargement forfaits:",
+        error,
+      );
+
+      throw error;
+    } finally {
+      setSubscriptionLoading(
+        false,
+      );
+    }
+  }
+
+  /**
+   * ==========================================================
+   * FORMATAGE DU PRIX
+   * ==========================================================
+   */
+
+  function formatPrice(
+    price: number | string,
+    currency: string,
+  ) {
+    const numericPrice =
+      Number(price);
+
+    if (
+      !Number.isFinite(
+        numericPrice,
+      )
+    ) {
+      return `${price} ${currency}`;
+    }
+
+    return `${new Intl.NumberFormat(
+      "fr-FR",
+    ).format(
+      numericPrice,
+    )} ${currency}`;
+  }
+
+  /**
+   * ==========================================================
+   * NOM DU FORFAIT
+   * ==========================================================
+   */
+
+  function getPlanLabel(
+    plan: SubscriptionPlan,
+  ) {
+    const code =
+      plan.code
+        .trim()
+        .toLowerCase();
+
+    if (
+      code.includes(
+        "month",
+      ) ||
+      code.includes(
+        "mens",
+      )
+    ) {
+      return "Mensuel";
+    }
+
+    if (
+      code.includes(
+        "year",
+      ) ||
+      code.includes(
+        "annual",
+      ) ||
+      code.includes(
+        "annuel",
+      )
+    ) {
+      return "Annuel";
+    }
+
+    return plan.name;
+  }
+
+  /**
+   * ==========================================================
+   * CHOISIR LE FORFAIT
+   * ==========================================================
+   */
+
+  async function choosePlanAndActivate() {
+    try {
+      setSubscriptionLoading(
+        true,
+      );
+
+      const availablePlans =
+        await loadPlans();
+
+      if (
+        availablePlans.length ===
+        0
+      ) {
+        throw new Error(
+          "Aucun forfait actif n'est disponible.",
+        );
+      }
+
+      /**
+       * --------------------------------------------------------
+       * Rechercher les forfaits mensuel et annuel
+       * --------------------------------------------------------
+       */
+
+      const monthlyPlan =
+        availablePlans.find(
+          (plan) => {
+            const code =
+              plan.code
+                .trim()
+                .toLowerCase();
+
+            return (
+              code.includes(
+                "month",
+              ) ||
+              code.includes(
+                "mens",
+              ) ||
+              Number(
+                plan.duration_days,
+              ) === 30
+            );
+          },
+        );
+
+      const annualPlan =
+        availablePlans.find(
+          (plan) => {
+            const code =
+              plan.code
+                .trim()
+                .toLowerCase();
+
+            return (
+              code.includes(
+                "year",
+              ) ||
+              code.includes(
+                "annual",
+              ) ||
+              code.includes(
+                "annuel",
+              ) ||
+              Number(
+                plan.duration_days,
+              ) === 365
+            );
+          },
+        );
+
+      /**
+       * --------------------------------------------------------
+       * Construire le choix
+       * --------------------------------------------------------
+       */
+
+      let selectedPlan:
+        | SubscriptionPlan
+        | undefined;
+
+      if (
+        monthlyPlan &&
+        annualPlan
+      ) {
+        const choice =
+          window.prompt(
+            [
+              "ACTIVATION D'ABONNEMENT",
+              "",
+              `1 — ${getPlanLabel(
+                monthlyPlan,
+              )} : ${formatPrice(
+                monthlyPlan.price,
+                monthlyPlan.currency_code,
+              )} / ${monthlyPlan.duration_days} jours`,
+              `2 — ${getPlanLabel(
+                annualPlan,
+              )} : ${formatPrice(
+                annualPlan.price,
+                annualPlan.currency_code,
+              )} / ${annualPlan.duration_days} jours`,
+              "",
+              "Tapez 1 ou 2 :",
+            ].join(
+              "\n",
+            ),
+            "1",
+          );
+
+        if (
+          choice ===
+          null
+        ) {
+          return;
+        }
+
+        if (
+          choice.trim() ===
+          "1"
+        ) {
+          selectedPlan =
+            monthlyPlan;
+        } else if (
+          choice.trim() ===
+          "2"
+        ) {
+          selectedPlan =
+            annualPlan;
+        } else {
+          alert(
+            "Choix invalide. Veuillez sélectionner 1 ou 2.",
+          );
+
+          return;
+        }
+      } else {
+        /**
+         * ------------------------------------------------------
+         * Si un seul forfait est disponible
+         * ------------------------------------------------------
+         */
+
+        if (
+          availablePlans.length ===
+          1
+        ) {
+          selectedPlan =
+            availablePlans[0];
+        } else {
+          const options =
+            availablePlans
+              .map(
+                (
+                  plan,
+                  index,
+                ) =>
+                  `${index + 1} — ${plan.name} : ${formatPrice(
+                    plan.price,
+                    plan.currency_code,
+                  )} / ${plan.duration_days} jours`,
+              )
+              .join(
+                "\n",
+              );
+
+          const choice =
+            window.prompt(
+              [
+                "ACTIVATION D'ABONNEMENT",
+                "",
+                options,
+                "",
+                "Choisissez le numéro du forfait :",
+              ].join(
+                "\n",
+              ),
+              "1",
+            );
+
+          if (
+            choice ===
+            null
+          ) {
+            return;
+          }
+
+          const index =
+            Number(
+              choice,
+            ) - 1;
+
+          if (
+            !Number.isInteger(
+              index,
+            ) ||
+            !availablePlans[
+              index
+            ]
+          ) {
+            alert(
+              "Choix de forfait invalide.",
+            );
+
+            return;
+          }
+
+          selectedPlan =
+            availablePlans[
+              index
+            ];
+        }
+      }
+
+      if (
+        !selectedPlan
+      ) {
+        throw new Error(
+          "Aucun forfait n'a été sélectionné.",
+        );
+      }
+
+      /**
+       * --------------------------------------------------------
+       * Confirmation du paiement
+       * --------------------------------------------------------
+       */
+
+      const paymentConfirmed =
+        window.confirm(
+          [
+            `Pharmacie : ${pharmacy.name}`,
+            "",
+            `Forfait : ${getPlanLabel(
+              selectedPlan,
+            )}`,
+            `Prix : ${formatPrice(
+              selectedPlan.price,
+              selectedPlan.currency_code,
+            )}`,
+            `Durée : ${selectedPlan.duration_days} jours`,
+            "",
+            "Mode de paiement : ESPÈCES",
+            "",
+            "Confirmez-vous avoir reçu le paiement ?",
+          ].join(
+            "\n",
+          ),
+        );
+
+      if (
+        !paymentConfirmed
+      ) {
+        return;
+      }
+
+      /**
+       * --------------------------------------------------------
+       * Motif
+       * --------------------------------------------------------
+       */
+
+      const reason =
+        window.prompt(
+          "Indiquez le motif ou la référence du paiement :",
+          "Paiement en espèces reçu",
+        );
+
+      if (
+        reason ===
+          null ||
+        !reason.trim()
+      ) {
+        alert(
+          "Le motif du paiement est obligatoire.",
+        );
+
+        return;
+      }
+
+      /**
+       * --------------------------------------------------------
+       * Appel API
+       * --------------------------------------------------------
+       */
+
+      setLoading(
+        true,
+      );
+
+      closeMenu();
+
+      const response =
+        await fetch(
+          "/api/super-admin/pharmacies/manual-subscription",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Accept:
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              pharmacyId:
+                pharmacy.id,
+
+              planId:
+                selectedPlan.id,
+
+              reason:
+                reason.trim(),
+            }),
+          },
+        );
+
+      const data =
+        await readApiResponse(
+          response,
+        );
+
+      if (
+        !response.ok ||
+        data.success !== true
+      ) {
+        throw new Error(
+          data.error ||
+            "Impossible d'activer l'abonnement.",
+        );
+      }
+
+      /**
+       * --------------------------------------------------------
+       * Succès
+       * --------------------------------------------------------
+       */
+
+      const expiration =
+        data.access
+          ?.expires_at
+          ? new Date(
+              data.access.expires_at,
+            ).toLocaleString(
+              "fr-FR",
+              {
+                dateStyle:
+                  "medium",
+                timeStyle:
+                  "short",
+              },
+            )
+          : null;
+
+      alert(
+        [
+          "✅ Abonnement activé avec succès.",
+          "",
+          `Pharmacie : ${pharmacy.name}`,
+          `Forfait : ${getPlanLabel(
+            selectedPlan,
+          )}`,
+          `Prix : ${formatPrice(
+            selectedPlan.price,
+            selectedPlan.currency_code,
+          )}`,
+          expiration
+            ? `Expiration : ${expiration}`
+            : "",
+          "",
+          "La pharmacie peut maintenant accéder à PharmaFlow.",
+        ]
+          .filter(
+            Boolean,
+          )
+          .join(
+            "\n",
+          ),
+      );
+
+      router.refresh();
+    } catch (error) {
+      console.error(
+        "Erreur activation abonnement manuel:",
+        error,
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Une erreur est survenue lors de l'activation de l'abonnement.",
+      );
+    } finally {
+      setLoading(
+        false,
+      );
+
+      setSubscriptionLoading(
+        false,
       );
     }
   }
@@ -102,8 +711,10 @@ export default function PharmacyActions({
   ) {
     const labels = {
       active: "activer",
-      inactive: "désactiver",
-      suspended: "suspendre",
+      inactive:
+        "désactiver",
+      suspended:
+        "suspendre",
     };
 
     const confirmed =
@@ -116,7 +727,9 @@ export default function PharmacyActions({
     }
 
     try {
-      setLoading(true);
+      setLoading(
+        true,
+      );
 
       closeMenu();
 
@@ -140,9 +753,11 @@ export default function PharmacyActions({
               status,
 
               reason:
-                status === "active"
+                status ===
+                "active"
                   ? "Activation depuis le panneau Super Admin"
-                  : status === "inactive"
+                  : status ===
+                      "inactive"
                     ? "Désactivation depuis le panneau Super Admin"
                     : "Suspension depuis le panneau Super Admin",
             }),
@@ -164,10 +779,6 @@ export default function PharmacyActions({
         );
       }
 
-      /**
-       * Actualiser les données de la page
-       */
-
       router.refresh();
     } catch (error) {
       console.error(
@@ -181,58 +792,63 @@ export default function PharmacyActions({
           : "Une erreur est survenue.",
       );
     } finally {
-      setLoading(false);
+      setLoading(
+        false,
+      );
     }
   }
 
   /**
    * ==========================================================
-   * DONNER UN ACCÈS MANUEL
+   * DONNER UN ACCÈS MANUEL EXCEPTIONNEL
    * ==========================================================
    */
 
   async function enableManualAccess() {
-    /**
-     * Demander le nombre de jours
-     */
-
     const daysInput =
       window.prompt(
         "Pendant combien de jours voulez-vous donner l'accès manuel ?",
         "30",
       );
 
-    if (daysInput === null) {
+    if (
+      daysInput ===
+      null
+    ) {
       return;
     }
 
     const days =
-      Number(daysInput);
+      Number(
+        daysInput,
+      );
 
     if (
-      !Number.isFinite(days) ||
+      !Number.isFinite(
+        days,
+      ) ||
+      !Number.isInteger(
+        days,
+      ) ||
       days <= 0 ||
       days > 3650
     ) {
       alert(
-        "Veuillez saisir un nombre de jours valide entre 1 et 3650.",
+        "Veuillez saisir un nombre entier de jours entre 1 et 3650.",
       );
 
       return;
     }
 
-    /**
-     * Demander le motif
-     */
-
     const reason =
       window.prompt(
-        "Pourquoi donnez-vous cet accès manuel ?",
-        "Paiement manuel reçu",
+        "Pourquoi donnez-vous cet accès manuel exceptionnel ?",
+        "Accès exceptionnel accordé par le Super Admin",
       );
 
     if (
-      reason === null ||
+      reason ===
+        null ||
       !reason.trim()
     ) {
       alert(
@@ -242,19 +858,18 @@ export default function PharmacyActions({
       return;
     }
 
-    /**
-     * Calcul de la date d'expiration
-     */
-
     const until =
       new Date();
 
     until.setDate(
-      until.getDate() + days,
+      until.getDate() +
+        days,
     );
 
     try {
-      setLoading(true);
+      setLoading(
+        true,
+      );
 
       closeMenu();
 
@@ -275,7 +890,8 @@ export default function PharmacyActions({
               pharmacyId:
                 pharmacy.id,
 
-              enabled: true,
+              enabled:
+                true,
 
               until:
                 until.toISOString(),
@@ -302,7 +918,7 @@ export default function PharmacyActions({
       }
 
       alert(
-        `Accès manuel accordé pendant ${days} jour(s).`,
+        `Accès manuel exceptionnel accordé pendant ${days} jour(s).`,
       );
 
       router.refresh();
@@ -318,7 +934,9 @@ export default function PharmacyActions({
           : "Une erreur est survenue.",
       );
     } finally {
-      setLoading(false);
+      setLoading(
+        false,
+      );
     }
   }
 
@@ -339,7 +957,9 @@ export default function PharmacyActions({
     }
 
     try {
-      setLoading(true);
+      setLoading(
+        true,
+      );
 
       closeMenu();
 
@@ -360,9 +980,11 @@ export default function PharmacyActions({
               pharmacyId:
                 pharmacy.id,
 
-              enabled: false,
+              enabled:
+                false,
 
-              until: null,
+              until:
+                null,
 
               reason:
                 "Accès manuel désactivé depuis le panneau Super Admin",
@@ -402,7 +1024,9 @@ export default function PharmacyActions({
           : "Une erreur est survenue.",
       );
     } finally {
-      setLoading(false);
+      setLoading(
+        false,
+      );
     }
   }
 
@@ -413,10 +1037,6 @@ export default function PharmacyActions({
    */
 
   async function deletePharmacy() {
-    /**
-     * Confirmation renforcée
-     */
-
     const confirmation =
       window.prompt(
         `ATTENTION : cette action est définitive.\n\nPour supprimer "${pharmacy.name}", tapez exactement : SUPPRIMER`,
@@ -430,7 +1050,9 @@ export default function PharmacyActions({
     }
 
     try {
-      setLoading(true);
+      setLoading(
+        true,
+      );
 
       closeMenu();
 
@@ -474,10 +1096,6 @@ export default function PharmacyActions({
           "La pharmacie a été supprimée avec succès.",
       );
 
-      /**
-       * Retour à la liste
-       */
-
       router.push(
         "/super-admin/pharmacies",
       );
@@ -495,26 +1113,29 @@ export default function PharmacyActions({
           : "Une erreur est survenue.",
       );
     } finally {
-      setLoading(false);
+      setLoading(
+        false,
+      );
     }
   }
 
   /**
    * ==========================================================
-   * ÉTAT DE LA PHARMACIE
+   * ÉTAT PHARMACIE
    * ==========================================================
    */
 
   const status =
     String(
-      pharmacy.status || "",
+      pharmacy.status ||
+        "",
     )
       .trim()
       .toLowerCase();
 
   /**
    * ==========================================================
-   * VÉRIFIER L'ACCÈS MANUEL
+   * ACCÈS MANUEL ACTIF
    * ==========================================================
    */
 
@@ -529,31 +1150,33 @@ export default function PharmacyActions({
     ) &&
     new Date(
       pharmacy.manual_access_until,
-    ).getTime() > Date.now();
+    ).getTime() >
+      Date.now();
 
   /**
    * ==========================================================
-   * AFFICHAGE
+   * RENDU
    * ==========================================================
    */
 
   return (
     <div className="actions-wrapper">
-
-      {/* ======================================================
-          BOUTON PRINCIPAL ACTIONS
-          ====================================================== */}
-
       <button
         type="button"
         className="actions-button"
         onClick={() =>
           setOpen(
-            (value) => !value,
+            (value) =>
+              !value,
           )
         }
-        disabled={loading}
-        aria-expanded={open}
+        disabled={
+          loading ||
+          subscriptionLoading
+        }
+        aria-expanded={
+          open
+        }
         aria-haspopup="menu"
       >
         <span className="actions-icon">
@@ -561,7 +1184,8 @@ export default function PharmacyActions({
         </span>
 
         <span className="actions-label">
-          {loading
+          {loading ||
+          subscriptionLoading
             ? "Traitement..."
             : "Actions"}
         </span>
@@ -577,14 +1201,8 @@ export default function PharmacyActions({
         </span>
       </button>
 
-      {/* ======================================================
-          MENU
-          ====================================================== */}
-
       {open && (
         <>
-          {/* Fond transparent permettant de fermer le menu */}
-
           <button
             type="button"
             className="menu-backdrop"
@@ -598,7 +1216,6 @@ export default function PharmacyActions({
             className="actions-menu"
             role="menu"
           >
-
             {/* ==================================================
                 NAVIGATION
                 ================================================== */}
@@ -656,11 +1273,65 @@ export default function PharmacyActions({
             <div className="menu-divider" />
 
             {/* ==================================================
-                ACCÈS PLATEFORME
+                ABONNEMENT
                 ================================================== */}
 
             <div className="menu-section-title">
-              Accès plateforme
+              Abonnement
+            </div>
+
+            <button
+              type="button"
+              className="action-item action-subscription"
+              onClick={
+                choosePlanAndActivate
+              }
+              disabled={
+                loading ||
+                subscriptionLoading
+              }
+              role="menuitem"
+            >
+              <span className="action-icon subscription-icon">
+                💳
+              </span>
+
+              <span className="action-content">
+                <strong>
+                  Activer un abonnement
+                </strong>
+
+                <small>
+                  Enregistrer un paiement manuel en espèces
+                </small>
+              </span>
+            </button>
+
+            <div className="subscription-note">
+              <span>
+                💰
+              </span>
+
+              <span>
+                Mensuel :{" "}
+                <strong>
+                  8 500 FCFA
+                </strong>{" "}
+                · Annuel :{" "}
+                <strong>
+                  85 000 FCFA
+                </strong>
+              </span>
+            </div>
+
+            <div className="menu-divider" />
+
+            {/* ==================================================
+                ACCÈS EXCEPTIONNEL
+                ================================================== */}
+
+            <div className="menu-section-title">
+              Accès exceptionnel
             </div>
 
             {!manualAccessActive ? (
@@ -681,11 +1352,11 @@ export default function PharmacyActions({
 
                 <span className="action-content">
                   <strong>
-                    Donner accès
+                    Donner un accès exceptionnel
                   </strong>
 
                   <small>
-                    Autoriser un accès manuel temporaire
+                    Autoriser temporairement l'accès sans abonnement
                   </small>
                 </span>
               </button>
@@ -707,23 +1378,21 @@ export default function PharmacyActions({
 
                 <span className="action-content">
                   <strong>
-                    Désactiver l'accès
+                    Désactiver l'accès exceptionnel
                   </strong>
 
                   <small>
-                    Retirer l'autorisation manuelle
+                    Retirer l'autorisation temporaire
                   </small>
                 </span>
               </button>
             )}
 
-            {/* Informations sur l'accès manuel */}
-
             {manualAccessActive &&
               pharmacy.manual_access_until && (
                 <div className="access-info">
                   <span>
-                    🔑 Accès manuel actif
+                    🔑 Accès exceptionnel actif
                   </span>
 
                   <strong>
@@ -752,8 +1421,6 @@ export default function PharmacyActions({
             <div className="menu-section-title">
               Statut de la pharmacie
             </div>
-
-            {/* ACTIVER */}
 
             {status !==
               "active" && (
@@ -786,8 +1453,6 @@ export default function PharmacyActions({
               </button>
             )}
 
-            {/* DÉSACTIVER */}
-
             {status !==
               "inactive" && (
               <button
@@ -818,8 +1483,6 @@ export default function PharmacyActions({
                 </span>
               </button>
             )}
-
-            {/* SUSPENDRE */}
 
             {status !==
               "suspended" && (
@@ -887,7 +1550,6 @@ export default function PharmacyActions({
                 </small>
               </span>
             </button>
-
           </div>
         </>
       )}
@@ -902,10 +1564,6 @@ export default function PharmacyActions({
           display: inline-block;
           z-index: 50;
         }
-
-        /* =====================================================
-           BOUTON ACTIONS
-           ===================================================== */
 
         .actions-button {
           min-width: 132px;
@@ -948,10 +1606,7 @@ export default function PharmacyActions({
         .actions-button:hover {
           border-color: #c8d2df;
           background: #f8fafc;
-
-          transform: translateY(
-            -1px
-          );
+          transform: translateY(-1px);
 
           box-shadow:
             0 5px 14px
@@ -964,9 +1619,7 @@ export default function PharmacyActions({
         }
 
         .actions-button:active {
-          transform: translateY(
-            0
-          );
+          transform: translateY(0);
         }
 
         .actions-button:disabled {
@@ -989,20 +1642,13 @@ export default function PharmacyActions({
         .actions-chevron {
           font-size: 12px;
           line-height: 1;
-
           transition:
             transform 0.2s ease;
         }
 
         .actions-chevron.open {
-          transform: rotate(
-            180deg
-          );
+          transform: rotate(180deg);
         }
-
-        /* =====================================================
-           BACKDROP
-           ===================================================== */
 
         .menu-backdrop {
           position: fixed;
@@ -1017,37 +1663,25 @@ export default function PharmacyActions({
           margin: 0;
 
           border: 0;
-
           background: transparent;
 
           cursor: default;
         }
 
-        /* =====================================================
-           MENU
-           ===================================================== */
-
         .actions-menu {
           position: absolute;
 
-          top: calc(
-            100% + 8px
-          );
-
+          top: calc(100% + 8px);
           right: 0;
 
           z-index: 100;
 
-          width: 310px;
-          max-width: calc(
-            100vw - 28px
-          );
+          width: 330px;
+          max-width: calc(100vw - 28px);
 
           padding: 10px;
 
-          border: 1px solid
-            #e4e9f0;
-
+          border: 1px solid #e4e9f0;
           border-radius: 16px;
 
           background: #ffffff;
@@ -1069,8 +1703,7 @@ export default function PharmacyActions({
               );
 
           animation:
-            menuIn 0.16s
-            ease-out;
+            menuIn 0.16s ease-out;
         }
 
         @keyframes menuIn {
@@ -1089,14 +1722,8 @@ export default function PharmacyActions({
           }
         }
 
-        /* =====================================================
-           TITRES DE SECTION
-           ===================================================== */
-
         .menu-section-title {
-          padding:
-            7px 10px
-            6px;
+          padding: 7px 10px 6px;
 
           color: #8a95a6;
 
@@ -1104,37 +1731,27 @@ export default function PharmacyActions({
           font-weight: 800;
 
           letter-spacing: 0.08em;
-
-          text-transform:
-            uppercase;
+          text-transform: uppercase;
         }
 
         .danger-title {
           color: #b42318;
         }
 
-        /* =====================================================
-           ÉLÉMENTS DU MENU
-           ===================================================== */
-
         .action-item {
           width: 100%;
           min-height: 52px;
 
-          padding:
-            8px 10px;
+          padding: 8px 10px;
 
           display: flex;
           align-items: center;
-
           gap: 11px;
 
           border: 0;
           border-radius: 10px;
 
-          background:
-            transparent;
-
+          background: transparent;
           color: #334155;
 
           text-align: left;
@@ -1168,7 +1785,6 @@ export default function PharmacyActions({
           justify-content: center;
 
           border-radius: 9px;
-
           background: #f1f4f8;
 
           font-size: 14px;
@@ -1198,20 +1814,14 @@ export default function PharmacyActions({
           color: #8994a4;
 
           font-size: 10px;
-
           line-height: 1.35;
         }
-
-        /* =====================================================
-           COULEURS ACTIONS
-           ===================================================== */
 
         .action-success:hover {
           background: #f0fdf4;
         }
 
-        .action-success
-          .action-icon {
+        .action-success .action-icon {
           background: #ecfdf3;
         }
 
@@ -1219,8 +1829,7 @@ export default function PharmacyActions({
           background: #fffbeb;
         }
 
-        .action-warning
-          .action-icon {
+        .action-warning .action-icon {
           background: #fffbeb;
         }
 
@@ -1228,8 +1837,7 @@ export default function PharmacyActions({
           background: #fef2f2;
         }
 
-        .action-danger
-          .action-icon {
+        .action-danger .action-icon {
           background: #fef2f2;
         }
 
@@ -1241,8 +1849,7 @@ export default function PharmacyActions({
           color: #b42318;
         }
 
-        .action-delete
-          .action-icon {
+        .action-delete .action-icon {
           background: #fef2f2;
         }
 
@@ -1250,9 +1857,59 @@ export default function PharmacyActions({
           background: #fff1f2;
         }
 
-        /* =====================================================
-           SÉPARATEUR
-           ===================================================== */
+        .action-subscription {
+          border:
+            1px solid #d8eaf0;
+
+          background:
+            linear-gradient(
+              135deg,
+              #f0fdfa,
+              #f8fbff
+            );
+        }
+
+        .action-subscription:hover {
+          background:
+            linear-gradient(
+              135deg,
+              #e6fffa,
+              #f0f7ff
+            );
+        }
+
+        .subscription-icon {
+          background: #e6fffa;
+        }
+
+        .subscription-note {
+          margin:
+            6px 5px 8px;
+
+          padding:
+            9px 10px;
+
+          display: flex;
+          align-items: flex-start;
+          gap: 7px;
+
+          border:
+            1px solid #e5eaf0;
+
+          border-radius: 9px;
+
+          background: #f8fafc;
+
+          color: #68758a;
+
+          font-size: 10px;
+          line-height: 1.45;
+        }
+
+        .subscription-note strong {
+          color: #334155;
+          font-weight: 800;
+        }
 
         .menu-divider {
           height: 1px;
@@ -1263,17 +1920,11 @@ export default function PharmacyActions({
           background: #edf0f4;
         }
 
-        /* =====================================================
-           INFORMATIONS ACCÈS MANUEL
-           ===================================================== */
-
         .access-info {
           margin:
-            5px 5px
-            8px;
+            5px 5px 8px;
 
-          padding:
-            10px;
+          padding: 10px;
 
           border:
             1px solid #d8f0df;
@@ -1306,10 +1957,6 @@ export default function PharmacyActions({
           font-size: 11px;
           font-weight: 800;
         }
-
-        /* =====================================================
-           MOBILE
-           ===================================================== */
 
         @media (max-width: 600px) {
           .actions-menu {

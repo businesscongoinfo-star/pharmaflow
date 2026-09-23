@@ -120,16 +120,18 @@ function hasValidSubscription(
     status === "trial" ||
     status === "trialing"
   ) {
-    return isFutureDate(
-      subscription.trial_ends_at,
+    return (
+      isFutureDate(
+        subscription.trial_ends_at,
+      ) ||
+      isFutureDate(
+        subscription.expires_at,
+      )
     );
   }
 
   /*
-   * Abonnement payé / actif.
-   *
-   * On accepte ici les statuts actifs connus
-   * de l'application.
+   * Abonnement payé / actif
    */
   if (
     status === "active" ||
@@ -141,50 +143,6 @@ function hasValidSubscription(
   }
 
   return false;
-}
-
-/**
- * Copie les cookies Supabase d'une réponse
- * vers une autre réponse.
- *
- * Important :
- * On ne transmet pas directement ResponseCookie[]
- * à cookies.set(), car Next.js attend un cookie
- * individuel ou un objet ResponseCookie.
- */
-function copySupabaseResponseCookies(
-  from: NextResponse,
-  to: NextResponse,
-): void {
-  const cookies = from.cookies.getAll();
-
-  for (const cookie of cookies) {
-    to.cookies.set({
-      name: cookie.name,
-      value: cookie.value,
-      ...(cookie.path !== undefined
-        ? { path: cookie.path }
-        : {}),
-      ...(cookie.domain !== undefined
-        ? { domain: cookie.domain }
-        : {}),
-      ...(cookie.expires !== undefined
-        ? { expires: cookie.expires }
-        : {}),
-      ...(cookie.httpOnly !== undefined
-        ? { httpOnly: cookie.httpOnly }
-        : {}),
-      ...(cookie.maxAge !== undefined
-        ? { maxAge: cookie.maxAge }
-        : {}),
-      ...(cookie.sameSite !== undefined
-        ? { sameSite: cookie.sameSite }
-        : {}),
-      ...(cookie.secure !== undefined
-        ? { secure: cookie.secure }
-        : {}),
-    });
-  }
 }
 
 function redirectToLogin(
@@ -242,49 +200,44 @@ export async function proxy(
     request.nextUrl.pathname;
 
   /*
-   * --------------------------------------------------
-   * 1. Routes publiques
-   * --------------------------------------------------
-   *
-   * L'invitation doit absolument être publique.
-   *
-   * Le token Supabase d'invitation peut être transmis
-   * dans le fragment #access_token=...
-   * et ce fragment n'est pas envoyé au serveur.
+   * ==================================================
+   * 1. ROUTES PUBLIQUES
+   * ==================================================
    */
+
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
   /*
-   * --------------------------------------------------
-   * 2. Espaces plateforme
-   * --------------------------------------------------
+   * ==================================================
+   * 2. ESPACES PLATEFORME
+   * ==================================================
    *
    * Super Admin et Agent ne dépendent pas
    * de l'abonnement d'une pharmacie.
-   *
-   * Leur autorisation est vérifiée dans leurs pages
-   * et leurs API.
    */
+
   if (isPlatformPath(pathname)) {
     return NextResponse.next();
   }
 
   /*
-   * --------------------------------------------------
-   * 3. Routes qui ne nécessitent pas de protection
-   * --------------------------------------------------
+   * ==================================================
+   * 3. ROUTES NON PROTÉGÉES
+   * ==================================================
    */
+
   if (!isProtectedPath(pathname)) {
     return NextResponse.next();
   }
 
   /*
-   * --------------------------------------------------
-   * 4. Configuration Supabase Server
-   * --------------------------------------------------
+   * ==================================================
+   * 4. CONFIGURATION SUPABASE
+   * ==================================================
    */
+
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -340,13 +293,11 @@ export async function proxy(
   );
 
   /*
-   * --------------------------------------------------
-   * 5. Vérification de l'utilisateur Supabase
-   * --------------------------------------------------
-   *
-   * getClaims() permet de vérifier les claims
-   * de la session côté serveur.
+   * ==================================================
+   * 5. UTILISATEUR AUTHENTIFIÉ
+   * ==================================================
    */
+
   const {
     data: claimsData,
     error: claimsError,
@@ -370,10 +321,11 @@ export async function proxy(
   }
 
   /*
-   * --------------------------------------------------
-   * 6. Profil utilisateur
-   * --------------------------------------------------
+   * ==================================================
+   * 6. PROFIL
+   * ==================================================
    */
+
   const {
     data: profileData,
     error: profileError,
@@ -401,13 +353,11 @@ export async function proxy(
     profileData as UserProfile;
 
   /*
-   * --------------------------------------------------
-   * 7. Sécurité plateforme
-   * --------------------------------------------------
-   *
-   * Si un compte plateforme possède le rôle
-   * super_admin, il n'a pas besoin d'une pharmacie.
+   * ==================================================
+   * 7. SUPER ADMIN
+   * ==================================================
    */
+
   if (
     profile.role === "super_admin"
   ) {
@@ -415,13 +365,20 @@ export async function proxy(
   }
 
   /*
-   * --------------------------------------------------
-   * 8. Vérification pharmacie
-   * --------------------------------------------------
+   * ==================================================
+   * 8. PHARMACIE OBLIGATOIRE
+   * ==================================================
    */
+
   if (!profile.pharmacy_id) {
     return redirectToLogin(request);
   }
+
+  /*
+   * ==================================================
+   * 9. RÉCUPÉRATION DE LA PHARMACIE
+   * ==================================================
+   */
 
   const {
     data: pharmacyData,
@@ -457,18 +414,70 @@ export async function proxy(
     pharmacyData as Pharmacy;
 
   /*
-   * --------------------------------------------------
-   * 9. Pharmacie inactive / suspendue
-   * --------------------------------------------------
+   * ==================================================
+   * 10. STATUT ADMINISTRATIF RÉELLEMENT BLOQUÉ
+   * ==================================================
    *
-   * On ne déconnecte PAS l'utilisateur.
+   * Ces statuts restent prioritaires.
    *
-   * Il doit pouvoir rester authentifié et accéder
-   * à /abonnement pour régulariser sa situation.
+   * Si le Super Admin suspend réellement une pharmacie,
+   * un simple accès manuel ne doit pas contourner cette
+   * décision administrative.
    */
+
   const pharmacyStatus =
     pharmacy.status?.toLowerCase() ??
     "active";
+
+  if (
+    pharmacyStatus === "suspended" ||
+    pharmacyStatus === "blocked" ||
+    pharmacyStatus === "disabled" ||
+    pharmacyStatus === "closed"
+  ) {
+    return redirectToSubscription(
+      request,
+      "pharmacy_suspended",
+    );
+  }
+
+  /*
+   * ==================================================
+   * 11. ACCÈS MANUEL SUPER ADMIN
+   * ==================================================
+   *
+   * IMPORTANT :
+   *
+   * L'accès manuel est vérifié AVANT le statut
+   * "inactive" et AVANT l'abonnement.
+   *
+   * Cela signifie :
+   *
+   * abonnement expiré + accès manuel actif
+   *                       =
+   *                  ACCÈS AUTORISÉ
+   *
+   * aucun abonnement + accès manuel actif
+   *                       =
+   *                  ACCÈS AUTORISÉ
+   *
+   * pharmacie inactive pour cause d'abonnement
+   * + accès manuel actif
+   *                       =
+   *                  ACCÈS AUTORISÉ
+   */
+
+  if (hasManualAccess(pharmacy)) {
+    return response;
+  }
+
+  /*
+   * ==================================================
+   * 12. STATUT PHARMACIE
+   * ==================================================
+   *
+   * À partir d'ici, il n'y a PAS d'accès manuel actif.
+   */
 
   if (
     pharmacyStatus === "inactive"
@@ -476,15 +485,6 @@ export async function proxy(
     return redirectToSubscription(
       request,
       "pharmacy_inactive",
-    );
-  }
-
-  if (
-    pharmacyStatus === "suspended"
-  ) {
-    return redirectToSubscription(
-      request,
-      "pharmacy_suspended",
     );
   }
 
@@ -498,23 +498,11 @@ export async function proxy(
   }
 
   /*
-   * --------------------------------------------------
-   * 10. Accès manuel Super Admin
-   * --------------------------------------------------
-   *
-   * Un accès manuel futur permet d'ouvrir
-   * temporairement l'espace de la pharmacie,
-   * même si son abonnement est expiré.
+   * ==================================================
+   * 13. DERNIER ABONNEMENT
+   * ==================================================
    */
-  if (hasManualAccess(pharmacy)) {
-    return response;
-  }
 
-  /*
-   * --------------------------------------------------
-   * 11. Dernier abonnement
-   * --------------------------------------------------
-   */
   const {
     data: subscriptionData,
     error: subscriptionError,
@@ -544,10 +532,11 @@ export async function proxy(
       .maybeSingle();
 
   /*
-   * --------------------------------------------------
-   * 12. Erreur de vérification
-   * --------------------------------------------------
+   * ==================================================
+   * 14. ERREUR ABONNEMENT
+   * ==================================================
    */
+
   if (subscriptionError) {
     console.error(
       "Subscription verification error:",
@@ -566,10 +555,11 @@ export async function proxy(
       | null;
 
   /*
-   * --------------------------------------------------
-   * 13. Abonnement valide
-   * --------------------------------------------------
+   * ==================================================
+   * 15. ABONNEMENT VALIDE
+   * ==================================================
    */
+
   if (
     hasValidSubscription(
       subscription,
@@ -579,10 +569,11 @@ export async function proxy(
   }
 
   /*
-   * --------------------------------------------------
-   * 14. Détermination du motif du blocage
-   * --------------------------------------------------
+   * ==================================================
+   * 16. MOTIF DU BLOCAGE
+   * ==================================================
    */
+
   let reason =
     "no_subscription";
 
@@ -628,10 +619,11 @@ export async function proxy(
   }
 
   /*
-   * --------------------------------------------------
-   * 15. Blocage sans déconnexion
-   * --------------------------------------------------
+   * ==================================================
+   * 17. BLOCAGE
+   * ==================================================
    */
+
   return redirectToSubscription(
     request,
     reason,
@@ -639,9 +631,9 @@ export async function proxy(
 }
 
 /*
- * ----------------------------------------------------
- * Next.js Proxy Matcher
- * ----------------------------------------------------
+ * ====================================================
+ * NEXT.JS PROXY MATCHER
+ * ====================================================
  *
  * On exclut :
  * - API
@@ -652,6 +644,7 @@ export async function proxy(
  * - robots
  * - sitemap
  */
+
 export const config = {
   matcher: [
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",

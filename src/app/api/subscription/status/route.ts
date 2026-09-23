@@ -23,10 +23,11 @@ type PharmacyRow = {
   owner_id: string | null;
   status: string | null;
 
+  /*
+   * Accès manuel accordé par le Super Admin.
+   */
   manual_access_enabled: boolean | null;
   manual_access_until: string | null;
-  manual_access_reason: string | null;
-  manual_access_by: string | null;
 };
 
 type PlanRow = {
@@ -87,6 +88,9 @@ type TimeRemaining = {
    HELPERS
    ========================================================================== */
 
+/**
+ * Normalise la langue de l'utilisateur.
+ */
 function normalizeLanguage(
   value: string | null | undefined,
 ): Locale {
@@ -97,6 +101,9 @@ function normalizeLanguage(
     : "fr";
 }
 
+/**
+ * Normalise une devise ISO 4217.
+ */
 function normalizeCurrency(
   value: string | null | undefined,
 ): string | null {
@@ -115,6 +122,11 @@ function normalizeCurrency(
   return currency;
 }
 
+/**
+ * Normalise le statut d'un abonnement.
+ *
+ * "paid" est également accepté et transformé en "active".
+ */
 function normalizeSubscriptionStatus(
   value: string | null | undefined,
 ): SubscriptionStatus {
@@ -124,9 +136,11 @@ function normalizeSubscriptionStatus(
 
   switch (status) {
     case "trial":
+    case "trialing":
       return "trial";
 
     case "active":
+    case "paid":
       return "active";
 
     case "expired":
@@ -139,6 +153,7 @@ function normalizeSubscriptionStatus(
       return "suspended";
 
     case "cancelled":
+    case "canceled":
       return "cancelled";
 
     default:
@@ -146,6 +161,30 @@ function normalizeSubscriptionStatus(
   }
 }
 
+/**
+ * Vérifie qu'une date est dans le futur.
+ */
+function isFutureDate(
+  value: string | null | undefined,
+  nowMs: number,
+): boolean {
+  if (!value) {
+    return false;
+  }
+
+  const timestamp =
+    new Date(value).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+
+  return timestamp > nowMs;
+}
+
+/**
+ * Calcule le temps restant jusqu'à une date.
+ */
 function calculateRemaining(
   targetDate: string | null,
   nowMs: number,
@@ -211,6 +250,9 @@ function calculateRemaining(
   };
 }
 
+/**
+ * Calcule le pourcentage utilisé du trial.
+ */
 function calculateTrialPercent(
   startedAt: string | null,
   endsAt: string | null,
@@ -257,7 +299,23 @@ function calculateTrialPercent(
   );
 }
 
-function isPharmacyActive(
+/* ==========================================================================
+   PHARMACY ACCESS
+   ========================================================================== */
+
+/**
+ * Les statuts suivants représentent un blocage administratif réel.
+ *
+ * IMPORTANT :
+ *
+ * "inactive" n'est PAS dans cette liste.
+ *
+ * Pourquoi ?
+ *
+ * Une pharmacie inactive peut avoir son accès réactivé
+ * temporairement par le Super Admin grâce à l'accès manuel.
+ */
+function isAdministrativeBlock(
   status: string | null,
 ): boolean {
   const normalized =
@@ -265,17 +323,7 @@ function isPharmacyActive(
       .trim()
       .toLowerCase();
 
-  /*
-   * Si aucun statut n'est renseigné,
-   * on conserve le comportement historique :
-   * la pharmacie n'est pas considérée comme bloquée.
-   */
-  if (!normalized) {
-    return true;
-  }
-
-  return ![
-    "inactive",
+  return [
     "disabled",
     "blocked",
     "suspended",
@@ -284,14 +332,14 @@ function isPharmacyActive(
 }
 
 /**
- * Vérifie l'accès manuel accordé par le Super Admin.
+ * Vérifie l'accès manuel du Super Admin.
  *
- * L'accès est valide uniquement si :
+ * Règle :
  *
  * manual_access_enabled = true
+ *
  * ET
- * manual_access_until existe
- * ET
+ *
  * manual_access_until > maintenant
  */
 function hasValidManualAccess(
@@ -299,28 +347,130 @@ function hasValidManualAccess(
   nowMs: number,
 ): boolean {
   if (
-    !pharmacy.manual_access_enabled
+    pharmacy.manual_access_enabled !==
+    true
   ) {
     return false;
   }
 
-  if (
-    !pharmacy.manual_access_until
-  ) {
-    return false;
-  }
-
-  const untilMs =
-    new Date(
-      pharmacy.manual_access_until,
-    ).getTime();
-
-  if (!Number.isFinite(untilMs)) {
-    return false;
-  }
-
-  return untilMs > nowMs;
+  return isFutureDate(
+    pharmacy.manual_access_until,
+    nowMs,
+  );
 }
+
+/**
+ * Retourne les informations détaillées
+ * de l'accès manuel.
+ */
+function buildManualAccessResponse(
+  pharmacy: PharmacyRow,
+  nowMs: number,
+) {
+  const enabled =
+    pharmacy.manual_access_enabled ===
+    true;
+
+  const valid =
+    hasValidManualAccess(
+      pharmacy,
+      nowMs,
+    );
+
+  const remaining =
+    valid
+      ? calculateRemaining(
+          pharmacy.manual_access_until,
+          nowMs,
+        )
+      : {
+          remaining_ms: 0,
+          remaining_seconds: 0,
+          remaining_minutes: 0,
+          remaining_hours: 0,
+          remaining_days: 0,
+        };
+
+  return {
+    enabled,
+
+    valid,
+
+    until:
+      pharmacy.manual_access_until ??
+      null,
+
+    remaining_ms:
+      remaining.remaining_ms,
+
+    remaining_seconds:
+      remaining.remaining_seconds,
+
+    remaining_minutes:
+      remaining.remaining_minutes,
+
+    remaining_hours:
+      remaining.remaining_hours,
+
+    remaining_days:
+      remaining.remaining_days,
+  };
+}
+
+/* ==========================================================================
+   SUBSCRIPTION ACCESS
+   ========================================================================== */
+
+/**
+ * Vérifie si l'abonnement est actuellement valide.
+ */
+function hasValidSubscription(
+  subscription: SubscriptionRow | null,
+  nowMs: number,
+): boolean {
+  if (!subscription) {
+    return false;
+  }
+
+  const status =
+    String(
+      subscription.status ?? "",
+    )
+      .trim()
+      .toLowerCase();
+
+  /*
+   * TRIAL
+   */
+  if (
+    status === "trial" ||
+    status === "trialing"
+  ) {
+    return isFutureDate(
+      subscription.trial_ends_at,
+      nowMs,
+    );
+  }
+
+  /*
+   * ABONNEMENT PAYÉ
+   */
+  if (
+    status === "active" ||
+    status === "paid"
+  ) {
+    return isFutureDate(
+      subscription.expires_at,
+      nowMs,
+    );
+  }
+
+  return false;
+}
+
+/* ==========================================================================
+   RESPONSE HELPERS
+   ========================================================================== */
 
 function createError(
   message: string,
@@ -343,40 +493,40 @@ function buildEmptyTrial(
 ) {
   return {
     active: false,
+
     started_at: null,
+
     ends_at: null,
+
     remaining_ms: 0,
+
     remaining_seconds: 0,
+
     remaining_minutes: 0,
+
     remaining_hours: 0,
+
     remaining_days: 0,
-    percent_used: percentUsed,
+
+    percent_used:
+      percentUsed,
   };
 }
 
 function buildEmptyExpiration() {
   return {
     expired: true,
-    expires_at: null,
-    remaining_ms: 0,
-    remaining_seconds: 0,
-    remaining_minutes: 0,
-    remaining_hours: 0,
-    remaining_days: 0,
-  };
-}
 
-function buildEmptyManualAccess() {
-  return {
-    enabled: false,
-    valid: false,
-    until: null,
-    reason: null,
-    granted_by: null,
+    expires_at: null,
+
     remaining_ms: 0,
+
     remaining_seconds: 0,
+
     remaining_minutes: 0,
+
     remaining_hours: 0,
+
     remaining_days: 0,
   };
 }
@@ -388,75 +538,21 @@ function buildUserResponse(
 ) {
   return {
     id: profile.id,
-    full_name: profile.full_name,
-    phone: profile.phone,
-    role: profile.role,
-    language: locale,
-    pharmacy_id: pharmacyId,
-  };
-}
 
-function buildManualAccessResponse(
-  pharmacy: PharmacyRow,
-  nowMs: number,
-) {
-  const enabled =
-    Boolean(
-      pharmacy.manual_access_enabled,
-    );
+    full_name:
+      profile.full_name,
 
-  const valid =
-    hasValidManualAccess(
-      pharmacy,
-      nowMs,
-    );
+    phone:
+      profile.phone,
 
-  const remaining =
-    valid &&
-    pharmacy.manual_access_until
-      ? calculateRemaining(
-          pharmacy.manual_access_until,
-          nowMs,
-        )
-      : {
-          remaining_ms: 0,
-          remaining_seconds: 0,
-          remaining_minutes: 0,
-          remaining_hours: 0,
-          remaining_days: 0,
-        };
+    role:
+      profile.role,
 
-  return {
-    enabled,
+    language:
+      locale,
 
-    valid,
-
-    until:
-      pharmacy.manual_access_until ??
-      null,
-
-    reason:
-      pharmacy.manual_access_reason ??
-      null,
-
-    granted_by:
-      pharmacy.manual_access_by ??
-      null,
-
-    remaining_ms:
-      remaining.remaining_ms,
-
-    remaining_seconds:
-      remaining.remaining_seconds,
-
-    remaining_minutes:
-      remaining.remaining_minutes,
-
-    remaining_hours:
-      remaining.remaining_hours,
-
-    remaining_days:
-      remaining.remaining_days,
+    pharmacy_id:
+      pharmacyId,
   };
 }
 
@@ -465,17 +561,31 @@ function buildPharmacyResponse(
   nowMs: number,
 ) {
   return {
-    id: pharmacy.id,
-    name: pharmacy.name,
-    address: pharmacy.address,
-    country_code: pharmacy.country_code,
-    city: pharmacy.city,
+    id:
+      pharmacy.id,
+
+    name:
+      pharmacy.name,
+
+    address:
+      pharmacy.address,
+
+    country_code:
+      pharmacy.country_code,
+
+    city:
+      pharmacy.city,
+
     currency_code:
       normalizeCurrency(
         pharmacy.currency_code,
       ),
-    owner_id: pharmacy.owner_id,
-    status: pharmacy.status,
+
+    owner_id:
+      pharmacy.owner_id,
+
+    status:
+      pharmacy.status,
 
     manual_access:
       buildManualAccessResponse(
@@ -491,11 +601,15 @@ function buildPharmacyResponse(
 
 export async function GET() {
   try {
+    /* ======================================================================
+       1. SUPABASE
+       ====================================================================== */
+
     const supabase =
       await createClient();
 
     /* ======================================================================
-       1. UTILISATEUR CONNECTÉ
+       2. UTILISATEUR CONNECTÉ
        ====================================================================== */
 
     const {
@@ -527,7 +641,7 @@ export async function GET() {
     }
 
     /* ======================================================================
-       2. PROFIL
+       3. PROFIL
        ====================================================================== */
 
     const {
@@ -546,7 +660,10 @@ export async function GET() {
             language
           `,
         )
-        .eq("id", user.id)
+        .eq(
+          "id",
+          user.id,
+        )
         .maybeSingle();
 
     if (profileError) {
@@ -584,7 +701,7 @@ export async function GET() {
       typedProfile.pharmacy_id;
 
     /* ======================================================================
-       3. DATE SERVEUR
+       4. DATE SERVEUR
        ====================================================================== */
 
     const now =
@@ -597,7 +714,7 @@ export async function GET() {
       now.toISOString();
 
     /* ======================================================================
-       4. LANGUE
+       5. LANGUE
        ====================================================================== */
 
     const locale =
@@ -606,7 +723,7 @@ export async function GET() {
       );
 
     /* ======================================================================
-       5. PHARMACIE
+       6. PHARMACIE
        ====================================================================== */
 
     const {
@@ -626,9 +743,7 @@ export async function GET() {
             owner_id,
             status,
             manual_access_enabled,
-            manual_access_until,
-            manual_access_reason,
-            manual_access_by
+            manual_access_until
           `,
         )
         .eq(
@@ -684,16 +799,21 @@ export async function GET() {
       );
 
     /* ======================================================================
-       6. PHARMACIE INACTIVE / SUSPENDUE
+       7. BLOCAGE ADMINISTRATIF
        ====================================================================== */
 
     /*
-     * L'accès manuel ne permet pas de contourner une suspension
-     * administrative de la pharmacie.
+     * IMPORTANT :
+     *
+     * Ces statuts restent prioritaires.
+     *
+     * Le Super Admin peut donc réellement désactiver
+     * une pharmacie et empêcher même un accès manuel
+     * de contourner ce blocage.
      */
 
     if (
-      !isPharmacyActive(
+      isAdministrativeBlock(
         typedPharmacy.status,
       )
     ) {
@@ -704,6 +824,7 @@ export async function GET() {
 
         access: {
           allowed: false,
+
           blocked: true,
 
           reason:
@@ -754,7 +875,109 @@ export async function GET() {
     }
 
     /* ======================================================================
-       7. ABONNEMENT
+       8. ACCÈS MANUEL PRIORITAIRE
+       ====================================================================== */
+
+    /*
+     * C'EST LE POINT PRINCIPAL DE LA MODIFICATION.
+     *
+     * L'accès manuel est vérifié AVANT l'abonnement.
+     *
+     * Cela permet :
+     *
+     * 1. abonnement expiré + accès manuel = ACCÈS
+     *
+     * 2. aucun abonnement + accès manuel = ACCÈS
+     *
+     * 3. pharmacie inactive + accès manuel = ACCÈS
+     *
+     * 4. abonnement actif + accès manuel = ACCÈS
+     *
+     * L'accès manuel est donc une autorisation temporaire
+     * accordée directement par le Super Administrateur.
+     */
+
+    const manualAccessValid =
+      hasValidManualAccess(
+        typedPharmacy,
+        nowMs,
+      );
+
+    if (
+      manualAccessValid
+    ) {
+      return NextResponse.json({
+        success: true,
+
+        authenticated: true,
+
+        access: {
+          allowed: true,
+
+          blocked: false,
+
+          reason:
+            "manual_access" as AccessReason,
+
+          manual_access:
+            manualAccessResponse,
+        },
+
+        /*
+         * On retourne "active" pour permettre
+         * aux composants qui utilisent "status"
+         * de considérer l'accès comme actuellement autorisé.
+         *
+         * L'information réelle reste disponible
+         * dans access.reason = "manual_access".
+         */
+        status:
+          "active" as SubscriptionStatus,
+
+        locale,
+
+        user:
+          userResponse,
+
+        pharmacy:
+          pharmacyResponse,
+
+        /*
+         * L'abonnement peut être expiré ou absent.
+         *
+         * L'accès vient du Super Admin.
+         */
+        subscription: null,
+
+        plan: null,
+
+        prices: {
+          currency_code:
+            pharmacyCurrency,
+
+          monthly: null,
+
+          yearly: null,
+
+          available: false,
+        },
+
+        trial:
+          buildEmptyTrial(100),
+
+        expiration:
+          buildEmptyExpiration(),
+
+        manual_access:
+          manualAccessResponse,
+
+        server_time:
+          serverTime,
+      });
+    }
+
+    /* ======================================================================
+       9. RÉCUPÉRATION DES ABONNEMENTS
        ====================================================================== */
 
     const {
@@ -810,7 +1033,7 @@ export async function GET() {
         : null;
 
     /* ======================================================================
-       8. PLANS MENSUEL ET ANNUEL
+       10. PLANS MENSUEL / ANNUEL
        ====================================================================== */
 
     let monthlyPlan:
@@ -890,7 +1113,7 @@ export async function GET() {
     }
 
     /* ======================================================================
-       9. PRIX
+       11. PRIX
        ====================================================================== */
 
     let planPrices:
@@ -930,7 +1153,7 @@ export async function GET() {
     }
 
     /* ======================================================================
-       10. PRIX MENSUEL / ANNUEL
+       12. PRIX MENSUEL / ANNUEL
        ====================================================================== */
 
     const monthlyPrice =
@@ -952,7 +1175,7 @@ export async function GET() {
         : null;
 
     /* ======================================================================
-       11. VALIDATION DES PRIX
+       13. VALIDATION DES PRIX
        ====================================================================== */
 
     const validMonthlyPrice =
@@ -981,17 +1204,10 @@ export async function GET() {
         ? yearlyPrice
         : null;
 
-    /* ======================================================================
-       12. RÉPONSE DES PRIX
-       ====================================================================== */
-
     const pricesResponse = {
       currency_code:
         pharmacyCurrency,
 
-      /*
-       * Au moins un tarif valide suffit pour rendre les prix disponibles.
-       */
       available:
         Boolean(
           validMonthlyPrice ||
@@ -1056,72 +1272,10 @@ export async function GET() {
     };
 
     /* ======================================================================
-       13. AUCUN ABONNEMENT
+       14. AUCUN ABONNEMENT
        ====================================================================== */
 
     if (!subscription) {
-      /*
-       * Même sans abonnement, le Super Admin peut avoir accordé
-       * un accès temporaire.
-       */
-
-      const manualAccessValid =
-        hasValidManualAccess(
-          typedPharmacy,
-          nowMs,
-        );
-
-      if (
-        manualAccessValid
-      ) {
-        return NextResponse.json({
-          success: true,
-
-          authenticated: true,
-
-          access: {
-            allowed: true,
-            blocked: false,
-
-            reason:
-              "manual_access" as AccessReason,
-
-            manual_access:
-              manualAccessResponse,
-          },
-
-          status:
-            "expired" as SubscriptionStatus,
-
-          locale,
-
-          user:
-            userResponse,
-
-          pharmacy:
-            pharmacyResponse,
-
-          subscription: null,
-
-          plan: null,
-
-          prices:
-            pricesResponse,
-
-          trial:
-            buildEmptyTrial(100),
-
-          expiration:
-            buildEmptyExpiration(),
-
-          manual_access:
-            manualAccessResponse,
-
-          server_time:
-            serverTime,
-        });
-      }
-
       return NextResponse.json({
         success: true,
 
@@ -1129,6 +1283,7 @@ export async function GET() {
 
         access: {
           allowed: false,
+
           blocked: true,
 
           reason:
@@ -1177,7 +1332,7 @@ export async function GET() {
     }
 
     /* ======================================================================
-       14. PLAN ACTUEL
+       15. PLAN ACTUEL
        ====================================================================== */
 
     const {
@@ -1216,7 +1371,7 @@ export async function GET() {
         : null;
 
     /* ======================================================================
-       15. STATUT
+       16. STATUT ABONNEMENT
        ====================================================================== */
 
     const status =
@@ -1225,7 +1380,7 @@ export async function GET() {
       );
 
     /* ======================================================================
-       16. TEMPS RESTANT
+       17. TEMPS RESTANT
        ====================================================================== */
 
     const trialRemaining =
@@ -1248,7 +1403,7 @@ export async function GET() {
       );
 
     /* ======================================================================
-       17. VALIDATION DES DATES DU TRIAL
+       18. VALIDATION TRIAL
        ====================================================================== */
 
     const trialStartedMs =
@@ -1275,10 +1430,6 @@ export async function GET() {
       trialEndsMs >
         trialStartedMs;
 
-    /* ======================================================================
-       18. TRIAL
-       ====================================================================== */
-
     const trialStillValid =
       status === "trial" &&
       trialDatesValid &&
@@ -1289,12 +1440,6 @@ export async function GET() {
        19. ABONNEMENT PAYÉ
        ====================================================================== */
 
-    /*
-     * Dans ton schéma actuel, le statut payé valide est "active".
-     *
-     * L'abonnement doit également avoir une date d'expiration
-     * située dans le futur.
-     */
     const paidSubscriptionStillValid =
       status === "active" &&
       Boolean(
@@ -1304,17 +1449,7 @@ export async function GET() {
         0;
 
     /* ======================================================================
-       20. ACCÈS MANUEL
-       ====================================================================== */
-
-    const manualAccessValid =
-      hasValidManualAccess(
-        typedPharmacy,
-        nowMs,
-      );
-
-    /* ======================================================================
-       21. DÉCISION FINALE D'ACCÈS
+       20. DÉCISION FINALE
        ====================================================================== */
 
     let allowed = false;
@@ -1325,102 +1460,123 @@ export async function GET() {
       "expired";
 
     /*
-     * PRIORITÉ 1 :
-     * Trial encore valide.
+     * TRIAL VALIDE
      */
     if (
       trialStillValid
     ) {
       allowed = true;
+
       blocked = false;
-      reason = "trial";
+
+      reason =
+        "trial";
     }
 
     /*
-     * PRIORITÉ 2 :
-     * Abonnement payé encore valide.
+     * ABONNEMENT PAYÉ VALIDE
      */
     else if (
       paidSubscriptionStillValid
     ) {
       allowed = true;
+
       blocked = false;
-      reason = "active";
+
+      reason =
+        "active";
     }
 
     /*
-     * PRIORITÉ 3 :
-     * Accès manuel accordé par le Super Admin.
+     * ACCÈS MANUEL
+     *
+     * Normalement cette condition aura déjà été traitée
+     * à l'étape 8.
+     *
+     * Elle reste ici comme sécurité supplémentaire.
      */
     else if (
       manualAccessValid
     ) {
       allowed = true;
+
       blocked = false;
+
       reason =
         "manual_access";
     }
 
     /*
-     * Accès manuel activé mais date dépassée.
+     * ACCÈS MANUEL EXPIRÉ
      */
     else if (
-      typedPharmacy.manual_access_enabled
+      typedPharmacy.manual_access_enabled ===
+      true
     ) {
       allowed = false;
+
       blocked = true;
+
       reason =
         "manual_access_expired";
     }
 
     /*
-     * Paiement en retard.
+     * PAIEMENT EN RETARD
      */
     else if (
       status === "past_due"
     ) {
       allowed = false;
+
       blocked = true;
+
       reason =
         "past_due";
     }
 
     /*
-     * Abonnement suspendu.
+     * ABONNEMENT SUSPENDU
      */
     else if (
       status === "suspended"
     ) {
       allowed = false;
+
       blocked = true;
+
       reason =
         "suspended";
     }
 
     /*
-     * Abonnement annulé.
+     * ABONNEMENT ANNULÉ
      */
     else if (
       status === "cancelled"
     ) {
       allowed = false;
+
       blocked = true;
+
       reason =
         "cancelled";
     }
 
     /*
-     * Expiration normale.
+     * EXPIRÉ
      */
     else {
       allowed = false;
+
       blocked = true;
+
       reason =
         "expired";
     }
 
     /* ======================================================================
-       22. POURCENTAGE DU TRIAL
+       21. POURCENTAGE TRIAL
        ====================================================================== */
 
     let finalTrialPercent =
@@ -1439,7 +1595,7 @@ export async function GET() {
     }
 
     /* ======================================================================
-       23. RÉPONSE TRIAL
+       22. RÉPONSE TRIAL
        ====================================================================== */
 
     const trialResponse = {
@@ -1482,7 +1638,7 @@ export async function GET() {
     };
 
     /* ======================================================================
-       24. EXPIRATION
+       23. RÉPONSE EXPIRATION
        ====================================================================== */
 
     const expirationResponse = {
@@ -1511,7 +1667,7 @@ export async function GET() {
     };
 
     /* ======================================================================
-       25. RÉPONSE FINALE
+       24. RÉPONSE FINALE
        ====================================================================== */
 
     return NextResponse.json({
