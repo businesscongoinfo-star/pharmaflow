@@ -3,879 +3,1519 @@ import Link from "next/link";
 import { requireAgent } from "@/app/lib/agent/auth";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
-type Subscription = {
+/* ==========================================================================
+   TYPES
+   ========================================================================== */
+
+type SearchParams = {
+  q?: string;
+  status?: string;
+  method?: string;
+  provider?: string;
+};
+
+type PaymentPharmacy = {
   id: string;
-  pharmacy_id: string;
-  plan_id: string;
+  name: string | null;
+  city: string | null;
+  country_code: string | null;
+};
+
+type PaymentProvider = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  mode: string | null;
+};
+
+type PaymentTransaction = {
+  id: string;
+
+  pharmacy_id: string | null;
+  subscription_id: string | null;
+  provider_id: string | null;
+
+  provider: string | null;
+  provider_transaction_id: string | null;
+  merchant_reference: string | null;
+
+  amount: number | string | null;
+  currency: string | null;
+
+  payment_method: string | null;
   status: string | null;
-  expires_at: string | null;
-  created_at: string | null;
+
+  checkout_url: string | null;
+
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+
+  metadata: unknown;
+  failure_reason: string | null;
+
+  created_at: string;
+  updated_at: string;
+  paid_at: string | null;
+
+  pharmacies: PaymentPharmacy | null;
+  payment_providers: PaymentProvider | null;
 };
 
-type Pharmacy = {
-  id: string;
-  name: string | null;
-  currency_code: string | null;
-};
 
-type Plan = {
-  id: string;
-  name: string | null;
-  code: string | null;
-};
+/* ==========================================================================
+   FORMATTERS
+   ========================================================================== */
 
-type Price = {
-  plan_id: string;
-  currency_code: string;
-  price: number;
-};
+function formatAmount(
+  amount: number | string | null,
+  currency: string | null,
+): string {
+  const value = Number(amount ?? 0);
 
-function status(
-  value: string | null,
-) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  if (!Number.isFinite(value)) {
+    return `0 ${currency ?? ""}`.trim();
+  }
+
+  return `${new Intl.NumberFormat("fr-FR", {
+    maximumFractionDigits: 2,
+  }).format(value)} ${currency ?? ""}`.trim();
 }
 
-function label(
-  value: string | null,
-) {
-  switch (status(value)) {
-    case "active":
+
+function formatDate(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+
+function normalizeStatus(
+  status: string | null,
+): string {
+  return (status ?? "").trim().toLowerCase();
+}
+
+
+/* ==========================================================================
+   STATUS
+   ========================================================================== */
+
+function statusLabel(
+  status: string | null,
+): string {
+  const value = normalizeStatus(status);
+
+  switch (value) {
     case "paid":
-      return "Payé / actif";
+    case "completed":
+    case "success":
+    case "succeeded":
+      return "Payé";
 
-    case "trial":
-    case "trialing":
-      return "Essai gratuit";
+    case "pending":
+      return "En attente";
 
-    case "past_due":
-      return "Impayé";
+    case "processing":
+      return "Traitement";
 
-    case "expired":
-      return "Expiré";
+    case "failed":
+      return "Échec";
 
     case "cancelled":
     case "canceled":
       return "Annulé";
 
+    case "refunded":
+      return "Remboursé";
+
     default:
-      return value || "Inconnu";
+      return status?.trim() || "Inconnu";
   }
 }
 
-function formatDate(
-  value: string | null,
-) {
-  if (!value) return "—";
 
-  const date =
-    new Date(value);
+function statusClass(
+  status: string | null,
+): string {
+  const value = normalizeStatus(status);
 
   if (
-    Number.isNaN(
-      date.getTime(),
-    )
+    value === "paid" ||
+    value === "completed" ||
+    value === "success" ||
+    value === "succeeded"
   ) {
-    return "—";
+    return "agent-payment-status agent-payment-status-success";
   }
 
-  return date.toLocaleDateString(
-    "fr-FR",
-    {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    },
+  if (
+    value === "pending"
+  ) {
+    return "agent-payment-status agent-payment-status-pending";
+  }
+
+  if (
+    value === "processing"
+  ) {
+    return "agent-payment-status agent-payment-status-processing";
+  }
+
+  if (
+    value === "failed"
+  ) {
+    return "agent-payment-status agent-payment-status-failed";
+  }
+
+  if (
+    value === "cancelled" ||
+    value === "canceled"
+  ) {
+    return "agent-payment-status agent-payment-status-cancelled";
+  }
+
+  if (
+    value === "refunded"
+  ) {
+    return "agent-payment-status agent-payment-status-default";
+  }
+
+  return "agent-payment-status agent-payment-status-default";
+}
+
+
+/* ==========================================================================
+   TRANSACTION HELPERS
+   ========================================================================== */
+
+function isPaid(
+  transaction: PaymentTransaction,
+): boolean {
+  const status = normalizeStatus(
+    transaction.status,
   );
-}
-
-function money(
-  amount: number | null,
-  currency: string | null,
-) {
-  if (
-    amount === null ||
-    !Number.isFinite(amount)
-  ) {
-    return "—";
-  }
 
   return (
-    new Intl.NumberFormat(
-      "fr-FR",
-      {
-        maximumFractionDigits: 2,
-      },
-    ).format(amount) +
-    ` ${currency ?? ""}`
+    Boolean(transaction.paid_at) ||
+    status === "paid" ||
+    status === "completed" ||
+    status === "success" ||
+    status === "succeeded"
   );
 }
 
-export default async function AgentPaymentsPage() {
-  const member =
-    await requireAgent();
+
+function isPending(
+  transaction: PaymentTransaction,
+): boolean {
+  const value = normalizeStatus(
+    transaction.status,
+  );
+
+  return (
+    value === "pending" ||
+    value === "processing"
+  );
+}
+
+
+function isFailed(
+  transaction: PaymentTransaction,
+): boolean {
+  const value = normalizeStatus(
+    transaction.status,
+  );
+
+  return (
+    value === "failed" ||
+    value === "cancelled" ||
+    value === "canceled"
+  );
+}
+
+
+function getProviderName(
+  transaction: PaymentTransaction,
+): string {
+  return (
+    transaction.payment_providers?.name ||
+    transaction.provider ||
+    "Non renseigné"
+  );
+}
+
+
+function getProviderCode(
+  transaction: PaymentTransaction,
+): string {
+  return (
+    transaction.payment_providers?.code ||
+    transaction.provider ||
+    "—"
+  );
+}
+
+
+/* ==========================================================================
+   PAGE
+   ========================================================================== */
+
+export default async function AgentPaiementsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  /* ------------------------------------------------------------------------
+     AGENT
+     ------------------------------------------------------------------------ */
+
+  const member = await requireAgent();
+
+  /* ------------------------------------------------------------------------
+     SEARCH PARAMS
+     ------------------------------------------------------------------------ */
+
+  const params =
+    (await searchParams) ?? {};
+
+  const q =
+    typeof params.q === "string"
+      ? params.q.trim()
+      : "";
+
+  const statusFilter =
+    typeof params.status === "string"
+      ? params.status.trim().toLowerCase()
+      : "";
+
+  const methodFilter =
+    typeof params.method === "string"
+      ? params.method.trim()
+      : "";
+
+  const providerFilter =
+    typeof params.provider === "string"
+      ? params.provider.trim()
+      : "";
+
+  /* ------------------------------------------------------------------------
+     SUPABASE
+     ------------------------------------------------------------------------ */
 
   const supabase =
     createAdminClient();
 
+  /*
+   * Relations explicites conservées.
+   *
+   * Ces relations permettent de récupérer :
+   * - la pharmacie associée ;
+   * - le fournisseur de paiement associé.
+   */
+
+  let query = supabase
+    .from("payment_transactions")
+    .select(`
+      id,
+      pharmacy_id,
+      subscription_id,
+      provider_id,
+      provider,
+      provider_transaction_id,
+      merchant_reference,
+      amount,
+      currency,
+      payment_method,
+      status,
+      checkout_url,
+      customer_name,
+      customer_email,
+      customer_phone,
+      metadata,
+      failure_reason,
+      created_at,
+      updated_at,
+      paid_at,
+
+      pharmacies!payment_transactions_pharmacy_id_fkey (
+        id,
+        name,
+        city,
+        country_code
+      ),
+
+      payment_providers!payment_transactions_provider_id_fkey (
+        id,
+        code,
+        name,
+        description,
+        enabled,
+        mode
+      )
+    `);
+
+  /* ------------------------------------------------------------------------
+     FILTRE STATUT
+     ------------------------------------------------------------------------ */
+
+  if (statusFilter) {
+    query = query.eq(
+      "status",
+      statusFilter,
+    );
+  }
+
+  /* ------------------------------------------------------------------------
+     FILTRE MÉTHODE
+     ------------------------------------------------------------------------ */
+
+  if (methodFilter) {
+    query = query.eq(
+      "payment_method",
+      methodFilter,
+    );
+  }
+
+  /* ------------------------------------------------------------------------
+     FILTRE FOURNISSEUR
+     ------------------------------------------------------------------------ */
+
+  if (providerFilter) {
+    query = query.eq(
+      "provider",
+      providerFilter,
+    );
+  }
+
+  /* ------------------------------------------------------------------------
+     RECHERCHE GLOBALE
+     ------------------------------------------------------------------------ */
+
+  if (q) {
+    /*
+     * .or() utilise la syntaxe PostgREST.
+     * On retire les caractères susceptibles de casser
+     * la syntaxe du filtre.
+     */
+
+    const safeSearch = q
+      .replace(/[%(),]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (safeSearch) {
+      query = query.or(
+        [
+          `merchant_reference.ilike.%${safeSearch}%`,
+          `provider_transaction_id.ilike.%${safeSearch}%`,
+          `customer_name.ilike.%${safeSearch}%`,
+          `customer_email.ilike.%${safeSearch}%`,
+          `customer_phone.ilike.%${safeSearch}%`,
+          `status.ilike.%${safeSearch}%`,
+          `currency.ilike.%${safeSearch}%`,
+          `payment_method.ilike.%${safeSearch}%`,
+          `provider.ilike.%${safeSearch}%`,
+        ].join(","),
+      );
+    }
+  }
+
+  /* ------------------------------------------------------------------------
+     EXÉCUTION
+     ------------------------------------------------------------------------ */
+
   const {
     data,
     error,
-  } = await supabase
-    .from("subscriptions")
-    .select(
-      `
-        id,
-        pharmacy_id,
-        plan_id,
-        status,
-        expires_at,
-        created_at
-      `,
-    )
-    .order(
-      "created_at",
-      {
-        ascending: false,
-      },
+  } = await query
+    .order("created_at", {
+      ascending: false,
+    })
+    .limit(100);
+
+  /* ------------------------------------------------------------------------
+     ERREUR SUPABASE
+     ------------------------------------------------------------------------ */
+
+  if (error) {
+    console.error(
+      "[PharmaFlow][agent/paiements]",
+      error,
     );
 
-  const subscriptions =
-    (data ??
-      []) as Subscription[];
+    return (
+      <main className="agent-payments-page">
+        <div className="agent-payments-container">
 
-  const pharmacyIds =
+          <section className="agent-payments-table-card">
+            <div className="border-b border-red-100 bg-red-50 px-5 py-5 sm:px-7">
+              <div className="flex items-start gap-4">
+
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-xl">
+                  ⚠️
+                </div>
+
+                <div className="min-w-0">
+                  <h1 className="text-lg font-bold text-red-900">
+                    Impossible de charger les paiements
+                  </h1>
+
+                  <p className="mt-1 text-sm leading-6 text-red-700">
+                    PharmaFlow n’a pas pu récupérer
+                    les transactions de paiement.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+
+            <div className="p-5 sm:p-7">
+
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <p className="text-xs font-semibold text-red-800">
+                  Détail technique
+                </p>
+
+                <p className="mt-1 break-words text-xs leading-5 text-red-700">
+                  {error.message ||
+                    "Erreur Supabase inconnue."}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+
+                <Link
+                  href="/agent"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700"
+                >
+                  ← Retour à l’espace agent
+                </Link>
+
+                <Link
+                  href="/agent/paiements"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Réessayer
+                </Link>
+
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </main>
+    );
+  }
+
+  /* ------------------------------------------------------------------------
+     NORMALISATION
+     ------------------------------------------------------------------------ */
+
+  const transactions =
+    (data as unknown as PaymentTransaction[]) ??
+    [];
+
+  /* ------------------------------------------------------------------------
+     STATISTIQUES
+     ------------------------------------------------------------------------ */
+
+  const totalTransactions =
+    transactions.length;
+
+  const paidTransactions =
+    transactions.filter(isPaid);
+
+  const pendingTransactions =
+    transactions.filter(isPending);
+
+  const failedTransactions =
+    transactions.filter(isFailed);
+
+  const totalPaid =
+    paidTransactions.reduce(
+      (total, transaction) => {
+        const amount = Number(
+          transaction.amount ?? 0,
+        );
+
+        return Number.isFinite(amount)
+          ? total + amount
+          : total;
+      },
+      0,
+    );
+
+  const totalPending =
+    pendingTransactions.reduce(
+      (total, transaction) => {
+        const amount = Number(
+          transaction.amount ?? 0,
+        );
+
+        return Number.isFinite(amount)
+          ? total + amount
+          : total;
+      },
+      0,
+    );
+
+  const totalFailed =
+    failedTransactions.reduce(
+      (total, transaction) => {
+        const amount = Number(
+          transaction.amount ?? 0,
+        );
+
+        return Number.isFinite(amount)
+          ? total + amount
+          : total;
+      },
+      0,
+    );
+
+  /* ------------------------------------------------------------------------
+     OPTIONS FILTRES
+     ------------------------------------------------------------------------ */
+
+  const currencies =
     Array.from(
       new Set(
-        subscriptions.map(
-          (item) =>
-            item.pharmacy_id,
-        ),
+        transactions
+          .map(
+            (transaction) =>
+              transaction.currency,
+          )
+          .filter(
+            (
+              value,
+            ): value is string =>
+              Boolean(value),
+          ),
       ),
     );
 
-  const planIds =
+  const methods =
     Array.from(
       new Set(
-        subscriptions.map(
-          (item) =>
-            item.plan_id,
-        ),
+        transactions
+          .map(
+            (transaction) =>
+              transaction.payment_method,
+          )
+          .filter(
+            (
+              value,
+            ): value is string =>
+              Boolean(value),
+          ),
       ),
+    ).sort(
+      (a, b) =>
+        a.localeCompare(b),
     );
 
-  let pharmacies: Pharmacy[] =
-    [];
-
-  let plans: Plan[] =
-    [];
-
-  let prices: Price[] =
-    [];
-
-  if (pharmacyIds.length) {
-    const { data } =
-      await supabase
-        .from("pharmacies")
-        .select(
-          `
-            id,
-            name,
-            currency_code
-          `,
-        )
-        .in(
-          "id",
-          pharmacyIds,
-        );
-
-    pharmacies =
-      (data ??
-        []) as Pharmacy[];
-  }
-
-  if (planIds.length) {
-    const { data } =
-      await supabase
-        .from(
-          "subscription_plans",
-        )
-        .select(
-          `
-            id,
-            name,
-            code
-          `,
-        )
-        .in(
-          "id",
-          planIds,
-        );
-
-    plans =
-      (data ??
-        []) as Plan[];
-  }
-
-  if (planIds.length) {
-    const { data } =
-      await supabase
-        .from(
-          "subscription_plan_prices",
-        )
-        .select(
-          `
-            plan_id,
-            currency_code,
-            price
-          `,
-        )
-        .in(
-          "plan_id",
-          planIds,
-        );
-
-    prices =
-      (data ??
-        []) as Price[];
-  }
-
-  const paid =
-    subscriptions.filter(
-      (item) => {
-        const s =
-          status(item.status);
-
-        return (
-          s === "active" ||
-          s === "paid"
-        );
-      },
+  const providers =
+    Array.from(
+      new Set(
+        transactions
+          .map(
+            (transaction) =>
+              transaction.provider,
+          )
+          .filter(
+            (
+              value,
+            ): value is string =>
+              Boolean(value),
+          ),
+      ),
+    ).sort(
+      (a, b) =>
+        a.localeCompare(b),
     );
 
-  const pending =
-    subscriptions.filter(
-      (item) =>
-        status(item.status) ===
-        "past_due",
+  const displayCurrency =
+    currencies.length === 1
+      ? currencies[0]
+      : null;
+
+  const hasFilters =
+    Boolean(
+      q ||
+        statusFilter ||
+        methodFilter ||
+        providerFilter,
     );
 
-  const trials =
-    subscriptions.filter(
-      (item) => {
-        const s =
-          status(item.status);
+  const clearUrl =
+    "/agent/paiements";
 
-        return (
-          s === "trial" ||
-          s === "trialing"
-        );
-      },
-    );
+  /* ------------------------------------------------------------------------
+     RENDER
+     ------------------------------------------------------------------------ */
 
   return (
-    <main className="payments-page">
+    <main className="agent-payments-page">
+      <div className="agent-payments-container">
 
-      <div className="shell">
+        {/* ================================================================
+            HEADER
+        ================================================================= */}
 
-        <header className="header">
+        <section className="agent-payments-header">
 
-          <div>
+          <div className="agent-payments-header-content">
 
-            <Link
-              href="/agent"
-              className="back"
-            >
-              ← Espace agent
-            </Link>
-
-            <div className="eyebrow">
-              PHARMAFLOW FINANCE
+            <div className="agent-payments-eyebrow">
+              <span>●</span>
+              PharmaFlow Finance
             </div>
 
-            <h1>
-              Suivi des paiements
+            <h1 className="agent-payments-title">
+              Centre des paiements
             </h1>
 
-            <p>
-              Suivi des règlements et de
-              l'état financier des abonnements.
+            <p className="agent-payments-description">
+              Supervision centralisée des transactions
+              de paiement enregistrées sur la plateforme
+              PharmaFlow.
             </p>
 
-          </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
 
-          <div className="agent">
+              <Link
+                href="/agent"
+                className="text-xs font-semibold text-slate-500 transition hover:text-teal-700"
+              >
+                Espace agent
+              </Link>
 
-            <div className="avatar">
-              {(
-                member.full_name ||
-                "A"
-              )
-                .charAt(0)
-                .toUpperCase()}
+              <span className="text-slate-300">
+                /
+              </span>
+
+              <span className="text-xs font-semibold text-slate-700">
+                Paiements
+              </span>
+
             </div>
 
-            <div>
-              <strong>
-                {member.full_name ||
-                  "Agent Finance"}
-              </strong>
-
-              <span>
-                Agent Finance
+            <div className="mt-3 break-all text-[11px] text-slate-400">
+              Session agent :{" "}
+              <span className="font-semibold text-slate-500">
+                {member.email ??
+                  member.id}
               </span>
             </div>
 
           </div>
 
-        </header>
 
-        <nav className="nav">
+          <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
 
-          <Link
-            href="/agent/abonnements"
-          >
-            Abonnements
-          </Link>
+            <Link
+              href="/agent/abonnements"
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700 sm:flex-none"
+            >
+              <span className="mr-2">
+                ←
+              </span>
 
-          <Link
-            href="/agent/paiements"
-            className="active"
-          >
-            Paiements
-          </Link>
+              Abonnements
+            </Link>
 
-          <Link
-            href="/agent/finance"
-          >
-            Tableau financier
-          </Link>
+            <Link
+              href="/agent"
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-teal-600 px-5 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700 sm:flex-none"
+            >
+              Tableau de bord
+            </Link>
 
-        </nav>
-
-        <section className="stats">
-
-          <div>
-            <span>
-              Actifs / payés
-            </span>
-
-            <strong>
-              {paid.length}
-            </strong>
-          </div>
-
-          <div>
-            <span>
-              En attente
-            </span>
-
-            <strong>
-              {pending.length}
-            </strong>
-          </div>
-
-          <div>
-            <span>
-              Essais gratuits
-            </span>
-
-            <strong>
-              {trials.length}
-            </strong>
           </div>
 
         </section>
 
-        <section className="table-card">
 
-          <div className="table-head">
+        {/* ================================================================
+            KPI
+        ================================================================= */}
 
-            <div>
-              <span>
-                RÈGLEMENTS
-              </span>
+        <section className="agent-payments-stats">
 
-              <h2>
-                Situation des abonnements
-              </h2>
+          {/* TOTAL */}
+
+          <div className="agent-payment-stat">
+
+            <div className="agent-payment-stat-label">
+              Transactions affichées
             </div>
 
-            <span className="count">
-              {subscriptions.length} dossiers
-            </span>
+            <div className="agent-payment-stat-value">
+              {totalTransactions}
+            </div>
+
+            <div className="agent-payment-stat-meta">
+              Maximum de 100 transactions chargées
+            </div>
 
           </div>
 
-          {error ? (
-            <div className="error">
-              Impossible de charger les
-              informations financières.
+
+          {/* PAID */}
+
+          <div className="agent-payment-stat">
+
+            <div className="agent-payment-stat-label">
+              Paiements reçus
+            </div>
+
+            <div className="agent-payment-stat-value">
+              {paidTransactions.length}
+            </div>
+
+            <div className="agent-payment-stat-meta">
+              {formatAmount(
+                totalPaid,
+                displayCurrency,
+              )}
+            </div>
+
+          </div>
+
+
+          {/* PENDING */}
+
+          <div className="agent-payment-stat">
+
+            <div className="agent-payment-stat-label">
+              Paiements en attente
+            </div>
+
+            <div className="agent-payment-stat-value">
+              {pendingTransactions.length}
+            </div>
+
+            <div className="agent-payment-stat-meta">
+              {formatAmount(
+                totalPending,
+                displayCurrency,
+              )}
+            </div>
+
+          </div>
+
+
+          {/* FAILED */}
+
+          <div className="agent-payment-stat">
+
+            <div className="agent-payment-stat-label">
+              Échecs / annulations
+            </div>
+
+            <div className="agent-payment-stat-value">
+              {failedTransactions.length}
+            </div>
+
+            <div className="agent-payment-stat-meta">
+              {formatAmount(
+                totalFailed,
+                displayCurrency,
+              )}
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* ================================================================
+            FILTERS
+        ================================================================= */}
+
+        <section className="agent-payments-filters">
+
+          {/* SEARCH */}
+
+          <div className="agent-payments-filter-group">
+
+            <label
+              htmlFor="q"
+              className="agent-payments-filter-label"
+            >
+              Recherche
+            </label>
+
+            <input
+              id="q"
+              name="q"
+              form="payment-filters"
+              defaultValue={q}
+              placeholder="Référence, client, téléphone..."
+              className="agent-payments-filter-input"
+            />
+
+          </div>
+
+
+          {/* STATUS */}
+
+          <div className="agent-payments-filter-group">
+
+            <label
+              htmlFor="status"
+              className="agent-payments-filter-label"
+            >
+              Statut
+            </label>
+
+            <select
+              id="status"
+              name="status"
+              form="payment-filters"
+              defaultValue={statusFilter}
+              className="agent-payments-filter-select"
+            >
+              <option value="">
+                Tous les statuts
+              </option>
+
+              <option value="pending">
+                En attente
+              </option>
+
+              <option value="processing">
+                Traitement
+              </option>
+
+              <option value="paid">
+                Payé
+              </option>
+
+              <option value="completed">
+                Terminé
+              </option>
+
+              <option value="success">
+                Succès
+              </option>
+
+              <option value="failed">
+                Échec
+              </option>
+
+              <option value="cancelled">
+                Annulé
+              </option>
+
+              <option value="refunded">
+                Remboursé
+              </option>
+            </select>
+
+          </div>
+
+
+          {/* METHOD */}
+
+          <div className="agent-payments-filter-group">
+
+            <label
+              htmlFor="method"
+              className="agent-payments-filter-label"
+            >
+              Méthode
+            </label>
+
+            <select
+              id="method"
+              name="method"
+              form="payment-filters"
+              defaultValue={methodFilter}
+              className="agent-payments-filter-select"
+            >
+              <option value="">
+                Toutes les méthodes
+              </option>
+
+              {methods.map(
+                (method) => (
+                  <option
+                    key={method}
+                    value={method}
+                  >
+                    {method}
+                  </option>
+                ),
+              )}
+            </select>
+
+          </div>
+
+
+          {/* PROVIDER */}
+
+          <div className="agent-payments-filter-group">
+
+            <label
+              htmlFor="provider"
+              className="agent-payments-filter-label"
+            >
+              Fournisseur
+            </label>
+
+            <select
+              id="provider"
+              name="provider"
+              form="payment-filters"
+              defaultValue={providerFilter}
+              className="agent-payments-filter-select"
+            >
+              <option value="">
+                Tous les fournisseurs
+              </option>
+
+              {providers.map(
+                (provider) => (
+                  <option
+                    key={provider}
+                    value={provider}
+                  >
+                    {provider}
+                  </option>
+                ),
+              )}
+            </select>
+
+          </div>
+
+
+          {/* ACTIONS */}
+
+          <div className="flex items-end gap-2">
+
+            <form
+              id="payment-filters"
+              method="GET"
+              className="contents"
+            >
+              <button
+                type="submit"
+                className="agent-payments-filter-button"
+              >
+                Filtrer
+              </button>
+
+              <Link
+                href={clearUrl}
+                className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+              >
+                Effacer
+              </Link>
+            </form>
+
+          </div>
+
+        </section>
+
+
+        {/* ================================================================
+            ACTIVE FILTERS
+        ================================================================= */}
+
+        {hasFilters && (
+          <section className="mb-4 flex flex-wrap items-center gap-2 sm:mb-5">
+
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              Filtres actifs
+            </span>
+
+            {q && (
+              <span className="max-w-full truncate rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700">
+                Recherche : {q}
+              </span>
+            )}
+
+            {statusFilter && (
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                Statut :{" "}
+                {statusLabel(
+                  statusFilter,
+                )}
+              </span>
+            )}
+
+            {methodFilter && (
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                Méthode :{" "}
+                {methodFilter}
+              </span>
+            )}
+
+            {providerFilter && (
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                Fournisseur :{" "}
+                {providerFilter}
+              </span>
+            )}
+
+          </section>
+        )}
+
+
+        {/* ================================================================
+            TRANSACTIONS
+        ================================================================= */}
+
+        <section className="agent-payments-table-card">
+
+          {/* HEADER */}
+
+          <div className="agent-payments-table-header">
+
+            <div className="min-w-0">
+
+              <div className="flex items-center gap-3">
+
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-lg">
+                  💳
+                </div>
+
+                <div className="min-w-0">
+
+                  <h2 className="agent-payments-table-title">
+                    Transactions de paiement
+                  </h2>
+
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Suivi des paiements enregistrés
+                    par PharmaFlow.
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <div className="agent-payments-table-count">
+              {transactions.length} résultat
+              {transactions.length > 1
+                ? "s"
+                : ""}
+            </div>
+
+          </div>
+
+
+          {/* EMPTY */}
+
+          {transactions.length === 0 ? (
+            <div className="agent-payments-empty">
+
+              <div className="agent-payments-empty-icon">
+                💳
+              </div>
+
+              <h3 className="agent-payments-empty-title">
+                Aucun paiement trouvé
+              </h3>
+
+              <p className="agent-payments-empty-description">
+                Aucune transaction ne correspond
+                aux critères actuellement sélectionnés.
+              </p>
+
+              <Link
+                href="/agent/paiements"
+                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-600 px-5 text-sm font-bold text-white shadow-sm shadow-teal-600/20 transition hover:bg-teal-700"
+              >
+                Afficher toutes les transactions
+              </Link>
+
             </div>
           ) : (
-            <div className="table-wrapper">
+            <>
+              {/* MOBILE HINT */}
 
-              <table>
+              <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 text-[11px] font-medium text-slate-400 lg:hidden">
+                <span aria-hidden="true">
+                  ↔
+                </span>
 
-                <thead>
-                  <tr>
-                    <th>
-                      Pharmacie
-                    </th>
+                Faites glisser horizontalement
+                pour voir toutes les colonnes.
+              </div>
 
-                    <th>
-                      Plan
-                    </th>
 
-                    <th>
-                      Statut
-                    </th>
+              {/* TABLE */}
 
-                    <th>
-                      Tarif
-                    </th>
+              <div className="agent-payments-table-wrapper">
 
-                    <th>
-                      Expiration
-                    </th>
+                <table className="agent-payments-table">
 
-                    <th>
-                      Dossier
-                    </th>
-                  </tr>
-                </thead>
+                  <thead>
+                    <tr>
 
-                <tbody>
+                      <th>
+                        Transaction
+                      </th>
 
-                  {subscriptions.map(
-                    (subscription) => {
+                      <th>
+                        Client
+                      </th>
 
-                      const pharmacy =
-                        pharmacies.find(
-                          (item) =>
-                            item.id ===
-                            subscription.pharmacy_id,
-                        );
+                      <th>
+                        Pharmacie
+                      </th>
 
-                      const plan =
-                        plans.find(
-                          (item) =>
-                            item.id ===
-                            subscription.plan_id,
-                        );
+                      <th>
+                        Fournisseur
+                      </th>
 
-                      const currency =
-                        pharmacy
-                          ?.currency_code
-                          ?.toUpperCase() ??
-                        null;
+                      <th>
+                        Méthode
+                      </th>
 
-                      const price =
-                        prices.find(
-                          (item) =>
-                            item.plan_id ===
-                              subscription.plan_id &&
-                            item.currency_code
-                              ?.toUpperCase() ===
-                              currency,
-                        );
+                      <th className="text-right">
+                        Montant
+                      </th>
 
-                      return (
-                        <tr
-                          key={
-                            subscription.id
-                          }
-                        >
+                      <th>
+                        Statut
+                      </th>
 
-                          <td>
-                            <strong>
-                              {pharmacy?.name ||
-                                "Pharmacie non renseignée"}
-                            </strong>
+                      <th>
+                        Date
+                      </th>
 
-                            <small>
-                              {currency ||
-                                "Devise inconnue"}
-                            </small>
-                          </td>
+                    </tr>
+                  </thead>
 
-                          <td>
-                            {plan?.name ||
-                              plan?.code ||
-                              "Plan inconnu"}
-                          </td>
 
-                          <td>
+                  <tbody>
 
-                            <span
-                              className={
-                                `badge ${status(
-                                  subscription.status,
-                                )}`
-                              }
-                            >
-                              {label(
-                                subscription.status,
+                    {transactions.map(
+                      (transaction) => {
+
+                        const pharmacy =
+                          transaction.pharmacies;
+
+                        const paymentProvider =
+                          transaction.payment_providers;
+
+                        const reference =
+                          transaction.merchant_reference ||
+                          transaction.provider_transaction_id ||
+                          transaction.id.slice(
+                            0,
+                            12,
+                          );
+
+                        return (
+                          <tr
+                            key={
+                              transaction.id
+                            }
+                          >
+
+                            {/* TRANSACTION */}
+
+                            <td>
+
+                              <div className="agent-payment-reference">
+
+                                <strong>
+                                  {reference}
+                                </strong>
+
+                                {transaction.provider_transaction_id &&
+                                  transaction.merchant_reference && (
+                                    <span>
+                                      {
+                                        transaction.provider_transaction_id
+                                      }
+                                    </span>
+                                  )}
+
+                                {transaction.subscription_id && (
+                                  <span className="inline-flex w-fit rounded-md bg-teal-50 px-2 py-1 text-[10px] font-semibold text-teal-700">
+                                    Abonnement lié
+                                  </span>
+                                )}
+
+                              </div>
+
+                            </td>
+
+
+                            {/* CLIENT */}
+
+                            <td>
+
+                              <div className="agent-payment-client">
+
+                                <div className="agent-payment-client-name">
+                                  {transaction.customer_name ||
+                                    "Client non renseigné"}
+                                </div>
+
+                                {transaction.customer_email && (
+                                  <div
+                                    className="agent-payment-client-email"
+                                    title={
+                                      transaction.customer_email
+                                    }
+                                  >
+                                    {
+                                      transaction.customer_email
+                                    }
+                                  </div>
+                                )}
+
+                                {transaction.customer_phone && (
+                                  <div className="text-[10px] text-slate-400">
+                                    {
+                                      transaction.customer_phone
+                                    }
+                                  </div>
+                                )}
+
+                              </div>
+
+                            </td>
+
+
+                            {/* PHARMACIE */}
+
+                            <td>
+
+                              <div className="agent-payment-pharmacy">
+
+                                <div className="agent-payment-pharmacy-name">
+                                  {pharmacy?.name ||
+                                    "Pharmacie non renseignée"}
+                                </div>
+
+                                {(pharmacy?.city ||
+                                  pharmacy?.country_code) && (
+                                  <div className="agent-payment-pharmacy-location">
+                                    {pharmacy?.city ||
+                                      "—"}
+
+                                    {pharmacy?.country_code
+                                      ? ` · ${pharmacy.country_code}`
+                                      : ""}
+                                  </div>
+                                )}
+
+                              </div>
+
+                            </td>
+
+
+                            {/* PROVIDER */}
+
+                            <td>
+
+                              <div className="agent-payment-provider">
+
+                                <div className="agent-payment-provider-name">
+                                  {getProviderName(
+                                    transaction,
+                                  )}
+                                </div>
+
+                                <div className="text-[10px] text-slate-400">
+                                  {getProviderCode(
+                                    transaction,
+                                  )}
+
+                                  {paymentProvider?.mode
+                                    ? ` · ${paymentProvider.mode}`
+                                    : ""}
+                                </div>
+
+                              </div>
+
+                            </td>
+
+
+                            {/* METHOD */}
+
+                            <td>
+
+                              <div className="agent-payment-provider">
+
+                                <span className="agent-payment-method">
+                                  {transaction.payment_method ||
+                                    "Non renseigné"}
+                                </span>
+
+                              </div>
+
+                            </td>
+
+
+                            {/* AMOUNT */}
+
+                            <td className="text-right">
+
+                              <div className="agent-payment-amount">
+                                {formatAmount(
+                                  transaction.amount,
+                                  transaction.currency,
+                                )}
+                              </div>
+
+                              {transaction.paid_at && (
+                                <div className="mt-1 text-[10px] font-medium text-emerald-600">
+                                  Payé le{" "}
+                                  {formatDate(
+                                    transaction.paid_at,
+                                  )}
+                                </div>
                               )}
-                            </span>
 
-                          </td>
+                            </td>
 
-                          <td>
-                            {money(
-                              price
-                                ? Number(
-                                    price.price,
-                                  )
-                                : null,
-                              currency,
-                            )}
-                          </td>
 
-                          <td>
-                            {formatDate(
-                              subscription.expires_at,
-                            )}
-                          </td>
+                            {/* STATUS */}
 
-                          <td>
-                            <Link
-                              href={`/agent/abonnements/${subscription.id}`}
-                            >
-                              Voir →
-                            </Link>
-                          </td>
+                            <td>
 
-                        </tr>
-                      );
-                    },
-                  )}
+                              <span
+                                className={statusClass(
+                                  transaction.status,
+                                )}
+                              >
+                                {statusLabel(
+                                  transaction.status,
+                                )}
+                              </span>
 
-                </tbody>
+                              {transaction.failure_reason && (
+                                <div
+                                  className="mt-1.5 max-w-[190px] truncate text-[10px] text-red-500"
+                                  title={
+                                    transaction.failure_reason
+                                  }
+                                >
+                                  {
+                                    transaction.failure_reason
+                                  }
+                                </div>
+                              )}
 
-              </table>
+                            </td>
 
-            </div>
+
+                            {/* DATE */}
+
+                            <td>
+
+                              <div className="agent-payment-date">
+
+                                <div className="agent-payment-date-main">
+                                  {formatDate(
+                                    transaction.created_at,
+                                  )}
+                                </div>
+
+                                {transaction.updated_at !==
+                                  transaction.created_at && (
+                                  <div className="agent-payment-date-time">
+                                    Modifié{" "}
+                                    {formatDate(
+                                      transaction.updated_at,
+                                    )}
+                                  </div>
+                                )}
+
+                              </div>
+
+                            </td>
+
+                          </tr>
+                        );
+                      },
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+            </>
           )}
 
         </section>
 
-        <div className="notice">
-          <strong>
-            ℹ️ À propos de cette vue
-          </strong>
 
-          <p>
-            Cette page présente actuellement
-            l'état financier des abonnements à
-            partir des enregistrements
-            d'abonnement. Le registre détaillé
-            des transactions encaissées sera
-            relié directement à la table de
-            transactions de paiement dès que
-            sa structure sera confirmée dans
-            votre base Supabase.
+        {/* ================================================================
+            INFORMATION
+        ================================================================= */}
+
+        <section className="agent-payments-info">
+
+          <div className="agent-payments-info-icon">
+            ℹ️
+          </div>
+
+          <div className="min-w-0">
+
+            <strong className="font-bold text-slate-700">
+              Informations de supervision
+            </strong>
+
+            <div className="mt-1">
+
+              Cette vue utilise la table{" "}
+
+              <code className="rounded-md bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal-700 ring-1 ring-slate-200">
+                payment_transactions
+              </code>
+
+              {" "}comme registre des transactions de
+              paiement et récupère les informations
+              liées aux pharmacies et aux fournisseurs
+              de paiement.
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* ================================================================
+            FOOTER
+        ================================================================= */}
+
+        <footer className="px-1 py-5 text-center sm:py-6">
+
+          <p className="text-[10px] font-medium text-slate-400 sm:text-xs">
+            PharmaFlow Africa · Centre de supervision
+            financière
           </p>
-        </div>
+
+        </footer>
 
       </div>
-
-      <style>{`
-        .payments-page {
-          min-height: 100vh;
-          padding: 30px;
-          background: #f5f9f9;
-          color: #172033;
-        }
-
-        .shell {
-          max-width: 1450px;
-          margin: auto;
-        }
-
-        .header {
-          display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          margin-bottom: 25px;
-        }
-
-        .back {
-          color: #0f766e;
-          text-decoration: none;
-          font-size: 12px;
-          font-weight: 800;
-        }
-
-        .eyebrow {
-          margin-top: 20px;
-          color: #0f766e;
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: .12em;
-        }
-
-        h1 {
-          margin: 6px 0;
-          font-size: 38px;
-          font-weight: 950;
-        }
-
-        .header p {
-          margin: 0;
-          color: #667085;
-        }
-
-        .agent {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          height: fit-content;
-          padding: 12px 15px;
-          border: 1px solid #dce8e8;
-          border-radius: 15px;
-          background: white;
-        }
-
-        .avatar {
-          width: 42px;
-          height: 42px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 12px;
-          background: #0f766e;
-          color: white;
-          font-weight: 900;
-        }
-
-        .agent strong,
-        .agent span {
-          display: block;
-        }
-
-        .agent strong {
-          font-size: 12px;
-        }
-
-        .agent span {
-          margin-top: 3px;
-          color: #0f766e;
-          font-size: 10px;
-          font-weight: 800;
-        }
-
-        .nav {
-          display: flex;
-          gap: 7px;
-          padding: 7px;
-          margin-bottom: 18px;
-          border: 1px solid #dce8e8;
-          border-radius: 14px;
-          background: white;
-        }
-
-        .nav a {
-          padding: 10px 15px;
-          border-radius: 9px;
-          color: #667085;
-          text-decoration: none;
-          font-size: 12px;
-          font-weight: 800;
-        }
-
-        .nav a.active {
-          background: #0f766e;
-          color: white;
-        }
-
-        .stats {
-          display: grid;
-          grid-template-columns:
-            repeat(3, 1fr);
-          gap: 14px;
-        }
-
-        .stats > div {
-          padding: 20px;
-          border: 1px solid #dce8e8;
-          border-radius: 17px;
-          background: white;
-        }
-
-        .stats span {
-          color: #667085;
-          font-size: 11px;
-          font-weight: 800;
-        }
-
-        .stats strong {
-          display: block;
-          margin-top: 6px;
-          font-size: 27px;
-          font-weight: 950;
-        }
-
-        .table-card {
-          margin-top: 18px;
-          overflow: hidden;
-          border: 1px solid #dce8e8;
-          border-radius: 19px;
-          background: white;
-        }
-
-        .table-head {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 22px;
-          border-bottom: 1px solid #edf1f2;
-        }
-
-        .table-head span:first-child {
-          color: #0f766e;
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: .1em;
-        }
-
-        .table-head h2 {
-          margin: 5px 0 0;
-          font-size: 19px;
-        }
-
-        .count {
-          padding: 7px 10px;
-          border-radius: 8px;
-          background: #edf7f5;
-          color: #0f766e;
-          font-size: 10px;
-          font-weight: 900;
-        }
-
-        .table-wrapper {
-          overflow-x: auto;
-        }
-
-        table {
-          width: 100%;
-          min-width: 900px;
-          border-collapse: collapse;
-        }
-
-        th {
-          padding: 12px 15px;
-          background: #f8fafb;
-          color: #667085;
-          text-align: left;
-          font-size: 10px;
-          text-transform: uppercase;
-        }
-
-        td {
-          padding: 15px;
-          border-top: 1px solid #edf1f2;
-          font-size: 11px;
-        }
-
-        td strong {
-          display: block;
-        }
-
-        td small {
-          display: block;
-          margin-top: 4px;
-          color: #98a2b3;
-        }
-
-        td a {
-          color: #0f766e;
-          text-decoration: none;
-          font-weight: 900;
-        }
-
-        .badge {
-          display: inline-flex;
-          padding: 6px 9px;
-          border-radius: 999px;
-          background: #eef2f3;
-          color: #667085;
-          font-size: 10px;
-          font-weight: 900;
-        }
-
-        .badge.active,
-        .badge.paid {
-          background: #e9f8ef;
-          color: #15803d;
-        }
-
-        .badge.trial,
-        .badge.trialing {
-          background: #eaf2ff;
-          color: #2563eb;
-        }
-
-        .badge.past_due {
-          background: #fff4e5;
-          color: #c2410c;
-        }
-
-        .badge.expired {
-          background: #f0f2f3;
-          color: #667085;
-        }
-
-        .notice {
-          margin-top: 18px;
-          padding: 15px;
-          border: 1px solid #d9e8f5;
-          border-radius: 13px;
-          background: #f5faff;
-        }
-
-        .notice strong {
-          color: #2563eb;
-          font-size: 12px;
-        }
-
-        .notice p {
-          margin: 6px 0 0;
-          color: #667085;
-          font-size: 11px;
-          line-height: 1.5;
-        }
-
-        .error {
-          padding: 30px;
-          color: #b42318;
-        }
-
-        @media(max-width:800px) {
-          .payments-page {
-            padding: 16px;
-          }
-
-          .header {
-            flex-direction: column;
-          }
-
-          .stats {
-            grid-template-columns: 1fr;
-          }
-
-          .nav {
-            overflow-x: auto;
-          }
-
-          .nav a {
-            white-space: nowrap;
-          }
-        }
-      `}</style>
-
     </main>
   );
 }
