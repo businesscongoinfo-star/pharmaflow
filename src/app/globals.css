@@ -47297,3 +47297,1040 @@ button {
   }
 
 }
+
+/* ============================================================
+   PHARMAFLOW — DASHBOARD RESPONSIVE / MOBILE PRO
+   À AJOUTER À LA FIN DE : src/app/globals.css
+
+   Objectifs :
+   - Sidebar desktop stable
+   - Sidebar mobile sous forme de drawer propre
+   - Aucun débordement horizontal
+   - Main content toujours visible
+   - Header adapté iPhone / Android / tablette
+   - Bouton hamburger bien positionné
+   - Overlay propre derrière le menu
+   - Tables et cartes responsives
+   - Support / réclamations responsifs
+   - Safe-area iPhone
+   ============================================================ */
+
+
+/* ============================================================
+   1. BASE DE SÉCURITÉ
+   ============================================================ */
+
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+
+/* ============================================================
+   2. STRUCTURE GLOBALE DU DASHBOARD
+   ============================================================ */
+
+.pf-app-shell {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.pf-sidebar,
+.pf-app-main {
+  min-width: 0;
+}
+
+.pf-app-main {
+  flex: 1 1 auto;
+  width: calc(100% - 280px);
+  max-width: calc(100% - 280px);
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.pf-dashboard-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+
+/* ============================================================
+   3. SIDEBAR DESKTOP
+   ============================================================ */
+
+.pf-sidebar {
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  z-index: 1000;
+}
+
+.pf-sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.pf-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pf-sidebar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.20);
+}
+
+
+/* ============================================================
+   4. HEADER DESKTOP
+   ============================================================ */
+
+.pf-app-header {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pf-header-left,
+.pf-header-actions {
+  min-width: 0;
+}
+
+.pf-header-left > div:last-child {
+  min-width: 0;
+}
+
+.pf-header-left h1 {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ============================================================
+   5. BOUTON MOBILE
+   ============================================================ */
+
+.pf-mobile-menu-button {
+  display: none;
+}
+
+
+/* ============================================================
+   6. TABLEAUX : PAS DE DÉBORDEMENT DE LA PAGE
+   ============================================================ */
+
+.pf-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.pf-dashboard-table {
+  min-width: 620px;
+}
+
+
+/* ============================================================
+   7. OVERLAY MOBILE
+   ============================================================ */
+
+.pf-mobile-overlay {
+  display: none;
+}
+
+
+/* ============================================================
+   8. TABLETTE — 1024 PX ET MOINS
+   ============================================================ */
+
+@media (max-width: 1024px) {
+
+  .pf-sidebar {
+    width: 250px;
+    min-width: 250px;
+    max-width: 250px;
+  }
+
+  .pf-app-main {
+    width: calc(100% - 250px);
+    max-width: calc(100% - 250px);
+  }
+
+  .pf-dashboard-content {
+    padding-left: clamp(18px, 3vw, 28px);
+    padding-right: clamp(18px, 3vw, 28px);
+  }
+
+  .pf-header-actions {
+    gap: 6px;
+  }
+
+  .pf-header-profile > div:last-child {
+    max-width: 150px;
+  }
+
+}
+
+
+/* ============================================================
+   9. TABLETTE PORTRAIT / GRAND MOBILE — 900 PX ET MOINS
+
+   Le menu devient un vrai tiroir latéral.
+   Il ne pousse PLUS le contenu.
+   ============================================================ */
+
+@media (max-width: 900px) {
+
+  html,
+  body {
+    overflow-x: hidden !important;
+  }
+
+  .pf-app-shell {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* Main prend toute la largeur */
+  .pf-app-main {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  /* Sidebar = drawer hors écran par défaut */
+  .pf-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+
+    width: min(88vw, 340px) !important;
+    min-width: 0 !important;
+    max-width: 340px !important;
+    height: 100dvh;
+
+    margin: 0;
+    padding-top: env(safe-area-inset-top);
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
+    transform: translate3d(-105%, 0, 0);
+    visibility: hidden;
+    opacity: 0;
+
+    transition:
+      transform 260ms cubic-bezier(.22, 1, .36, 1),
+      visibility 260ms ease,
+      opacity 180ms ease;
+
+    box-shadow:
+      18px 0 45px rgba(15, 23, 42, 0.18);
+
+    z-index: 10020 !important;
+
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .pf-sidebar.pf-sidebar-mobile-open {
+    transform: translate3d(0, 0, 0);
+    visibility: visible;
+    opacity: 1;
+  }
+
+  /* Overlay uniquement quand le drawer est ouvert */
+  .pf-mobile-overlay {
+    display: block !important;
+    position: fixed !important;
+    inset: 0;
+
+    width: 100%;
+    height: 100dvh;
+
+    margin: 0;
+    padding: 0;
+    border: 0;
+
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+
+    cursor: pointer;
+    z-index: 10010 !important;
+  }
+
+  /* Empêche le clic visuel de traverser le drawer */
+  .pf-sidebar.pf-sidebar-mobile-open ~ .pf-app-main {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Hamburger */
+  .pf-mobile-menu-button {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+
+    flex: 0 0 auto;
+
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+
+    margin-right: 10px;
+
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 12px;
+
+    background: #ffffff;
+    color: #0f766e;
+
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+
+    box-shadow:
+      0 5px 18px rgba(15, 23, 42, 0.08);
+
+    cursor: pointer;
+  }
+
+  .pf-mobile-menu-button:active {
+    transform: scale(0.96);
+  }
+
+  /* Bouton fermer du drawer */
+  .pf-sidebar-close {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+
+    border-radius: 10px;
+  }
+
+  /* Header */
+  .pf-app-header {
+    position: relative;
+    z-index: 20;
+
+    width: 100%;
+    max-width: 100%;
+
+    min-height: 72px;
+
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+
+    overflow: hidden;
+  }
+
+  .pf-header-left {
+    min-width: 0;
+    max-width: 70%;
+  }
+
+  .pf-header-left > div:last-child {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .pf-header-left h1 {
+    max-width: 100%;
+    font-size: clamp(20px, 4vw, 28px);
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pf-header-label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+
+  .pf-header-actions {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .pf-header-profile {
+    display: none !important;
+  }
+
+  .pf-header-divider {
+    display: none !important;
+  }
+
+  .pf-header-icon-button {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+  }
+
+  /* Contenu */
+  .pf-dashboard-content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+
+    padding:
+      20px
+      max(20px, env(safe-area-inset-right))
+      calc(24px + env(safe-area-inset-bottom))
+      max(20px, env(safe-area-inset-left));
+
+    overflow-x: hidden;
+  }
+
+  /* Intro */
+  .pf-dashboard-intro {
+    gap: 18px;
+  }
+
+  .pf-intro-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Grille KPI */
+  .pf-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Grille principale */
+  .pf-main-dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Actions rapides */
+  .pf-quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Support */
+  .pf-dashboard-support-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Toutes les cartes */
+  .pf-panel,
+  .pf-kpi-card,
+  .pf-quick-card,
+  .pf-subscription-card,
+  .pf-pharmacy-banner {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+}
+
+
+/* ============================================================
+   10. MOBILE — 600 PX ET MOINS
+   ============================================================ */
+
+@media (max-width: 600px) {
+
+  /* ----------------------------------------------------------
+     APP
+     ---------------------------------------------------------- */
+
+  .pf-app-shell {
+    width: 100vw;
+    max-width: 100vw;
+    overflow-x: hidden !important;
+  }
+
+  .pf-app-main {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  /* ----------------------------------------------------------
+     DRAWER
+     ---------------------------------------------------------- */
+
+  .pf-sidebar {
+    width: min(88vw, 320px) !important;
+    max-width: 320px !important;
+  }
+
+  .pf-sidebar-brand {
+    padding-left: 18px;
+    padding-right: 12px;
+  }
+
+  .pf-sidebar-pharmacy {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+
+  .pf-sidebar-nav {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .pf-nav-item {
+    min-height: 46px;
+    border-radius: 12px;
+  }
+
+  .pf-sidebar-support {
+    margin-left: 14px;
+    margin-right: 14px;
+  }
+
+  /* ----------------------------------------------------------
+     HEADER
+     ---------------------------------------------------------- */
+
+  .pf-app-header {
+    min-height: 68px;
+
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: 8px;
+
+    padding-left:
+      max(14px, env(safe-area-inset-left));
+
+    padding-right:
+      max(14px, env(safe-area-inset-right));
+
+    gap: 8px;
+  }
+
+  .pf-header-left {
+    flex: 1 1 auto;
+    max-width: calc(100% - 100px);
+    min-width: 0;
+  }
+
+  .pf-mobile-menu-button {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    margin-right: 8px;
+    border-radius: 12px;
+    font-size: 19px;
+  }
+
+  .pf-header-left h1 {
+    font-size: 20px;
+    max-width: 100%;
+  }
+
+  .pf-header-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9px;
+  }
+
+  .pf-header-actions {
+    gap: 5px;
+  }
+
+  .pf-header-icon-button {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+
+  /* ----------------------------------------------------------
+     CONTENU
+     ---------------------------------------------------------- */
+
+  .pf-dashboard-content {
+    padding:
+      16px
+      max(16px, env(safe-area-inset-right))
+      calc(28px + env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+  }
+
+  /* ----------------------------------------------------------
+     INTRO
+     ---------------------------------------------------------- */
+
+  .pf-dashboard-intro {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .pf-dashboard-intro h2 {
+    font-size: 26px;
+    line-height: 1.12;
+  }
+
+  .pf-dashboard-intro p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .pf-intro-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .pf-intro-actions button {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  /* ----------------------------------------------------------
+     PHARMACY BANNER
+     ---------------------------------------------------------- */
+
+  .pf-pharmacy-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 17px;
+    border-radius: 16px;
+  }
+
+  .pf-banner-main {
+    min-width: 0;
+  }
+
+  .pf-banner-status {
+    width: 100%;
+  }
+
+  /* ----------------------------------------------------------
+     ABONNEMENT
+     ---------------------------------------------------------- */
+
+  .pf-subscription-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .pf-subscription-main {
+    min-width: 0;
+  }
+
+  .pf-subscription-content {
+    min-width: 0;
+  }
+
+  .pf-subscription-content h3 {
+    font-size: 17px;
+    line-height: 1.35;
+  }
+
+  .pf-subscription-right {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .pf-subscription-button {
+    flex: 1 1 auto;
+    min-height: 46px;
+  }
+
+  /* ----------------------------------------------------------
+     KPI
+     ---------------------------------------------------------- */
+
+  .pf-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .pf-kpi-card {
+    width: 100%;
+    min-height: 150px;
+  }
+
+  .pf-kpi-value {
+    font-size: 28px;
+  }
+
+  /* ----------------------------------------------------------
+     PANELS
+     ---------------------------------------------------------- */
+
+  .pf-main-dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .pf-panel {
+    width: 100%;
+    min-width: 0;
+    border-radius: 16px;
+  }
+
+  .pf-panel-header {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .pf-panel-header h3 {
+    font-size: 17px;
+  }
+
+  .pf-panel-header p {
+    font-size: 12px;
+  }
+
+  /* ----------------------------------------------------------
+     TABLE
+     ---------------------------------------------------------- */
+
+  .pf-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pf-dashboard-table {
+    min-width: 580px;
+  }
+
+  /* ----------------------------------------------------------
+     STOCK
+     ---------------------------------------------------------- */
+
+  .pf-stock-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .pf-stock-summary-card {
+    min-width: 0;
+    padding: 10px 6px;
+  }
+
+  .pf-stock-summary-card span {
+    font-size: 9px;
+  }
+
+  .pf-stock-summary-card strong {
+    font-size: 20px;
+  }
+
+  .pf-stock-list {
+    min-width: 0;
+  }
+
+  .pf-stock-item {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .pf-stock-product {
+    min-width: 0;
+  }
+
+  .pf-stock-product strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ----------------------------------------------------------
+     QUICK ACTIONS
+     ---------------------------------------------------------- */
+
+  .pf-quick-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .pf-quick-card {
+    width: 100%;
+    min-height: 76px;
+  }
+
+  .pf-quick-content {
+    min-width: 0;
+  }
+
+  .pf-quick-content strong,
+  .pf-quick-content span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ----------------------------------------------------------
+     SUPPORT
+     ---------------------------------------------------------- */
+
+  .pf-dashboard-support-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 17px;
+    border-radius: 16px;
+  }
+
+  .pf-dashboard-support-content {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .pf-dashboard-support-content h3 {
+    font-size: 17px;
+    line-height: 1.3;
+  }
+
+  .pf-dashboard-support-content p {
+    font-size: 13px;
+  }
+
+  .pf-dashboard-support-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .pf-dashboard-support-actions button {
+    width: 100% !important;
+    min-height: 46px;
+    justify-content: center;
+  }
+
+  /* ----------------------------------------------------------
+     FOOTER
+     ---------------------------------------------------------- */
+
+  .pf-dashboard-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding-bottom:
+      calc(18px + env(safe-area-inset-bottom));
+  }
+
+}
+
+
+/* ============================================================
+   11. TRÈS PETITS TÉLÉPHONES — 390 PX ET MOINS
+   ============================================================ */
+
+@media (max-width: 390px) {
+
+  .pf-sidebar {
+    width: 90vw !important;
+    max-width: 310px !important;
+  }
+
+  .pf-dashboard-content {
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+
+  .pf-header-left {
+    max-width: calc(100% - 92px);
+  }
+
+  .pf-mobile-menu-button {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+
+  .pf-header-icon-button {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+  }
+
+  .pf-dashboard-intro h2 {
+    font-size: 23px;
+  }
+
+  .pf-stock-summary {
+    gap: 5px;
+  }
+
+  .pf-stock-summary-card {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+}
+
+
+/* ============================================================
+   12. IPHONE / IOS : SAFE AREA
+   ============================================================ */
+
+@supports (padding: max(0px)) {
+
+  .pf-sidebar {
+    padding-bottom:
+      max(16px, env(safe-area-inset-bottom));
+  }
+
+  .pf-app-header {
+    padding-left:
+      max(14px, env(safe-area-inset-left));
+
+    padding-right:
+      max(14px, env(safe-area-inset-right));
+  }
+
+}
+
+
+/* ============================================================
+   13. PAYSAGE MOBILE
+   ============================================================ */
+
+@media (max-width: 900px) and (orientation: landscape) {
+
+  .pf-sidebar {
+    width: min(360px, 72vw) !important;
+  }
+
+  .pf-dashboard-content {
+    padding-top: 16px;
+  }
+
+  .pf-kpi-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .pf-quick-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+}
+
+
+/* ============================================================
+   14. ACCESSIBILITÉ / RÉDUCTION DES ANIMATIONS
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .pf-sidebar,
+  .pf-mobile-overlay,
+  .pf-nav-item,
+  .pf-kpi-card,
+  .pf-quick-card,
+  .pf-mobile-menu-button {
+    transition: none !important;
+    animation: none !important;
+  }
+
+}
+
+
+/* ============================================================
+   15. CORRECTION DES ÉLÉMENTS QUI POURRAIENT FORCER
+       LA LARGEUR DE L'ÉCRAN
+   ============================================================ */
+
+@media (max-width: 900px) {
+
+  .pf-dashboard-content img,
+  .pf-dashboard-content video,
+  .pf-dashboard-content iframe,
+  .pf-dashboard-content svg,
+  .pf-dashboard-content canvas {
+    max-width: 100%;
+  }
+
+  .pf-dashboard-content pre,
+  .pf-dashboard-content code {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .pf-dashboard-content input,
+  .pf-dashboard-content select,
+  .pf-dashboard-content textarea {
+    max-width: 100%;
+  }
+
+}

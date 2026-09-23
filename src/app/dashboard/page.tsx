@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { createClient } from "../lib/supabase/client";
@@ -54,12 +54,22 @@ type Subscription = {
   plan_id: string | null;
 };
 
+type ManualAccess = {
+  enabled: boolean;
+  valid: boolean;
+  until: string | null;
+  remaining_days: number;
+  remaining_hours: number;
+  remaining_minutes: number;
+};
+
 type SubscriptionInfo = {
   status: string;
   daysRemaining: number;
   endDate: string | null;
   isTrial: boolean;
   isPaid: boolean;
+  isManualAccess: boolean;
 };
 
 type Product = {
@@ -155,104 +165,12 @@ function getRoleRedirect(
 }
 
 /* ============================================================
-   VÉRIFICATION ABONNEMENT
-============================================================ */
-
-function hasValidSubscription(
-  subscription: Subscription | null,
-): boolean {
-  if (!subscription) {
-    return false;
-  }
-
-  const status = String(
-    subscription.status || "",
-  )
-    .trim()
-    .toLowerCase();
-
-  const allowedStatuses = [
-    "active",
-    "paid",
-    "trial",
-    "trialing",
-    "cancelled",
-  ];
-
-  if (!allowedStatuses.includes(status)) {
-    return false;
-  }
-
-  /* ----------------------------------------------------------
-     PÉRIODE D'ESSAI
-  ---------------------------------------------------------- */
-
-  if (
-    status === "trial" ||
-    status === "trialing"
-  ) {
-    if (!subscription.trial_ends_at) {
-      return false;
-    }
-
-    const trialEndsAt = new Date(
-      subscription.trial_ends_at,
-    ).getTime();
-
-    if (!Number.isFinite(trialEndsAt)) {
-      return false;
-    }
-
-    if (trialEndsAt <= Date.now()) {
-      return false;
-    }
-
-    if (subscription.expires_at) {
-      const expiresAt = new Date(
-        subscription.expires_at,
-      ).getTime();
-
-      if (!Number.isFinite(expiresAt)) {
-        return false;
-      }
-
-      if (expiresAt <= Date.now()) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /* ----------------------------------------------------------
-     ABONNEMENT PAYÉ / ACTIF / ANNULÉ
-  ---------------------------------------------------------- */
-
-  if (!subscription.expires_at) {
-    return false;
-  }
-
-  const expiresAt = new Date(
-    subscription.expires_at,
-  ).getTime();
-
-  if (!Number.isFinite(expiresAt)) {
-    return false;
-  }
-
-  if (expiresAt <= Date.now()) {
-    return false;
-  }
-
-  return true;
-}
-
-/* ============================================================
    PAGE DASHBOARD
 ============================================================ */
 
 export default function DashboardPage() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const supabase = useMemo(
     () => createClient(),
@@ -314,6 +232,9 @@ export default function DashboardPage() {
 
   const [subscription, setSubscription] =
     useState<Subscription | null>(null);
+
+  const [manualAccess, setManualAccess] =
+    useState<ManualAccess | null>(null);
 
   const [products, setProducts] =
     useState<Product[]>([]);
@@ -494,86 +415,103 @@ export default function DashboardPage() {
           );
 
           /* ==================================================
-             PROTECTION STATUT PHARMACIE
+             VÉRIFICATION CENTRALE DE L'ACCÈS
+          ==================================================
+
+             /api/subscription/status est la source centrale
+             de vérité pour l'accès au dashboard.
+
+             Il gère :
+             - essai gratuit ;
+             - abonnement payé ;
+             - abonnement manuel ;
+             - accès manuel temporaire ;
+             - expiration ;
+             - blocage administratif.
+
+             Le dashboard ne refait donc pas une seconde
+             logique d'abonnement susceptible de refuser
+             un accès accordé par le Super Admin.
           ================================================== */
 
-          const pharmacyStatus =
-            String(
-              currentPharmacy.status ||
-                "",
-            )
-              .trim()
-              .toLowerCase();
-
-          if (
-            pharmacyStatus &&
-            pharmacyStatus !== "active" &&
-            pharmacyStatus !== "trial"
-          ) {
-            setRedirecting(true);
-
-            router.replace(
-              "/paiements?subscription=required",
+          const subscriptionStatusResponse =
+            await fetch(
+              "/api/subscription/status",
+              {
+                method: "GET",
+                cache: "no-store",
+                credentials: "include",
+                headers: {
+                  Accept:
+                    "application/json",
+                },
+              },
             );
 
-            return;
+          const responseText =
+            await subscriptionStatusResponse.text();
+
+          let subscriptionStatusData:
+            | {
+                success?: boolean;
+                access?: {
+                  allowed?: boolean;
+                  blocked?: boolean;
+                  reason?: string;
+                  manual_access?: ManualAccess;
+                };
+                subscription?:
+                  | Subscription
+                  | null;
+                manual_access?:
+                  | ManualAccess
+                  | null;
+                message?: string;
+              }
+            | null = null;
+
+          try {
+            subscriptionStatusData =
+              JSON.parse(responseText);
+          } catch {
+            throw new Error(
+              "Le serveur a retourné une réponse invalide lors de la vérification de votre accès.",
+            );
           }
 
-          /* ==================================================
-             VÉRIFICATION ABONNEMENT
-          ================================================== */
-
-          const {
-            data: subscriptionData,
-            error: subscriptionError,
-          } =
-            await supabase
-              .from("subscriptions")
-              .select(
-                `
-                id,
-                status,
-                trial_started_at,
-                trial_ends_at,
-                expires_at,
-                plan_id
-                `,
-              )
-              .eq(
-                "pharmacy_id",
-                pharmacyId,
-              )
-              .order(
-                "created_at",
-                {
-                  ascending: false,
-                },
-              )
-              .limit(1)
-              .maybeSingle();
-
           if (
-            subscriptionError
+            !subscriptionStatusResponse.ok ||
+            !subscriptionStatusData?.success
           ) {
             throw new Error(
-              subscriptionError.message,
+              subscriptionStatusData?.message ||
+                "Impossible de vérifier votre accès.",
             );
           }
 
+          const accessAllowed =
+            subscriptionStatusData.access
+              ?.allowed === true;
+
+          const currentManualAccess =
+            (subscriptionStatusData.manual_access ||
+              subscriptionStatusData.access
+                ?.manual_access ||
+              null) as ManualAccess | null;
+
           const currentSubscription =
-            subscriptionData as
-              | Subscription
-              | null;
+            (subscriptionStatusData.subscription ||
+              null) as Subscription | null;
+
+          setManualAccess(
+            currentManualAccess,
+          );
 
           setSubscription(
             currentSubscription,
           );
 
-          if (
-            !hasValidSubscription(
-              currentSubscription,
-            )
-          ) {
+          if (!accessAllowed) {
             setRedirecting(true);
 
             setProducts([]);
@@ -581,7 +519,7 @@ export default function DashboardPage() {
             setTodaySales([]);
 
             router.replace(
-              "/paiements?subscription=required",
+              "/abonnement?subscription=required",
             );
 
             return;
@@ -881,6 +819,31 @@ export default function DashboardPage() {
 
   const subscriptionInfo =
     useMemo<SubscriptionInfo>(() => {
+      const manualIsValid =
+        manualAccess?.valid === true &&
+        Boolean(manualAccess.until);
+
+      if (
+        manualIsValid &&
+        !subscription
+      ) {
+        return {
+          status: "manual_access",
+          daysRemaining: Math.max(
+            0,
+            Number(
+              manualAccess?.remaining_days ||
+                0,
+            ),
+          ),
+          endDate:
+            manualAccess?.until ?? null,
+          isTrial: false,
+          isPaid: false,
+          isManualAccess: true,
+        };
+      }
+
       if (!subscription) {
         return {
           status: "none",
@@ -888,6 +851,7 @@ export default function DashboardPage() {
           endDate: null,
           isTrial: false,
           isPaid: false,
+          isManualAccess: false,
         };
       }
 
@@ -917,6 +881,7 @@ export default function DashboardPage() {
           endDate: null,
           isTrial,
           isPaid,
+          isManualAccess: false,
         };
       }
 
@@ -930,6 +895,7 @@ export default function DashboardPage() {
           endDate,
           isTrial,
           isPaid,
+          isManualAccess: false,
         };
       }
 
@@ -951,8 +917,9 @@ export default function DashboardPage() {
         endDate,
         isTrial,
         isPaid,
+        isManualAccess: false,
       };
-    }, [subscription]);
+    }, [manualAccess, subscription]);
 
   const subscriptionEndDate =
     subscriptionInfo.endDate
@@ -1349,9 +1316,22 @@ export default function DashboardPage() {
           {navigation.map(
             (item) => {
 
+              const normalizedPathname =
+                pathname?.replace(
+                  /\/$/,
+                  "",
+                ) || "/dashboard";
+
               const active =
                 item.href ===
-                "/dashboard";
+                  "/dashboard"
+                  ? normalizedPathname ===
+                    "/dashboard"
+                  : normalizedPathname ===
+                      item.href ||
+                    normalizedPathname.startsWith(
+                      `${item.href}/`,
+                    );
 
               const labels: Record<
                 string,
@@ -1400,6 +1380,11 @@ export default function DashboardPage() {
                       ? "pf-nav-item-active"
                       : ""
                   }`}
+                  aria-current={
+                    active
+                      ? "page"
+                      : undefined
+                  }
                 >
 
                   <span className="pf-nav-icon">
@@ -1885,24 +1870,32 @@ export default function DashboardPage() {
               <div className="pf-subscription-content">
 
                 <span className="pf-subscription-label">
-                  {subscriptionInfo.isTrial
-                    ? "ESSAI GRATUIT"
-                    : "ABONNEMENT"}
+                  {subscriptionInfo.isManualAccess
+                    ? "ACCÈS MANUEL"
+                    : subscriptionInfo.isTrial
+                      ? "ESSAI GRATUIT"
+                      : "ABONNEMENT"}
                 </span>
 
                 <h3>
                   {subscriptionInfo.daysRemaining > 0
-                    ? subscriptionInfo.isTrial
-                      ? `Il vous reste ${subscriptionInfo.daysRemaining} jour${
+                    ? subscriptionInfo.isManualAccess
+                      ? `Accès manuel valide pendant ${subscriptionInfo.daysRemaining} jour${
                           subscriptionInfo.daysRemaining > 1
                             ? "s"
                             : ""
-                        } d’essai gratuit`
-                      : `Il vous reste ${subscriptionInfo.daysRemaining} jour${
-                          subscriptionInfo.daysRemaining > 1
-                            ? "s"
-                            : ""
-                        } sur votre abonnement`
+                        }`
+                      : subscriptionInfo.isTrial
+                        ? `Il vous reste ${subscriptionInfo.daysRemaining} jour${
+                            subscriptionInfo.daysRemaining > 1
+                              ? "s"
+                              : ""
+                          } d’essai gratuit`
+                        : `Il vous reste ${subscriptionInfo.daysRemaining} jour${
+                            subscriptionInfo.daysRemaining > 1
+                              ? "s"
+                              : ""
+                          } sur votre abonnement`
                     : "Votre abonnement a expiré"}
                 </h3>
 
@@ -2680,6 +2673,20 @@ export default function DashboardPage() {
 
       <style jsx>{`
 
+        .pf-nav-item {
+          position: relative;
+          cursor: pointer;
+        }
+
+        .pf-nav-item:focus-visible,
+        .pf-quick-card:focus-visible,
+        .pf-kpi-card:focus-visible,
+        .pf-primary-button:focus-visible,
+        .pf-secondary-button:focus-visible {
+          outline: 3px solid rgba(13, 148, 136, 0.28);
+          outline-offset: 2px;
+        }
+
         .pf-sidebar-support {
           display: flex;
           flex-direction: column;
@@ -2942,6 +2949,7 @@ function QuickAction({
   return (
     <button
       type="button"
+      aria-label={title}
       className={`pf-quick-card ${
         primary
           ? "pf-quick-card-primary"

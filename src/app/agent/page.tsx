@@ -2,6 +2,12 @@ import Link from "next/link";
 
 import { requireAgent } from "@/app/lib/agent/auth";
 
+/*
+|--------------------------------------------------------------------------
+| TYPES
+|--------------------------------------------------------------------------
+*/
+
 type AgentRole =
   | "support"
   | "finance"
@@ -16,6 +22,12 @@ type AgentCardProps = {
   description: string;
   href: string;
 };
+
+/*
+|--------------------------------------------------------------------------
+| CONFIGURATION DES RÔLES
+|--------------------------------------------------------------------------
+*/
 
 const ROLE_LABELS: Record<AgentRole, string> = {
   support: "Support",
@@ -35,6 +47,12 @@ const ROLE_ICONS: Record<AgentRole, string> = {
   security: "🛡️",
 };
 
+/*
+|--------------------------------------------------------------------------
+| HELPERS
+|--------------------------------------------------------------------------
+*/
+
 function hasPermission(
   permissions: Record<string, boolean>,
   permission: string,
@@ -42,37 +60,67 @@ function hasPermission(
   return permissions?.[permission] === true;
 }
 
+function normalizeRole(role: string): AgentRole {
+  const allowedRoles: AgentRole[] = [
+    "support",
+    "finance",
+    "technical",
+    "operations",
+    "analyst",
+    "security",
+  ];
+
+  return allowedRoles.includes(role as AgentRole)
+    ? (role as AgentRole)
+    : "support";
+}
+
+/*
+|--------------------------------------------------------------------------
+| PAGE AGENT
+|--------------------------------------------------------------------------
+*/
+
 export default async function AgentPage() {
   /*
-   * --------------------------------------------------
-   * AUTHENTIFICATION + AUTORISATION
-   * --------------------------------------------------
-   *
-   * requireAgent() vérifie :
-   *
-   * 1. utilisateur Supabase connecté
-   * 2. membre présent dans platform_team_members
-   * 3. membre actif
-   * 4. mot de passe initial à modifier
-   *
-   * Si must_change_password = true :
-   *
-   * /agent/change-password
-   *
-   * est automatiquement utilisé.
-   */
+  |--------------------------------------------------------------------------
+  | AUTHENTIFICATION
+  |--------------------------------------------------------------------------
+  |
+  | requireAgent() vérifie notamment :
+  |
+  | 1. utilisateur Supabase connecté
+  | 2. membre présent dans platform_team_members
+  | 3. membre actif
+  | 4. éventuel changement obligatoire du mot de passe
+  |
+  */
 
   const member = await requireAgent();
 
-  const permissions = member.permissions ?? {};
+  /*
+  |--------------------------------------------------------------------------
+  | DONNÉES DU MEMBRE
+  |--------------------------------------------------------------------------
+  */
 
-  const role = member.role;
+  const permissions =
+    member.permissions ?? {};
+
+  const role = normalizeRole(
+    String(member.role ?? "support"),
+  );
+
+  const firstName =
+    member.full_name
+      ?.trim()
+      .split(/\s+/)[0] || "Membre";
 
   /*
-   * --------------------------------------------------
-   * PERMISSIONS
-   * --------------------------------------------------
-   */
+  |--------------------------------------------------------------------------
+  | PERMISSIONS SUPPORT
+  |--------------------------------------------------------------------------
+  */
 
   const canSupport = hasPermission(
     permissions,
@@ -84,6 +132,12 @@ export default async function AgentPage() {
     "support.manage",
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS PHARMACIES
+  |--------------------------------------------------------------------------
+  */
+
   const canPharmacies = hasPermission(
     permissions,
     "pharmacies.view",
@@ -93,6 +147,12 @@ export default async function AgentPage() {
     permissions,
     "pharmacies.manage",
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS ABONNEMENTS
+  |--------------------------------------------------------------------------
+  */
 
   const canSubscriptions = hasPermission(
     permissions,
@@ -104,6 +164,12 @@ export default async function AgentPage() {
     "subscriptions.manage",
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS PAIEMENTS
+  |--------------------------------------------------------------------------
+  */
+
   const canPayments = hasPermission(
     permissions,
     "payments.view",
@@ -113,6 +179,12 @@ export default async function AgentPage() {
     permissions,
     "payments.manage",
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS TECHNIQUES
+  |--------------------------------------------------------------------------
+  */
 
   const canTechnical = hasPermission(
     permissions,
@@ -124,10 +196,22 @@ export default async function AgentPage() {
     "technical.manage",
   );
 
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS ANALYTIQUES
+  |--------------------------------------------------------------------------
+  */
+
   const canAnalytics = hasPermission(
     permissions,
     "analytics.view",
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS SÉCURITÉ
+  |--------------------------------------------------------------------------
+  */
 
   const canSecurity = hasPermission(
     permissions,
@@ -139,16 +223,11 @@ export default async function AgentPage() {
     "security.manage",
   );
 
-  const firstName =
-    member.full_name
-      ?.trim()
-      .split(/\s+/)[0] || "Membre";
-
   /*
-   * --------------------------------------------------
-   * MODULES DISPONIBLES
-   * --------------------------------------------------
-   */
+  |--------------------------------------------------------------------------
+  | MODULES DISPONIBLES
+  |--------------------------------------------------------------------------
+  */
 
   const hasAnyModule =
     canSupport ||
@@ -159,8 +238,18 @@ export default async function AgentPage() {
     canAnalytics ||
     canSecurity;
 
+  /*
+  |--------------------------------------------------------------------------
+  | RENDU
+  |--------------------------------------------------------------------------
+  */
+
   return (
     <main className="pf-agent-page">
+      {/* ================================================================
+          HEADER
+      ================================================================ */}
+
       <header className="pf-agent-header">
         <div className="pf-agent-brand">
           <div className="pf-agent-logo">
@@ -198,7 +287,15 @@ export default async function AgentPage() {
         </div>
       </header>
 
+      {/* ================================================================
+          CONTENU PRINCIPAL
+      ================================================================ */}
+
       <section className="pf-agent-content">
+        {/* ============================================================
+            BIENVENUE
+        ============================================================ */}
+
         <div className="pf-agent-welcome">
           <div>
             <span className="pf-agent-eyebrow">
@@ -227,8 +324,16 @@ export default async function AgentPage() {
           </div>
         </div>
 
+        {/* ============================================================
+            MODULES
+        ============================================================ */}
+
         {hasAnyModule ? (
           <div className="pf-agent-grid">
+            {/* --------------------------------------------------------
+                SUPPORT
+            -------------------------------------------------------- */}
+
             {canSupport ? (
               <AgentCard
                 icon="🛟"
@@ -241,6 +346,10 @@ export default async function AgentPage() {
                 href="/agent/support"
               />
             ) : null}
+
+            {/* --------------------------------------------------------
+                PHARMACIES
+            -------------------------------------------------------- */}
 
             {canPharmacies ? (
               <AgentCard
@@ -255,6 +364,10 @@ export default async function AgentPage() {
               />
             ) : null}
 
+            {/* --------------------------------------------------------
+                ABONNEMENTS
+            -------------------------------------------------------- */}
+
             {canSubscriptions ? (
               <AgentCard
                 icon="📅"
@@ -267,6 +380,10 @@ export default async function AgentPage() {
                 href="/agent/abonnements"
               />
             ) : null}
+
+            {/* --------------------------------------------------------
+                PAIEMENTS
+            -------------------------------------------------------- */}
 
             {canPayments ? (
               <AgentCard
@@ -281,6 +398,10 @@ export default async function AgentPage() {
               />
             ) : null}
 
+            {/* --------------------------------------------------------
+                TECHNIQUE
+            -------------------------------------------------------- */}
+
             {canTechnical ? (
               <AgentCard
                 icon="🛠️"
@@ -294,6 +415,10 @@ export default async function AgentPage() {
               />
             ) : null}
 
+            {/* --------------------------------------------------------
+                ANALYTIQUE
+            -------------------------------------------------------- */}
+
             {canAnalytics ? (
               <AgentCard
                 icon="📊"
@@ -302,6 +427,10 @@ export default async function AgentPage() {
                 href="/agent/analytique"
               />
             ) : null}
+
+            {/* --------------------------------------------------------
+                SÉCURITÉ
+            -------------------------------------------------------- */}
 
             {canSecurity ? (
               <AgentCard
@@ -317,6 +446,10 @@ export default async function AgentPage() {
             ) : null}
           </div>
         ) : (
+          /* ============================================================
+             AUCUN MODULE
+          ============================================================ */
+
           <div className="pf-agent-empty">
             <div className="pf-agent-empty-icon">
               🔐
@@ -338,6 +471,10 @@ export default async function AgentPage() {
             </p>
           </div>
         )}
+
+        {/* ============================================================
+            INFORMATIONS DU COMPTE
+        ============================================================ */}
 
         <div className="pf-agent-account">
           <div className="pf-agent-account-icon">
@@ -394,6 +531,10 @@ export default async function AgentPage() {
           </div>
         </div>
 
+        {/* ============================================================
+            SÉCURITÉ
+        ============================================================ */}
+
         <div className="pf-agent-security">
           <div className="pf-agent-security-icon">
             🔐
@@ -414,6 +555,10 @@ export default async function AgentPage() {
         </div>
       </section>
 
+      {/* ================================================================
+          FOOTER
+      ================================================================ */}
+
       <footer className="pf-agent-footer">
         <span>
           PharmaFlow — Centre opérationnel
@@ -423,6 +568,10 @@ export default async function AgentPage() {
           Accès sécurisé
         </span>
       </footer>
+
+      {/* ================================================================
+          STYLES
+      ================================================================ */}
 
       <style>{`
         .pf-agent-page {
@@ -844,6 +993,12 @@ export default async function AgentPage() {
     </main>
   );
 }
+
+/*
+|--------------------------------------------------------------------------
+| COMPOSANT CARTE
+|--------------------------------------------------------------------------
+*/
 
 function AgentCard({
   icon,
