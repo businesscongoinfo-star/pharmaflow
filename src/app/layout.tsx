@@ -4,44 +4,78 @@ import { getLocale, getMessages } from "next-intl/server";
 
 import "./globals.css";
 
+/*
+|--------------------------------------------------------------------------
+| SITE CONFIGURATION
+|--------------------------------------------------------------------------
+*/
+
+const SITE_URL = "https://pharmaflow.africa";
+const SITE_NAME = "PharmaFlow Africa";
+const SITE_TITLE = "PharmaFlow — Gestion intelligente des pharmacies";
+
+const SITE_DESCRIPTION =
+  "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.";
+
+const SITE_EMAIL = "pharmaflowafrica@gmail.com";
+const SITE_PHONE = "+242044177909";
+
+/*
+|--------------------------------------------------------------------------
+| SEO / METADATA
+|--------------------------------------------------------------------------
+*/
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://pharmaflow.africa"),
+  metadataBase: new URL(SITE_URL),
 
   title: {
-    default: "PharmaFlow — Gestion intelligente des pharmacies",
+    default: SITE_TITLE,
     template: "%s | PharmaFlow",
   },
 
-  description:
-    "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
+  description: SITE_DESCRIPTION,
 
   keywords: [
     "PharmaFlow",
     "PharmaFlow Africa",
     "PharmaFlow Congo",
+    "PharmaFlow Afrique",
     "pharmaflow.africa",
-    "pharmacie",
     "gestion pharmacie",
     "logiciel pharmacie",
+    "gestion pharmacie Afrique",
     "gestion stock pharmacie",
     "gestion ventes pharmacie",
+    "gestion produits pharmacie",
+    "gestion utilisateurs pharmacie",
+    "gestion financière pharmacie",
     "SaaS pharmacie",
+    "plateforme pharmacie",
+    "application pharmacie",
   ],
 
-  applicationName: "PharmaFlow",
+  applicationName: SITE_NAME,
 
   authors: [
     {
-      name: "PharmaFlow Africa",
+      name: SITE_NAME,
+      url: SITE_URL,
     },
   ],
 
-  creator: "PharmaFlow Africa",
+  creator: SITE_NAME,
 
-  publisher: "PharmaFlow Africa",
+  publisher: SITE_NAME,
+
+  category: "software",
 
   alternates: {
-    canonical: "https://pharmaflow.africa/",
+    canonical: `${SITE_URL}/`,
+    languages: {
+      "fr-FR": `${SITE_URL}/`,
+      en: `${SITE_URL}/en`,
+    },
   },
 
   robots: {
@@ -57,33 +91,107 @@ export const metadata: Metadata = {
     },
   },
 
+  /*
+  |--------------------------------------------------------------------------
+  | FAVICON / BRAND ICON
+  |--------------------------------------------------------------------------
+  |
+  | Le fichier public/favicon.png doit contenir le logo officiel
+  | PharmaFlow sur un fond carré.
+  |
+  | Recommandation :
+  | 512 x 512 px ou 1024 x 1024 px
+  |
+  */
+
+  icons: {
+    icon: [
+      {
+        url: "/favicon.png",
+        type: "image/png",
+        sizes: "512x512",
+      },
+    ],
+
+    shortcut: "/favicon.png",
+
+    apple: [
+      {
+        url: "/favicon.png",
+        type: "image/png",
+        sizes: "512x512",
+      },
+    ],
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | OPEN GRAPH
+  |--------------------------------------------------------------------------
+  */
+
   openGraph: {
     type: "website",
+
     locale: "fr_FR",
-    url: "https://pharmaflow.africa/",
-    siteName: "PharmaFlow Africa",
 
-    title:
-      "PharmaFlow — Gestion intelligente des pharmacies",
+    alternateLocale: ["en_US"],
 
-    description:
-      "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
+    url: `${SITE_URL}/`,
+
+    siteName: SITE_NAME,
+
+    title: SITE_TITLE,
+
+    description: SITE_DESCRIPTION,
+
+    images: [
+      {
+        url: `${SITE_URL}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "PharmaFlow Africa — Gestion intelligente des pharmacies",
+        type: "image/png",
+      },
+    ],
   },
+
+  /*
+  |--------------------------------------------------------------------------
+  | TWITTER / X
+  |--------------------------------------------------------------------------
+  */
 
   twitter: {
     card: "summary_large_image",
 
-    title:
-      "PharmaFlow — Gestion intelligente des pharmacies",
+    title: SITE_TITLE,
 
-    description:
-      "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
+    description: SITE_DESCRIPTION,
+
+    images: [`${SITE_URL}/og-image.png`],
+
+    creator: "@PharmaFlowAfrica",
   },
 
-  icons: {
-    icon: "/favicon.ico",
+  /*
+  |--------------------------------------------------------------------------
+  | OTHER
+  |--------------------------------------------------------------------------
+  */
+
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
   },
 };
+
+/*
+|--------------------------------------------------------------------------
+| ROOT LAYOUT
+|--------------------------------------------------------------------------
+*/
 
 export default async function RootLayout({
   children,
@@ -95,17 +203,14 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   /*
-   * ==========================================================
-   * DONNÉES STRUCTURÉES SEO
-   * ==========================================================
-   *
-   * Organization :
-   * Identifie PharmaFlow Africa comme l'organisation
-   * associée au site.
-   *
-   * WebSite :
-   * Identifie pharmaflow.africa comme le site officiel.
-   */
+  |--------------------------------------------------------------------------
+  | STRUCTURED DATA — JSON-LD
+  |--------------------------------------------------------------------------
+  |
+  | Ces données permettent aux moteurs de recherche de mieux comprendre
+  | l'identité de PharmaFlow Africa et son site officiel.
+  |
+  */
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -114,42 +219,78 @@ export default async function RootLayout({
       {
         "@type": "Organization",
 
-        "@id": "https://pharmaflow.africa/#organization",
+        "@id": `${SITE_URL}/#organization`,
 
-        name: "PharmaFlow Africa",
+        name: SITE_NAME,
 
-        url: "https://pharmaflow.africa/",
+        url: `${SITE_URL}/`,
 
-        email: "pharmaflowafrica@gmail.com",
+        email: SITE_EMAIL,
 
-        telephone: "+242044177909",
+        telephone: SITE_PHONE,
 
         description:
           "PharmaFlow Africa propose une plateforme SaaS moderne pour la gestion des pharmacies, des produits, des stocks, des ventes, des utilisateurs, des rapports et des paiements.",
 
         logo: {
           "@type": "ImageObject",
-          url: "https://pharmaflow.africa/favicon.ico",
+
+          "@id": `${SITE_URL}/#logo`,
+
+          url: `${SITE_URL}/favicon.png`,
+
+          contentUrl: `${SITE_URL}/favicon.png`,
+
+          width: 512,
+
+          height: 512,
+
+          caption: SITE_NAME,
+        },
+
+        image: {
+          "@id": `${SITE_URL}/#logo`,
         },
       },
 
       {
         "@type": "WebSite",
 
-        "@id": "https://pharmaflow.africa/#website",
+        "@id": `${SITE_URL}/#website`,
 
-        name: "PharmaFlow Africa",
+        name: SITE_NAME,
 
-        url: "https://pharmaflow.africa/",
+        url: `${SITE_URL}/`,
 
-        description:
-          "PharmaFlow est une plateforme SaaS moderne pour gérer les pharmacies, les produits, les stocks, les ventes, les utilisateurs, les rapports et les paiements.",
+        description: SITE_DESCRIPTION,
 
         publisher: {
-          "@id": "https://pharmaflow.africa/#organization",
+          "@id": `${SITE_URL}/#organization`,
         },
 
         inLanguage: ["fr-FR", "en"],
+      },
+
+      {
+        "@type": "SoftwareApplication",
+
+        "@id": `${SITE_URL}/#software`,
+
+        name: "PharmaFlow",
+
+        applicationCategory: "BusinessApplication",
+
+        operatingSystem: "Web",
+
+        url: `${SITE_URL}/`,
+
+        description: SITE_DESCRIPTION,
+
+        publisher: {
+          "@id": `${SITE_URL}/#organization`,
+        },
+
+        image: `${SITE_URL}/favicon.png`,
       },
     ],
   };
@@ -157,6 +298,10 @@ export default async function RootLayout({
   return (
     <html lang={locale}>
       <head>
+        {/* =========================================================
+            JSON-LD — STRUCTURED DATA
+           ========================================================= */}
+
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
