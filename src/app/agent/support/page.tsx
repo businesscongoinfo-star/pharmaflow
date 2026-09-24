@@ -97,23 +97,97 @@ function hasPermission(
   permissions: Record<string, boolean>,
   permission: string,
 ) {
-  return permissions?.[permission] === true;
+  return permissions[permission] === true;
 }
 
-function formatDate(value: string | null) {
+function normalizePermissions(
+  permissions: unknown,
+): Record<string, boolean> {
+  if (
+    permissions &&
+    typeof permissions === "object" &&
+    !Array.isArray(permissions)
+  ) {
+    return permissions as Record<
+      string,
+      boolean
+    >;
+  }
+
+  if (Array.isArray(permissions)) {
+    return permissions.reduce<
+      Record<string, boolean>
+    >((result, permission) => {
+      if (
+        typeof permission === "string"
+      ) {
+        result[permission] = true;
+      }
+
+      return result;
+    }, {});
+  }
+
+  return {};
+}
+
+function normalizeRole(
+  role: unknown,
+) {
+  return String(role ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
+function isTechnicalAgent(
+  role: unknown,
+) {
+  const normalizedRole =
+    normalizeRole(role);
+
+  return (
+    normalizedRole === "technical" ||
+    normalizedRole === "technique" ||
+    normalizedRole === "technicien"
+  );
+}
+
+function isPlatformAdministrator(
+  role: unknown,
+) {
+  const normalizedRole =
+    normalizeRole(role);
+
+  return (
+    normalizedRole === "superadmin" ||
+    normalizedRole === "platformadmin" ||
+    normalizedRole === "administrator" ||
+    normalizedRole === "admin"
+  );
+}
+
+function formatDate(
+  value: string | null,
+) {
   if (!value) return "—";
 
   try {
-    return new Intl.DateTimeFormat("fr-FR", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
+    return new Intl.DateTimeFormat(
+      "fr-FR",
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      },
+    ).format(new Date(value));
   } catch {
     return value;
   }
 }
 
-function getStatusLabel(status: string | null) {
+function getStatusLabel(
+  status: string | null,
+) {
   switch (status) {
     case "new":
       return "Nouvelle";
@@ -138,7 +212,9 @@ function getStatusLabel(status: string | null) {
   }
 }
 
-function getPriorityLabel(priority: string | null) {
+function getPriorityLabel(
+  priority: string | null,
+) {
   switch (priority) {
     case "urgent":
       return "Urgente";
@@ -157,7 +233,9 @@ function getPriorityLabel(priority: string | null) {
   }
 }
 
-function getCategoryLabel(category: string | null) {
+function getCategoryLabel(
+  category: string | null,
+) {
   switch (category) {
     case "technical":
       return "Technique";
@@ -188,7 +266,9 @@ function getCategoryLabel(category: string | null) {
   }
 }
 
-function statusClass(status: string | null) {
+function statusClass(
+  status: string | null,
+) {
   switch (status) {
     case "new":
       return "new";
@@ -213,7 +293,9 @@ function statusClass(status: string | null) {
   }
 }
 
-function priorityClass(priority: string | null) {
+function priorityClass(
+  priority: string | null,
+) {
   switch (priority) {
     case "urgent":
       return "urgent";
@@ -268,12 +350,20 @@ function sourceClass(
   }
 }
 
-function getItemHref(item: SupportItem) {
-  if (item.source === "reclamation") {
+function getItemHref(
+  item: SupportItem,
+) {
+  if (
+    item.source ===
+    "reclamation"
+  ) {
     return `/agent/support/reclamation/${item.id}`;
   }
 
-  if (item.source === "ticket") {
+  if (
+    item.source ===
+    "ticket"
+  ) {
     return `/agent/support/ticket/${item.id}`;
   }
 
@@ -289,24 +379,74 @@ function getItemHref(item: SupportItem) {
 export default async function AgentSupportPage() {
   /*
   |--------------------------------------------------------------------------
-  | AGENT
+  | AGENT CONNECTÉ
   |--------------------------------------------------------------------------
   */
 
-  const member = await requireAgent();
+  const member =
+    await requireAgent();
 
   const permissions =
-    member.permissions ?? {};
+    normalizePermissions(
+      member.permissions,
+    );
 
-  const canView = hasPermission(
-    permissions,
-    "support.view",
-  );
+  const technicalAgent =
+    isTechnicalAgent(
+      member.role,
+    );
 
-  const canManage = hasPermission(
-    permissions,
-    "support.manage",
-  );
+  const platformAdministrator =
+    isPlatformAdministrator(
+      member.role,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS EFFECTIVES
+  |--------------------------------------------------------------------------
+  |
+  | IMPORTANT :
+  |
+  | Un agent technique doit pouvoir accéder au
+  | centre support pour diagnostiquer et traiter
+  | les incidents/tickets techniques.
+  |
+  | On ne modifie pas les permissions stockées
+  | dans la base de données.
+  |
+  | On applique uniquement les permissions
+  | effectives pour cette page.
+  |
+  */
+
+  const canViewByPermission =
+    hasPermission(
+      permissions,
+      "support.view",
+    );
+
+  const canManageByPermission =
+    hasPermission(
+      permissions,
+      "support.manage",
+    );
+
+  const canView =
+    canViewByPermission ||
+    technicalAgent ||
+    platformAdministrator;
+
+  const canManage =
+    canManageByPermission ||
+    technicalAgent ||
+    platformAdministrator;
+
+  /*
+  |--------------------------------------------------------------------------
+  | PROTECTION
+  |--------------------------------------------------------------------------
+  */
 
   if (!canView && !canManage) {
     return (
@@ -316,14 +456,18 @@ export default async function AgentSupportPage() {
             🔐
           </div>
 
+          <span className="support-denied-eyebrow">
+            ESPACE AGENT
+          </span>
+
           <h1>
             Accès refusé
           </h1>
 
           <p>
-            Votre compte agent ne dispose pas
-            des permissions nécessaires pour
-            accéder au centre de support.
+            Votre compte agent ne dispose
+            pas des permissions nécessaires
+            pour accéder au centre de support.
           </p>
 
           <Link
@@ -334,14 +478,16 @@ export default async function AgentSupportPage() {
           </Link>
         </div>
 
-        <style>{supportStyles}</style>
+        <style>
+          {supportStyles}
+        </style>
       </main>
     );
   }
 
   /*
   |--------------------------------------------------------------------------
-  | SUPABASE
+  | SUPABASE ADMIN
   |--------------------------------------------------------------------------
   */
 
@@ -379,9 +525,12 @@ export default async function AgentSupportPage() {
         resolved_at,
         closed_at
       `)
-      .order("created_at", {
-        ascending: false,
-      }),
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      ),
 
     supabase
       .from("support_tickets")
@@ -401,9 +550,12 @@ export default async function AgentSupportPage() {
         updated_at,
         last_message_at
       `)
-      .order("last_message_at", {
-        ascending: false,
-      }),
+      .order(
+        "last_message_at",
+        {
+          ascending: false,
+        },
+      ),
 
     supabase
       .from("support_cases")
@@ -428,14 +580,17 @@ export default async function AgentSupportPage() {
         created_at,
         updated_at
       `)
-      .order("created_at", {
-        ascending: false,
-      }),
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        },
+      ),
   ]);
 
   /*
   |--------------------------------------------------------------------------
-  | ERREURS
+  | ERREURS DATABASE
   |--------------------------------------------------------------------------
   */
 
@@ -445,7 +600,9 @@ export default async function AgentSupportPage() {
     casesResult.error,
   ].filter(Boolean);
 
-  if (databaseErrors.length > 0) {
+  if (
+    databaseErrors.length > 0
+  ) {
     console.error(
       "[AGENT SUPPORT]",
       databaseErrors,
@@ -472,99 +629,169 @@ export default async function AgentSupportPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | NORMALISATION
+  | NORMALISATION — RÉCLAMATIONS
   |--------------------------------------------------------------------------
   */
 
-  const reclamationItems: SupportItem[] =
-    reclamations.map((item) => ({
-      id: item.id,
-      source: "reclamation",
-      reference: item.reference,
-      subject:
-        item.subject ||
-        "Réclamation sans objet",
-      description:
-        item.resolution ||
-        item.admin_reply ||
-        "Réclamation transmise par le client.",
-      status: item.status,
-      priority: item.priority,
-      category: "general",
-      customerName:
-        item.client_name ||
-        "Client",
-      customerEmail:
-        item.client_email,
-      customerPhone:
-        item.client_phone,
-      pharmacyId:
-        item.pharmacy_id,
-      createdAt:
-        item.created_at,
-      updatedAt:
-        item.updated_at,
-    }));
+  const reclamationItems:
+    SupportItem[] =
+    reclamations.map(
+      (item) => ({
+        id: item.id,
 
-  const ticketItems: SupportItem[] =
-    tickets.map((item) => ({
-      id: item.id,
-      source: "ticket",
-      reference:
-        item.ticket_number,
-      subject:
-        item.subject ||
-        "Ticket sans objet",
-      description:
-        `Demande ${getCategoryLabel(
+        source:
+          "reclamation",
+
+        reference:
+          item.reference,
+
+        subject:
+          item.subject ||
+          "Réclamation sans objet",
+
+        description:
+          item.resolution ||
+          item.admin_reply ||
+          "Réclamation transmise par le client.",
+
+        status:
+          item.status,
+
+        priority:
+          item.priority,
+
+        category:
+          "general",
+
+        customerName:
+          item.client_name ||
+          "Client",
+
+        customerEmail:
+          item.client_email,
+
+        customerPhone:
+          item.client_phone,
+
+        pharmacyId:
+          item.pharmacy_id,
+
+        createdAt:
+          item.created_at,
+
+        updatedAt:
+          item.updated_at,
+      }),
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | NORMALISATION — TICKETS
+  |--------------------------------------------------------------------------
+  */
+
+  const ticketItems:
+    SupportItem[] =
+    tickets.map(
+      (item) => ({
+        id: item.id,
+
+        source:
+          "ticket",
+
+        reference:
+          item.ticket_number,
+
+        subject:
+          item.subject ||
+          "Ticket sans objet",
+
+        description:
+          `Demande ${getCategoryLabel(
+            item.category,
+          )}.`,
+
+        status:
+          item.status,
+
+        priority:
+          item.priority,
+
+        category:
           item.category,
-        )}.`,
-      status: item.status,
-      priority: item.priority,
-      category:
-        item.category,
-      customerName:
-        item.customer_name,
-      customerEmail:
-        item.customer_email,
-      customerPhone:
-        item.customer_phone,
-      pharmacyId: null,
-      createdAt:
-        item.created_at,
-      updatedAt:
-        item.updated_at,
-    }));
 
-  const caseItems: SupportItem[] =
-    cases.map((item) => ({
-      id: item.id,
-      source: "case",
-      reference:
-        item.case_number,
-      subject:
-        item.subject,
-      description:
-        item.description,
-      status:
-        item.status,
-      priority:
-        item.priority,
-      category:
-        item.category,
-      customerName:
-        "Pharmacie PharmaFlow",
-      customerEmail:
-        null,
-      customerPhone:
-        null,
-      pharmacyId:
-        item.pharmacy_id,
-      createdAt:
-        item.created_at,
-      updatedAt:
-        item.updated_at,
-    }));
+        customerName:
+          item.customer_name,
+
+        customerEmail:
+          item.customer_email,
+
+        customerPhone:
+          item.customer_phone,
+
+        pharmacyId:
+          null,
+
+        createdAt:
+          item.created_at,
+
+        updatedAt:
+          item.updated_at,
+      }),
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | NORMALISATION — DOSSIERS
+  |--------------------------------------------------------------------------
+  */
+
+  const caseItems:
+    SupportItem[] =
+    cases.map(
+      (item) => ({
+        id: item.id,
+
+        source:
+          "case",
+
+        reference:
+          item.case_number,
+
+        subject:
+          item.subject,
+
+        description:
+          item.description,
+
+        status:
+          item.status,
+
+        priority:
+          item.priority,
+
+        category:
+          item.category,
+
+        customerName:
+          "Pharmacie PharmaFlow",
+
+        customerEmail:
+          null,
+
+        customerPhone:
+          null,
+
+        pharmacyId:
+          item.pharmacy_id,
+
+        createdAt:
+          item.created_at,
+
+        updatedAt:
+          item.updated_at,
+      }),
+    );
 
   /*
   |--------------------------------------------------------------------------
@@ -572,15 +799,20 @@ export default async function AgentSupportPage() {
   |--------------------------------------------------------------------------
   */
 
-  const allItems = [
-    ...reclamationItems,
-    ...ticketItems,
-    ...caseItems,
-  ].sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() -
-      new Date(a.createdAt).getTime(),
-  );
+  const allItems =
+    [
+      ...reclamationItems,
+      ...ticketItems,
+      ...caseItems,
+    ].sort(
+      (a, b) =>
+        new Date(
+          b.createdAt,
+        ).getTime() -
+        new Date(
+          a.createdAt,
+        ).getTime(),
+    );
 
   /*
   |--------------------------------------------------------------------------
@@ -594,33 +826,40 @@ export default async function AgentSupportPage() {
   const newCases =
     allItems.filter(
       (item) =>
-        item.status === "new",
+        item.status ===
+        "new",
     ).length;
 
   const openCases =
     allItems.filter(
       (item) =>
-        item.status === "open" ||
-        item.status === "in_progress",
+        item.status ===
+          "open" ||
+        item.status ===
+          "in_progress",
     ).length;
 
   const pendingCases =
     allItems.filter(
       (item) =>
-        item.status === "pending",
+        item.status ===
+        "pending",
     ).length;
 
   const resolvedCases =
     allItems.filter(
       (item) =>
-        item.status === "resolved" ||
-        item.status === "closed",
+        item.status ===
+          "resolved" ||
+        item.status ===
+          "closed",
     ).length;
 
   const urgentCases =
     allItems.filter(
       (item) =>
-        item.priority === "urgent",
+        item.priority ===
+        "urgent",
     ).length;
 
   const reclamationCount =
@@ -634,7 +873,22 @@ export default async function AgentSupportPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | PAGE
+  | LIBELLÉ DU RÔLE
+  |--------------------------------------------------------------------------
+  */
+
+  const agentRoleLabel =
+    technicalAgent
+      ? "Agent Technique"
+      : platformAdministrator
+        ? "Administrateur Plateforme"
+        : canManage
+          ? "Agent Support"
+          : "Agent";
+
+  /*
+  |--------------------------------------------------------------------------
+  | RENDER
   |--------------------------------------------------------------------------
   */
 
@@ -663,8 +917,9 @@ export default async function AgentSupportPage() {
             </h1>
 
             <p>
-              Gérez les réclamations, tickets et
-              dossiers des pharmacies PharmaFlow.
+              Gérez les réclamations,
+              tickets et dossiers des
+              pharmacies PharmaFlow.
             </p>
           </div>
         </div>
@@ -674,7 +929,8 @@ export default async function AgentSupportPage() {
             {member.full_name
               ?.trim()
               .charAt(0)
-              .toUpperCase() || "A"}
+              .toUpperCase() ||
+              "A"}
           </div>
 
           <div>
@@ -683,7 +939,7 @@ export default async function AgentSupportPage() {
             </strong>
 
             <span>
-              Agent Support
+              {agentRoleLabel}
             </span>
           </div>
         </div>
@@ -708,22 +964,28 @@ export default async function AgentSupportPage() {
 
         <div className="support-toolbar-actions">
           <div className="toolbar-source">
-            🧾 {reclamationCount} réclamation
-            {reclamationCount > 1
+            🧾 {reclamationCount}{" "}
+            réclamation
+            {reclamationCount >
+            1
               ? "s"
               : ""}
           </div>
 
           <div className="toolbar-source">
-            🎫 {ticketCount} ticket
-            {ticketCount > 1
+            🎫 {ticketCount}{" "}
+            ticket
+            {ticketCount >
+            1
               ? "s"
               : ""}
           </div>
 
           <div className="toolbar-source">
-            📂 {supportCaseCount} dossier
-            {supportCaseCount > 1
+            📂 {supportCaseCount}{" "}
+            dossier
+            {supportCaseCount >
+            1
               ? "s"
               : ""}
           </div>
@@ -859,7 +1121,8 @@ export default async function AgentSupportPage() {
             </strong>
 
             <small>
-              Depuis la table reclamations
+              Depuis la table
+              reclamations
             </small>
           </div>
         </div>
@@ -921,20 +1184,23 @@ export default async function AgentSupportPage() {
             </h2>
 
             <p>
-              Les réclamations et tickets sont
-              maintenant centralisés dans cet espace.
+              Les réclamations et
+              tickets sont centralisés
+              dans cet espace.
             </p>
           </div>
 
           <div className="support-count">
             {totalCases} demande
-            {totalCases > 1
+            {totalCases >
+            1
               ? "s"
               : ""}
           </div>
         </div>
 
-        {allItems.length === 0 ? (
+        {allItems.length ===
+        0 ? (
           <div className="support-empty">
             <div className="support-empty-icon">
               🛟
@@ -945,9 +1211,11 @@ export default async function AgentSupportPage() {
             </h3>
 
             <p>
-              Les réclamations et tickets des
-              pharmacies apparaîtront automatiquement
-              ici lorsqu'ils seront créés.
+              Les réclamations et
+              tickets des pharmacies
+              apparaîtront
+              automatiquement ici
+              lorsqu'ils seront créés.
             </p>
           </div>
         ) : (
@@ -971,7 +1239,9 @@ export default async function AgentSupportPage() {
                       </span>
 
                       <div className="support-case-number">
-                        {item.reference}
+                        {
+                          item.reference
+                        }
                       </div>
 
                       <span
@@ -1007,20 +1277,26 @@ export default async function AgentSupportPage() {
                     <div className="support-case-meta">
                       <span>
                         👤{" "}
-                        {item.customerName}
+                        {
+                          item.customerName
+                        }
                       </span>
 
                       {item.customerPhone ? (
                         <span>
                           📞{" "}
-                          {item.customerPhone}
+                          {
+                            item.customerPhone
+                          }
                         </span>
                       ) : null}
 
                       {item.customerEmail ? (
                         <span>
                           ✉️{" "}
-                          {item.customerEmail}
+                          {
+                            item.customerEmail
+                          }
                         </span>
                       ) : null}
 
@@ -1081,13 +1357,15 @@ export default async function AgentSupportPage() {
 
         <div>
           <strong>
-            Permissions de votre compte
+            Permissions effectives
           </strong>
 
           <p>
-            {canManage
-              ? "Votre compte possède les permissions de consultation et de gestion du support."
-              : "Votre compte possède actuellement un accès en consultation au support."}
+            {technicalAgent
+              ? "Votre rôle Technique vous permet de consulter et de traiter les demandes du centre de support."
+              : canManage
+                ? "Votre compte possède les permissions de consultation et de gestion du support."
+                : "Votre compte possède actuellement un accès en consultation au support."}
           </p>
 
           <div className="support-permission-tags">
@@ -1102,11 +1380,19 @@ export default async function AgentSupportPage() {
                 ✓ support.manage
               </span>
             ) : null}
+
+            {technicalAgent ? (
+              <span>
+                ✓ technical
+              </span>
+            ) : null}
           </div>
         </div>
       </section>
 
-      <style>{supportStyles}</style>
+      <style>
+        {supportStyles}
+      </style>
     </main>
   );
 }
@@ -1694,8 +1980,17 @@ const supportStyles = `
     font-size: 38px;
   }
 
+  .support-denied-eyebrow {
+    display: block;
+    margin-top: 12px;
+    color: #0f766e;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+
   .support-denied-card h1 {
-    margin: 10px 0 0;
+    margin: 7px 0 0;
     font-size: 23px;
   }
 
