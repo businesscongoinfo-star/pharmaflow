@@ -51090,3 +51090,2623 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* ============================================================
+   PHARMAFLOW — SUPER ADMIN
+   GREEN DESIGN SYSTEM
+   ============================================================ */
+
+:root {
+  --pf-sa-primary: #0f766e;
+  --pf-sa-primary-dark: #115e59;
+  --pf-sa-primary-deep: #134e4a;
+  --pf-sa-primary-light: #ccfbf1;
+  --pf-sa-primary-soft: #f0fdfa;
+
+  --pf-sa-success: #15803d;
+  --pf-sa-success-light: #f0fdf4;
+
+  --pf-sa-text: #101828;
+  --pf-sa-text-secondary: #475467;
+  --pf-sa-text-muted: #667085;
+
+  --pf-sa-border: #e4e7ec;
+  --pf-sa-border-soft: #eaecf0;
+
+  --pf-sa-background: #f5f8f8;
+  --pf-sa-surface: #ffffff;
+
+  --pf-sa-shadow:
+    0 8px 30px rgba(15, 118, 110, .07);
+
+  --pf-sa-shadow-hover:
+    0 16px 40px rgba(15, 118, 110, .12);
+
+  --pf-sa-radius: 16px;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — GLOBAL PAGE
+   ============================================================ */
+
+.sa-layout,
+.pf-super-admin,
+.pf-super-admin-page,
+.pf-sa-page {
+  --sa-primary: var(--pf-sa-primary);
+  --sa-primary-dark: var(--pf-sa-primary-dark);
+  --sa-primary-light: var(--pf-sa-primary-light);
+
+  --sa-success: var(--pf-sa-success);
+
+  --sa-text: var(--pf-sa-text);
+  --sa-text-secondary: var(--pf-sa-text-secondary);
+  --sa-text-soft: var(--pf-sa-text-muted);
+
+  --sa-border: var(--pf-sa-border);
+  --sa-background: var(--pf-sa-background);
+
+  background:
+    linear-gradient(
+      180deg,
+      #f8fafc 0%,
+      #f5f8f8 100%
+    );
+}
+
+
+/* ============================================================
+   SUPER ADMIN — LIENS
+   ============================================================ */
+
+.sa-layout a,
+.pf-super-admin a,
+.pf-super-admin-page a,
+.pf-sa-page a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — BOUTONS PRIMAIRES
+   ============================================================ */
+
+.sa-layout .sa-primary-button,
+.sa-layout .sa-primary-btn,
+.pf-super-admin .pf-primary-button,
+.pf-super-admin-page .pf-primary-button,
+.pf-sa-page .pf-primary-button {
+  background:
+    linear-gradient(
+      135deg,
+      #0f766e,
+      #14b8a6
+    );
+
+  border-color: #0f766e;
+
+  color: #ffffff;
+
+  box-shadow:
+    0 8px 20px rgba(15, 118, 110, .16);
+
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    background .18s ease;
+}
+
+.sa-layout .sa-primary-button:hover,
+.sa-layout .sa-primary-btn:hover,
+.pf-super-admin .pf-primary-button:hover,
+.pf-super-admin-page .pf-primary-button:hover,
+.pf-sa-page .pf-primary-button:hover {
+  background:
+    linear-gradient(
+      135deg,
+      #115e59,
+      #0f766e
+    );
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 12px 26px rgba(15, 118, 110, .22);
+}
+
+
+/* ============================================================
+   SUPER ADMIN — LIENS D'ACTION
+   ============================================================ */
+
+.sa-layout a:hover,
+.pf-super-admin a:hover,
+.pf-super-admin-page a:hover,
+.pf-sa-page a:hover {
+  color: #0f766e;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — CARTES
+   ============================================================ */
+
+.sa-layout .sa-stat-card,
+.sa-layout .sa-module-card,
+.sa-layout .sa-governance-card,
+.sa-layout .sa-integration-card,
+.sa-layout .sa-control-card,
+.pf-super-admin .pf-card,
+.pf-super-admin-page .pf-card,
+.pf-sa-page .pf-card {
+  border-color: #e4e7ec;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 6px 24px rgba(16, 24, 40, .045);
+
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.sa-layout .sa-stat-card:hover,
+.sa-layout .sa-module-card:hover,
+.sa-layout .sa-governance-card:hover,
+.sa-layout .sa-integration-card:hover,
+.sa-layout .sa-control-card:hover,
+.pf-super-admin .pf-card:hover,
+.pf-super-admin-page .pf-card:hover,
+.pf-sa-page .pf-card:hover {
+  border-color: #b7ddd8;
+
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 15px 38px rgba(15, 118, 110, .10);
+}
+
+
+/* ============================================================
+   SUPER ADMIN — ICÔNES
+   ============================================================ */
+
+.sa-layout .sa-stat-icon,
+.sa-layout .sa-module-icon,
+.sa-layout .sa-governance-icon,
+.sa-layout .sa-integration-icon,
+.sa-layout .sa-control-icon {
+  background:
+    linear-gradient(
+      135deg,
+      #ecfdf5,
+      #ccfbf1
+    );
+
+  border-color: #ccefe8;
+
+  color: #0f766e;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — TITRES
+   ============================================================ */
+
+.sa-layout h1,
+.sa-layout h2,
+.sa-layout h3,
+.pf-super-admin h1,
+.pf-super-admin h2,
+.pf-super-admin h3,
+.pf-super-admin-page h1,
+.pf-super-admin-page h2,
+.pf-super-admin-page h3,
+.pf-sa-page h1,
+.pf-sa-page h2,
+.pf-sa-page h3 {
+  color: var(--pf-sa-text);
+}
+
+
+/* ============================================================
+   SUPER ADMIN — TEXTE VERT
+   ============================================================ */
+
+.sa-layout .sa-primary-text,
+.sa-layout .sa-accent,
+.pf-super-admin .pf-primary-text,
+.pf-super-admin-page .pf-primary-text,
+.pf-sa-page .pf-primary-text {
+  color: #0f766e;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — BADGES SUCCESS
+   ============================================================ */
+
+.sa-layout .sa-badge-success,
+.sa-layout .sa-status-success,
+.pf-super-admin .pf-badge-success,
+.pf-super-admin-page .pf-badge-success,
+.pf-sa-page .pf-badge-success {
+  background: #f0fdf4;
+
+  border: 1px solid #bbf7d0;
+
+  color: #15803d;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — NAVIGATION ACTIVE
+   ============================================================ */
+
+.sa-layout .sa-nav-item.active,
+.sa-layout .sa-sidebar-link.active,
+.sa-layout .sa-menu-item.active,
+.pf-super-admin .pf-nav-item.active,
+.pf-super-admin-page .pf-nav-item.active,
+.pf-sa-page .pf-nav-item.active {
+  background:
+    linear-gradient(
+      135deg,
+      #ecfdf5,
+      #f0fdfa
+    );
+
+  color: #0f766e;
+
+  border-color: #ccefe8;
+
+  box-shadow:
+    inset 3px 0 0 #0f766e;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — SIDEBAR
+   ============================================================ */
+
+.sa-layout .sa-sidebar {
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #f8fffd 100%
+    );
+
+  border-right-color: #e1e9e7;
+}
+
+.sa-layout .sa-sidebar-link:hover,
+.sa-layout .sa-nav-item:hover,
+.sa-layout .sa-menu-item:hover {
+  background: #f0fdfa;
+
+  color: #0f766e;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — HEADER
+   ============================================================ */
+
+.sa-layout .sa-header {
+  background: rgba(255, 255, 255, .96);
+
+  border-bottom-color: #e4e7ec;
+
+  box-shadow:
+    0 2px 15px rgba(16, 24, 40, .035);
+}
+
+
+/* ============================================================
+   SUPER ADMIN — AVATAR
+   ============================================================ */
+
+.sa-layout .sa-admin-avatar {
+  background:
+    linear-gradient(
+      135deg,
+      #0f766e,
+      #14b8a6
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 6px 16px rgba(15, 118, 110, .18);
+}
+
+
+/* ============================================================
+   SUPER ADMIN — WELCOME
+   ============================================================ */
+
+.sa-layout .sa-welcome {
+  background:
+    linear-gradient(
+      135deg,
+      #0f766e 0%,
+      #115e59 55%,
+      #134e4a 100%
+    );
+
+  border-color: #0f766e;
+
+  box-shadow:
+    0 16px 40px rgba(15, 118, 110, .17);
+}
+
+.sa-layout .sa-welcome h1,
+.sa-layout .sa-welcome h2,
+.sa-layout .sa-welcome p {
+  color: #ffffff;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — STAT CARDS
+   ============================================================ */
+
+.sa-layout .sa-stat-value {
+  color: #0f766e;
+}
+
+.sa-layout .sa-stat-label {
+  color: #667085;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — PROGRESS
+   ============================================================ */
+
+.sa-layout .sa-progress,
+.pf-super-admin .pf-progress,
+.pf-super-admin-page .pf-progress {
+  background: #e6f4f1;
+}
+
+.sa-layout .sa-progress-bar,
+.pf-super-admin .pf-progress-bar,
+.pf-super-admin-page .pf-progress-bar {
+  background:
+    linear-gradient(
+      90deg,
+      #0f766e,
+      #14b8a6
+    );
+}
+
+
+/* ============================================================
+   SUPER ADMIN — TABLEAUX
+   ============================================================ */
+
+.sa-layout table,
+.pf-super-admin table,
+.pf-super-admin-page table,
+.pf-sa-page table {
+  border-color: #e4e7ec;
+}
+
+.sa-layout th,
+.pf-super-admin th,
+.pf-super-admin-page th,
+.pf-sa-page th {
+  background: #f0fdfa;
+
+  color: #475467;
+
+  border-bottom-color: #dcebe8;
+}
+
+.sa-layout td,
+.pf-super-admin td,
+.pf-super-admin-page td,
+.pf-sa-page td {
+  border-bottom-color: #eaecf0;
+}
+
+.sa-layout tbody tr:hover,
+.pf-super-admin tbody tr:hover,
+.pf-super-admin-page tbody tr:hover,
+.pf-sa-page tbody tr:hover {
+  background: #f8fffd;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — INPUTS
+   ============================================================ */
+
+.sa-layout input,
+.sa-layout select,
+.sa-layout textarea,
+.pf-super-admin input,
+.pf-super-admin select,
+.pf-super-admin textarea,
+.pf-super-admin-page input,
+.pf-super-admin-page select,
+.pf-super-admin-page textarea,
+.pf-sa-page input,
+.pf-sa-page select,
+.pf-sa-page textarea {
+  border-color: #dfe4ec;
+
+  background: #ffffff;
+
+  color: #101828;
+
+  transition:
+    border-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.sa-layout input:focus,
+.sa-layout select:focus,
+.sa-layout textarea:focus,
+.pf-super-admin input:focus,
+.pf-super-admin select:focus,
+.pf-super-admin textarea:focus,
+.pf-super-admin-page input:focus,
+.pf-super-admin-page select:focus,
+.pf-super-admin-page textarea:focus,
+.pf-sa-page input:focus,
+.pf-sa-page select:focus,
+.pf-sa-page textarea:focus {
+  outline: none;
+
+  border-color: #0f766e;
+
+  box-shadow:
+    0 0 0 3px rgba(15, 118, 110, .12);
+}
+
+
+/* ============================================================
+   SUPER ADMIN — CHECKBOX / RADIO
+   ============================================================ */
+
+.sa-layout input[type="checkbox"],
+.sa-layout input[type="radio"],
+.pf-super-admin input[type="checkbox"],
+.pf-super-admin input[type="radio"],
+.pf-super-admin-page input[type="checkbox"],
+.pf-super-admin-page input[type="radio"] {
+  accent-color: #0f766e;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — SETTINGS PAGE
+   ============================================================ */
+
+.pf-settings-page {
+  --settings-primary: #0f766e;
+  --settings-primary-dark: #115e59;
+  --settings-primary-light: #ccfbf1;
+  --settings-primary-soft: #f0fdfa;
+
+  background:
+    linear-gradient(
+      180deg,
+      #f8fafc 0%,
+      #f5f8f8 100%
+    );
+}
+
+
+/* ============================================================
+   SETTINGS — HEADER ICON
+   ============================================================ */
+
+.pf-settings-heading-icon {
+  background:
+    linear-gradient(
+      135deg,
+      #0f766e,
+      #14b8a6
+    ) !important;
+
+  box-shadow:
+    0 12px 28px rgba(15, 118, 110, .20) !important;
+}
+
+
+/* ============================================================
+   SETTINGS — BREADCRUMB
+   ============================================================ */
+
+.pf-settings-breadcrumb a {
+  color: #0f766e !important;
+}
+
+.pf-settings-breadcrumb a:hover {
+  color: #115e59 !important;
+}
+
+
+/* ============================================================
+   SETTINGS — PRIMARY BUTTON
+   ============================================================ */
+
+.pf-settings-btn-primary {
+  background:
+    linear-gradient(
+      135deg,
+      #0f766e,
+      #14b8a6
+    ) !important;
+
+  border-color: #0f766e !important;
+
+  color: #ffffff !important;
+
+  box-shadow:
+    0 8px 20px rgba(15, 118, 110, .17) !important;
+}
+
+.pf-settings-btn-primary:hover {
+  background:
+    linear-gradient(
+      135deg,
+      #115e59,
+      #0f766e
+    ) !important;
+
+  box-shadow:
+    0 11px 26px rgba(15, 118, 110, .22) !important;
+}
+
+
+/* ============================================================
+   SETTINGS — CARDS
+   ============================================================ */
+
+.pf-settings-card {
+  border-color: #e0e8e6 !important;
+
+  box-shadow:
+    0 7px 25px rgba(16, 24, 40, .045) !important;
+}
+
+.pf-settings-card:hover {
+  border-color: #b9ddd8 !important;
+
+  box-shadow:
+    0 15px 38px rgba(15, 118, 110, .10) !important;
+}
+
+
+/* ============================================================
+   SETTINGS — CARD ICONS
+   ============================================================ */
+
+.pf-settings-card-icon {
+  background:
+    linear-gradient(
+      135deg,
+      #ecfdf5,
+      #ccfbf1
+    ) !important;
+
+  border-color: #ccefe8 !important;
+}
+
+
+/* ============================================================
+   SETTINGS — STATUS
+   ============================================================ */
+
+.pf-settings-status {
+  background: #f0fdf4 !important;
+
+  border-color: #bbf7d0 !important;
+
+  color: #15803d !important;
+}
+
+
+/* ============================================================
+   SETTINGS — LINKS
+   ============================================================ */
+
+.pf-settings-link {
+  color: #0f766e !important;
+}
+
+.pf-settings-link:hover {
+  color: #115e59 !important;
+}
+
+
+/* ============================================================
+   SETTINGS — INFORMATION BOX
+   ============================================================ */
+
+.pf-settings-info {
+  border-color: #bde5df !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #f8fffd,
+      #effcf9
+    ) !important;
+}
+
+.pf-settings-info h2 {
+  color: #115e59 !important;
+}
+
+.pf-settings-info-icon {
+  border-color: #ccefe8 !important;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — FOCUS ACCESSIBILITY
+   ============================================================ */
+
+.sa-layout a:focus-visible,
+.sa-layout button:focus-visible,
+.pf-super-admin a:focus-visible,
+.pf-super-admin button:focus-visible,
+.pf-super-admin-page a:focus-visible,
+.pf-super-admin-page button:focus-visible,
+.pf-sa-page a:focus-visible,
+.pf-sa-page button:focus-visible,
+.pf-settings-page a:focus-visible,
+.pf-settings-page button:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, .20);
+
+  outline-offset: 3px;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — SELECTION
+   ============================================================ */
+
+.sa-layout ::selection,
+.pf-super-admin ::selection,
+.pf-super-admin-page ::selection,
+.pf-sa-page ::selection,
+.pf-settings-page ::selection {
+  background: rgba(15, 118, 110, .16);
+
+  color: #134e4a;
+}
+
+
+/* ============================================================
+   SUPER ADMIN — RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 850px) {
+
+  .pf-settings-page {
+    padding: 20px;
+  }
+
+  .pf-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 560px) {
+
+  .pf-settings-page {
+    padding: 14px;
+  }
+
+  .pf-settings-heading-icon {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .sa-layout *,
+  .sa-layout *::before,
+  .sa-layout *::after,
+  .pf-super-admin *,
+  .pf-super-admin-page *,
+  .pf-sa-page *,
+  .pf-settings-page *,
+  .pf-settings-page *::before,
+  .pf-settings-page *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+}
+
+/* ============================================================
+   FIN — SUPER ADMIN GREEN DESIGN SYSTEM
+   ============================================================ */
+
+   /* ============================================================
+   PHARMAFLOW — SUPER ADMIN
+   SIDEBAR GREEN — VERSION CORRIGÉE
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   VARIABLES
+   ------------------------------------------------------------ */
+
+.sa-layout {
+  --sa-sidebar-width: 272px !important;
+
+  --sa-green-primary: #0f766e;
+  --sa-green-dark: #115e59;
+  --sa-green-deep: #134e4a;
+  --sa-green-light: #ccfbf1;
+  --sa-green-soft: #f0fdfa;
+}
+
+
+/* ------------------------------------------------------------
+   SIDEBAR PRINCIPALE
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-sidebar {
+  position: fixed !important;
+
+  top: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+
+  width: 272px !important;
+
+  min-width: 272px !important;
+  max-width: 272px !important;
+
+  height: 100vh !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  overflow: hidden !important;
+
+  background:
+    linear-gradient(
+      180deg,
+      #075e57 0%,
+      #0f766e 45%,
+      #115e59 100%
+    ) !important;
+
+  color: #ffffff !important;
+
+  border-right:
+    1px solid
+    rgba(255, 255, 255, 0.12) !important;
+
+  box-shadow:
+    6px 0 25px
+    rgba(15, 118, 110, 0.14) !important;
+
+  z-index: 100 !important;
+}
+
+
+/* ------------------------------------------------------------
+   LOGO / BRAND
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-brand {
+  min-height: 82px !important;
+
+  height: 82px !important;
+
+  flex: 0 0 82px !important;
+
+  display: flex !important;
+
+  align-items: center !important;
+
+  gap: 12px !important;
+
+  padding: 18px 20px !important;
+
+  box-sizing: border-box !important;
+
+  background:
+    rgba(0, 0, 0, 0.08) !important;
+
+  border-bottom:
+    1px solid
+    rgba(255, 255, 255, 0.12) !important;
+}
+
+
+/* ------------------------------------------------------------
+   LOGO
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-brand-logo {
+  width: 42px !important;
+  height: 42px !important;
+
+  min-width: 42px !important;
+
+  flex: 0 0 42px !important;
+
+  display: flex !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+
+  border-radius: 12px !important;
+
+  background:
+    rgba(255, 255, 255, 0.14) !important;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.20) !important;
+
+  color: #ffffff !important;
+
+  box-shadow:
+    0 8px 20px
+    rgba(0, 0, 0, 0.14) !important;
+}
+
+
+/* ------------------------------------------------------------
+   NOM PHARMAFLOW
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-brand-text {
+  min-width: 0 !important;
+
+  display: block !important;
+
+  overflow: visible !important;
+}
+
+.sa-layout .sa-brand-name {
+  display: block !important;
+
+  color: #ffffff !important;
+
+  font-size: 17px !important;
+
+  line-height: 1.2 !important;
+
+  font-weight: 850 !important;
+
+  white-space: nowrap !important;
+}
+
+.sa-layout .sa-brand-subtitle {
+  display: block !important;
+
+  margin-top: 4px !important;
+
+  color:
+    rgba(255, 255, 255, 0.68) !important;
+
+  font-size: 10px !important;
+
+  line-height: 1.3 !important;
+
+  white-space: nowrap !important;
+}
+
+
+/* ------------------------------------------------------------
+   ZONE SCROLLABLE
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-sidebar-scroll {
+  flex: 1 1 auto !important;
+
+  min-height: 0 !important;
+
+  width: 100% !important;
+
+  overflow-x: hidden !important;
+
+  overflow-y: auto !important;
+
+  padding:
+    18px 13px 24px !important;
+
+  box-sizing: border-box !important;
+}
+
+
+/* Scrollbar */
+
+.sa-layout .sa-sidebar-scroll::-webkit-scrollbar {
+  width: 5px !important;
+}
+
+.sa-layout .sa-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.sa-layout .sa-sidebar-scroll::-webkit-scrollbar-thumb {
+  background:
+    rgba(255, 255, 255, 0.22) !important;
+
+  border-radius: 999px !important;
+}
+
+
+/* ------------------------------------------------------------
+   TITRES DE SECTIONS
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-nav-title {
+  display: block !important;
+
+  width: auto !important;
+
+  margin:
+    19px 10px 8px !important;
+
+  color:
+    rgba(255, 255, 255, 0.55) !important;
+
+  font-size: 9px !important;
+
+  line-height: 1.3 !important;
+
+  font-weight: 850 !important;
+
+  letter-spacing: .12em !important;
+
+  text-transform: uppercase !important;
+}
+
+
+/* ------------------------------------------------------------
+   NAVIGATION
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-nav {
+  width: 100% !important;
+
+  display: flex !important;
+
+  flex-direction: column !important;
+
+  gap: 4px !important;
+}
+
+
+/* ------------------------------------------------------------
+   LIENS DE NAVIGATION
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-nav-link {
+  width: 100% !important;
+
+  min-height: 46px !important;
+
+  height: auto !important;
+
+  box-sizing: border-box !important;
+
+  display: flex !important;
+
+  align-items: center !important;
+
+  gap: 12px !important;
+
+  padding:
+    10px 12px !important;
+
+  margin: 0 !important;
+
+  border-radius: 11px !important;
+
+  color:
+    rgba(255, 255, 255, 0.78) !important;
+
+  background:
+    transparent !important;
+
+  text-decoration: none !important;
+
+  font-size: 12px !important;
+
+  line-height: 1.3 !important;
+
+  font-weight: 650 !important;
+
+  white-space: nowrap !important;
+
+  overflow: visible !important;
+
+  transition:
+    background .18s ease,
+    color .18s ease,
+    transform .18s ease !important;
+}
+
+
+/* ------------------------------------------------------------
+   ICÔNES
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-nav-icon {
+  width: 28px !important;
+
+  min-width: 28px !important;
+
+  max-width: 28px !important;
+
+  height: 28px !important;
+
+  flex: 0 0 28px !important;
+
+  display: flex !important;
+
+  align-items: center !important;
+
+  justify-content: center !important;
+
+  color:
+    rgba(255, 255, 255, 0.82) !important;
+
+  font-size: 17px !important;
+
+  line-height: 1 !important;
+}
+
+
+/* ------------------------------------------------------------
+   TEXTE DES MENUS
+   ------------------------------------------------------------ */
+
+/*
+   IMPORTANT :
+   On force le texte à rester visible.
+*/
+
+.sa-layout .sa-nav-link > span:not(.sa-nav-icon),
+.sa-layout .sa-nav-link .sa-nav-label,
+.sa-layout .sa-nav-link span {
+  display: inline-flex !important;
+
+  align-items: center !important;
+
+  min-width: 0 !important;
+
+  flex: 1 1 auto !important;
+
+  color:
+    rgba(255, 255, 255, 0.82) !important;
+
+  font-size: 12px !important;
+
+  line-height: 1.3 !important;
+
+  font-weight: 650 !important;
+
+  white-space: nowrap !important;
+
+  overflow: visible !important;
+
+  opacity: 1 !important;
+
+  visibility: visible !important;
+}
+
+
+/* ------------------------------------------------------------
+   HOVER
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-nav-link:hover {
+  color: #ffffff !important;
+
+  background:
+    rgba(255, 255, 255, 0.11) !important;
+
+  transform:
+    translateX(2px) !important;
+}
+
+.sa-layout .sa-nav-link:hover .sa-nav-icon,
+.sa-layout .sa-nav-link:hover span {
+  color: #ffffff !important;
+}
+
+
+/* ------------------------------------------------------------
+   MENU ACTIF
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-nav-link.active {
+  color: #ffffff !important;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.18),
+      rgba(255, 255, 255, 0.08)
+    ) !important;
+
+  box-shadow:
+    inset 4px 0 0 #5eead4 !important;
+}
+
+.sa-layout .sa-nav-link.active .sa-nav-icon,
+.sa-layout .sa-nav-link.active span {
+  color: #ffffff !important;
+}
+
+
+/* ------------------------------------------------------------
+   BADGES DANS LE MENU
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-nav-link .sa-module-badge,
+.sa-layout .sa-nav-link .badge {
+  flex: 0 0 auto !important;
+
+  display: inline-flex !important;
+
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding:
+    3px 7px !important;
+
+  border-radius: 999px !important;
+
+  background:
+    rgba(255, 255, 255, 0.12) !important;
+
+  color:
+    rgba(255, 255, 255, 0.85) !important;
+
+  font-size: 8px !important;
+
+  font-weight: 800 !important;
+}
+
+
+/* ------------------------------------------------------------
+   FOOTER SIDEBAR
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-sidebar-footer {
+  flex: 0 0 auto !important;
+
+  padding:
+    14px !important;
+
+  background:
+    rgba(0, 0, 0, 0.08) !important;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.12) !important;
+}
+
+
+/* ------------------------------------------------------------
+   STATUT SÉCURITÉ
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-security-status {
+  display: flex !important;
+
+  align-items: center !important;
+
+  gap: 10px !important;
+
+  padding: 11px !important;
+
+  border-radius: 11px !important;
+
+  background:
+    rgba(255, 255, 255, 0.07) !important;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.06) !important;
+}
+
+.sa-layout .sa-security-status strong {
+  color:
+    rgba(255, 255, 255, 0.92) !important;
+}
+
+.sa-layout .sa-security-status div span {
+  color:
+    rgba(255, 255, 255, 0.52) !important;
+}
+
+.sa-layout .sa-security-dot {
+  background: #5eead4 !important;
+
+  box-shadow:
+    0 0 0 4px
+    rgba(94, 234, 212, .12) !important;
+}
+
+
+/* ------------------------------------------------------------
+   CONTENU PRINCIPAL
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-main {
+  margin-left: 272px !important;
+
+  width: calc(100% - 272px) !important;
+
+  min-width: 0 !important;
+
+  min-height: 100vh !important;
+}
+
+
+/* ------------------------------------------------------------
+   HEADER
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-header {
+  width: calc(100% - 272px) !important;
+
+  margin-left: 0 !important;
+
+  background:
+    rgba(255, 255, 255, .97) !important;
+
+  border-bottom:
+    1px solid #e4e7ec !important;
+
+  box-shadow:
+    0 2px 15px
+    rgba(16, 24, 40, .035) !important;
+}
+
+
+/* ------------------------------------------------------------
+   AVATAR ADMIN
+   ------------------------------------------------------------ */
+
+.sa-layout .sa-admin-avatar {
+  background:
+    linear-gradient(
+      135deg,
+      #0f766e,
+      #14b8a6
+    ) !important;
+
+  box-shadow:
+    0 6px 16px
+    rgba(15, 118, 110, .20) !important;
+}
+
+
+/* ------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------ */
+
+@media (max-width: 1100px) {
+
+  .sa-layout .sa-sidebar {
+    width: 245px !important;
+
+    min-width: 245px !important;
+
+    max-width: 245px !important;
+  }
+
+  .sa-layout .sa-main {
+    margin-left: 245px !important;
+
+    width:
+      calc(100% - 245px) !important;
+  }
+
+  .sa-layout .sa-header {
+    width:
+      calc(100% - 245px) !important;
+  }
+
+}
+
+
+/* ------------------------------------------------------------
+   TABLET / MOBILE
+   ------------------------------------------------------------ */
+
+@media (max-width: 800px) {
+
+  .sa-layout .sa-sidebar {
+    width: 272px !important;
+
+    min-width: 272px !important;
+
+    max-width: 272px !important;
+
+    transform:
+      translateX(-100%) !important;
+  }
+
+  .sa-layout .sa-main {
+    width: 100% !important;
+
+    margin-left: 0 !important;
+  }
+
+  .sa-layout .sa-header {
+    width: 100% !important;
+  }
+
+}
+
+
+/* ------------------------------------------------------------
+   EMPÊCHER UNE RÈGLE DE MASQUAGE DE CASSER LE MENU
+   ------------------------------------------------------------ */
+
+@media (min-width: 801px) {
+
+  .sa-layout .sa-sidebar {
+    transform:
+      translateX(0) !important;
+  }
+
+  .sa-layout .sa-brand-text,
+  .sa-layout .sa-brand-name,
+  .sa-layout .sa-brand-subtitle,
+  .sa-layout .sa-nav-title,
+  .sa-layout .sa-nav-link span,
+  .sa-layout .sa-nav-label {
+    display: block !important;
+
+    visibility: visible !important;
+
+    opacity: 1 !important;
+  }
+
+}
+
+
+/* ============================================================
+   FIN — SUPER ADMIN SIDEBAR GREEN
+   ============================================================ */
+
+   /* ============================================================
+   PHARMAFLOW — SUPER ADMIN
+   RESPONSIVE MOBILE / TABLETTE
+   VERSION PROFESSIONNELLE
+   ============================================================ */
+
+
+/* ============================================================
+   1. PROTECTION GÉNÉRALE
+   ============================================================ */
+
+.sa-layout {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  overflow-x: hidden;
+}
+
+.sa-layout *,
+.sa-layout *::before,
+.sa-layout *::after {
+  box-sizing: border-box;
+}
+
+.sa-layout img,
+.sa-layout svg {
+  max-width: 100%;
+}
+
+.sa-layout a {
+  max-width: 100%;
+}
+
+
+/* ============================================================
+   2. TABLETTES — 801 À 1100 PX
+   ============================================================ */
+
+@media (max-width: 1100px) and (min-width: 801px) {
+
+  .sa-layout {
+    --sa-sidebar-width: 245px !important;
+  }
+
+  .sa-layout .sa-sidebar {
+    width: 245px !important;
+    min-width: 245px !important;
+    max-width: 245px !important;
+  }
+
+  .sa-layout .sa-main {
+    width: calc(100% - 245px) !important;
+    margin-left: 245px !important;
+  }
+
+  .sa-layout .sa-header {
+    width: 100% !important;
+    padding-left: 22px !important;
+    padding-right: 22px !important;
+  }
+
+  .sa-layout .sa-content {
+    width: 100% !important;
+    max-width: 100% !important;
+
+    padding:
+      24px 22px 35px !important;
+  }
+
+  .sa-layout .sa-stats-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sa-layout .sa-module-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sa-layout .sa-quick-actions {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sa-layout .sa-governance-grid,
+  .sa-layout .sa-integration-grid,
+  .sa-layout .sa-control-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+
+/* ============================================================
+   3. TÉLÉPHONE — STRUCTURE PRINCIPALE
+   ============================================================ */
+
+@media (max-width: 800px) {
+
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  .sa-layout {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+
+    display: block !important;
+
+    overflow-x: hidden !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     SIDEBAR MOBILE
+     ---------------------------------------------------------- */
+
+  /*
+     Sur téléphone, la sidebar devient une zone supérieure.
+     Elle reste visible afin que les menus soient accessibles
+     sans dépendre d'un bouton hamburger.
+  */
+
+  .sa-layout .sa-sidebar {
+    position: relative !important;
+
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+
+    transform: none !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    overflow: visible !important;
+
+    border-right: 0 !important;
+    border-bottom:
+      1px solid
+      rgba(255, 255, 255, 0.12) !important;
+
+    box-shadow:
+      0 5px 22px
+      rgba(15, 118, 110, 0.13) !important;
+
+    z-index: 90 !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     BRAND MOBILE
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-brand {
+    width: 100% !important;
+
+    min-height: 68px !important;
+    height: 68px !important;
+
+    padding:
+      13px 16px !important;
+
+    flex: 0 0 68px !important;
+  }
+
+  .sa-layout .sa-brand-logo {
+    width: 38px !important;
+    height: 38px !important;
+
+    min-width: 38px !important;
+
+    flex: 0 0 38px !important;
+
+    border-radius: 10px !important;
+
+    font-size: 17px !important;
+  }
+
+  .sa-layout .sa-brand-name {
+    font-size: 15px !important;
+  }
+
+  .sa-layout .sa-brand-subtitle {
+    font-size: 9px !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     MENU MOBILE
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-sidebar-scroll {
+    width: 100% !important;
+
+    max-height: none !important;
+
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+
+    padding:
+      8px 10px 12px !important;
+
+    scrollbar-width: thin !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     TITRES DES SECTIONS
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-nav-title {
+    margin:
+      10px 7px 6px !important;
+
+    font-size: 8px !important;
+
+    letter-spacing:
+      .10em !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     NAVIGATION
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-nav {
+    width: 100% !important;
+
+    display: grid !important;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 5px !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     LIENS
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-nav-link {
+    width: 100% !important;
+
+    min-height: 43px !important;
+
+    padding:
+      8px 9px !important;
+
+    gap: 7px !important;
+
+    border-radius: 9px !important;
+
+    font-size: 10px !important;
+
+    white-space: normal !important;
+
+    overflow: hidden !important;
+
+    transform: none !important;
+  }
+
+
+  .sa-layout .sa-nav-link:hover {
+    transform: none !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     ICÔNES
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-nav-icon {
+    width: 23px !important;
+
+    min-width: 23px !important;
+
+    max-width: 23px !important;
+
+    height: 23px !important;
+
+    flex: 0 0 23px !important;
+
+    font-size: 14px !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     TEXTE DES MENUS
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-nav-link > span:not(.sa-nav-icon),
+  .sa-layout .sa-nav-link .sa-nav-label,
+  .sa-layout .sa-nav-link span {
+    min-width: 0 !important;
+
+    flex: 1 1 auto !important;
+
+    display: block !important;
+
+    color:
+      rgba(255, 255, 255, 0.88) !important;
+
+    font-size: 10px !important;
+
+    line-height: 1.2 !important;
+
+    font-weight: 700 !important;
+
+    white-space: normal !important;
+
+    overflow-wrap: anywhere !important;
+
+    visibility: visible !important;
+
+    opacity: 1 !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     MENU ACTIF
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-nav-link.active {
+    box-shadow:
+      inset 3px 0 0 #5eead4 !important;
+
+    background:
+      rgba(255, 255, 255, 0.17) !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     FOOTER SIDEBAR
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-sidebar-footer {
+    width: 100% !important;
+
+    padding:
+      9px 10px !important;
+
+    border-top:
+      1px solid
+      rgba(255, 255, 255, 0.10) !important;
+  }
+
+  .sa-layout .sa-security-status {
+    padding:
+      8px 10px !important;
+
+    border-radius: 9px !important;
+  }
+
+  .sa-layout .sa-security-status strong {
+    font-size: 9px !important;
+  }
+
+  .sa-layout .sa-security-status div span {
+    font-size: 8px !important;
+  }
+
+
+  /* ==========================================================
+     MAIN
+     ========================================================== */
+
+  .sa-layout .sa-main {
+    width: 100% !important;
+
+    min-width: 0 !important;
+
+    margin-left: 0 !important;
+
+    min-height: auto !important;
+  }
+
+
+  /* ==========================================================
+     HEADER
+     ========================================================== */
+
+  .sa-layout .sa-header {
+    position: sticky !important;
+
+    top: 0 !important;
+
+    width: 100% !important;
+
+    height: 58px !important;
+
+    min-height: 58px !important;
+
+    padding:
+      0 13px !important;
+
+    z-index: 70 !important;
+  }
+
+  .sa-layout .sa-header-left {
+    min-width: 0 !important;
+
+    overflow: hidden !important;
+  }
+
+  .sa-layout .sa-breadcrumb {
+    gap: 5px !important;
+
+    font-size: 9px !important;
+
+    white-space: nowrap !important;
+
+    overflow: hidden !important;
+
+    text-overflow: ellipsis !important;
+  }
+
+  .sa-layout .sa-breadcrumb-separator {
+    font-size: 11px !important;
+  }
+
+
+  /* ----------------------------------------------------------
+     HEADER DROITE
+     ---------------------------------------------------------- */
+
+  .sa-layout .sa-header-right {
+    gap: 6px !important;
+
+    flex-shrink: 0 !important;
+  }
+
+  .sa-layout .sa-header-icon-button {
+    width: 32px !important;
+    height: 32px !important;
+
+    min-width: 32px !important;
+  }
+
+  .sa-layout .sa-admin-profile {
+    gap: 6px !important;
+
+    padding-left: 6px !important;
+  }
+
+  .sa-layout .sa-admin-avatar {
+    width: 32px !important;
+    height: 32px !important;
+
+    min-width: 32px !important;
+
+    font-size: 10px !important;
+  }
+
+  .sa-layout .sa-admin-info {
+    display: none !important;
+  }
+
+
+  /* ==========================================================
+     CONTENU
+     ========================================================== */
+
+  .sa-layout .sa-content {
+    width: 100% !important;
+
+    max-width: 100% !important;
+
+    min-width: 0 !important;
+
+    padding:
+      16px 12px 28px !important;
+
+    margin: 0 !important;
+  }
+
+
+  /* ==========================================================
+     WELCOME
+     ========================================================== */
+
+  .sa-layout .sa-welcome {
+    width: 100% !important;
+
+    min-width: 0 !important;
+
+    min-height: auto !important;
+
+    display: flex !important;
+
+    flex-direction: column !important;
+
+    align-items: flex-start !important;
+
+    gap: 16px !important;
+
+    padding:
+      20px !important;
+
+    margin-bottom: 20px !important;
+
+    border-radius: 15px !important;
+  }
+
+  .sa-layout .sa-welcome-content {
+    width: 100% !important;
+
+    max-width: 100% !important;
+
+    min-width: 0 !important;
+  }
+
+  .sa-layout .sa-eyebrow {
+    font-size: 8px !important;
+
+    margin-bottom: 7px !important;
+  }
+
+  .sa-layout .sa-welcome h1 {
+    font-size:
+      clamp(23px, 7vw, 30px) !important;
+
+    line-height: 1.12 !important;
+
+    word-break: normal !important;
+  }
+
+  .sa-layout .sa-welcome p {
+    max-width: 100% !important;
+
+    margin-top: 9px !important;
+
+    font-size: 10px !important;
+
+    line-height: 1.55 !important;
+  }
+
+  .sa-layout .sa-welcome-actions {
+    width: 100% !important;
+
+    display: grid !important;
+
+    grid-template-columns:
+      1fr !important;
+
+    gap: 7px !important;
+  }
+
+  .sa-layout .sa-welcome-actions
+  .sa-primary-button,
+  .sa-layout .sa-welcome-actions
+  .sa-secondary-button {
+    width: 100% !important;
+
+    min-height: 40px !important;
+
+    font-size: 10px !important;
+  }
+
+
+  /* ==========================================================
+     STATISTIQUES
+     ========================================================== */
+
+  .sa-layout .sa-stats-grid {
+    width: 100% !important;
+
+    display: grid !important;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 9px !important;
+
+    margin-bottom: 22px !important;
+  }
+
+  .sa-layout .sa-stat-card {
+    min-width: 0 !important;
+
+    width: 100% !important;
+
+    padding: 14px !important;
+
+    border-radius: 12px !important;
+  }
+
+  .sa-layout .sa-stat-top {
+    gap: 6px !important;
+  }
+
+  .sa-layout .sa-stat-title {
+    font-size: 8px !important;
+
+    line-height: 1.3 !important;
+  }
+
+  .sa-layout .sa-stat-value {
+    margin-top: 7px !important;
+
+    font-size:
+      clamp(21px, 7vw, 27px) !important;
+  }
+
+  .sa-layout .sa-stat-description {
+    margin-top: 5px !important;
+
+    font-size: 8px !important;
+
+    line-height: 1.4 !important;
+  }
+
+  .sa-layout .sa-stat-icon {
+    width: 32px !important;
+    height: 32px !important;
+
+    min-width: 32px !important;
+
+    font-size: 14px !important;
+
+    border-radius: 8px !important;
+  }
+
+
+  /* ==========================================================
+     TITRES DE SECTIONS
+     ========================================================== */
+
+  .sa-layout .sa-section {
+    width: 100% !important;
+
+    margin-bottom: 24px !important;
+  }
+
+  .sa-layout .sa-section-header {
+    width: 100% !important;
+
+    display: flex !important;
+
+    align-items: flex-start !important;
+
+    flex-direction: column !important;
+
+    gap: 4px !important;
+
+    margin-bottom: 11px !important;
+  }
+
+  .sa-layout .sa-section-header h2 {
+    font-size: 15px !important;
+  }
+
+  .sa-layout .sa-section-header p {
+    font-size: 9px !important;
+  }
+
+
+  /* ==========================================================
+     CARTES MODULES
+     ========================================================== */
+
+  .sa-layout .sa-module-grid {
+    width: 100% !important;
+
+    display: grid !important;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 9px !important;
+  }
+
+  .sa-layout .sa-module-card {
+    min-width: 0 !important;
+
+    width: 100% !important;
+
+    padding: 13px !important;
+
+    gap: 9px !important;
+
+    border-radius: 11px !important;
+  }
+
+  .sa-layout .sa-module-icon {
+    width: 32px !important;
+    height: 32px !important;
+
+    min-width: 32px !important;
+
+    border-radius: 8px !important;
+
+    font-size: 13px !important;
+  }
+
+  .sa-layout .sa-module-content {
+    min-width: 0 !important;
+  }
+
+  .sa-layout .sa-module-content strong {
+    font-size: 10px !important;
+
+    line-height: 1.3 !important;
+  }
+
+  .sa-layout .sa-module-content p {
+    margin-top: 4px !important;
+
+    font-size: 8px !important;
+
+    line-height: 1.4 !important;
+  }
+
+  .sa-layout .sa-module-badge {
+    font-size: 7px !important;
+
+    padding:
+      2px 5px !important;
+  }
+
+
+  /* ==========================================================
+     QUICK ACTIONS
+     ========================================================== */
+
+  .sa-layout .sa-quick-actions {
+    width: 100% !important;
+
+    display: grid !important;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 8px !important;
+  }
+
+  .sa-layout .sa-quick-action {
+    min-width: 0 !important;
+
+    width: 100% !important;
+
+    padding: 11px !important;
+
+    gap: 8px !important;
+
+    border-radius: 10px !important;
+  }
+
+  .sa-layout .sa-quick-icon {
+    width: 30px !important;
+    height: 30px !important;
+
+    min-width: 30px !important;
+
+    font-size: 12px !important;
+  }
+
+  .sa-layout .sa-quick-content {
+    min-width: 0 !important;
+  }
+
+  .sa-layout .sa-quick-content strong {
+    font-size: 9px !important;
+
+    line-height: 1.25 !important;
+  }
+
+  .sa-layout .sa-quick-content span {
+    margin-top: 2px !important;
+
+    font-size: 7px !important;
+  }
+
+  .sa-layout .sa-quick-arrow {
+    display: none !important;
+  }
+
+
+  /* ==========================================================
+     GOVERNANCE
+     ========================================================== */
+
+  .sa-layout .sa-governance-grid {
+    width: 100% !important;
+
+    display: grid !important;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 9px !important;
+  }
+
+  .sa-layout .sa-governance-card {
+    min-width: 0 !important;
+
+    padding: 13px !important;
+
+    gap: 9px !important;
+
+    border-radius: 11px !important;
+  }
+
+  .sa-layout .sa-governance-icon {
+    width: 31px !important;
+    height: 31px !important;
+
+    min-width: 31px !important;
+
+    font-size: 12px !important;
+  }
+
+  .sa-layout .sa-governance-content {
+    min-width: 0 !important;
+  }
+
+  .sa-layout .sa-governance-content strong {
+    font-size: 9px !important;
+  }
+
+  .sa-layout .sa-governance-content p {
+    font-size: 7px !important;
+
+    line-height: 1.4 !important;
+  }
+
+
+  /* ==========================================================
+     INTÉGRATIONS
+     ========================================================== */
+
+  .sa-layout .sa-integration-grid {
+    width: 100% !important;
+
+    display: grid !important;
+
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 9px !important;
+  }
+
+  .sa-layout .sa-integration-card {
+    min-width: 0 !important;
+
+    padding: 13px !important;
+
+    gap: 9px !important;
+
+    border-radius: 11px !important;
+  }
+
+  .sa-layout .sa-integration-icon {
+    width: 31px !important;
+    height: 31px !important;
+
+    min-width: 31px !important;
+
+    font-size: 12px !important;
+  }
+
+  .sa-layout .sa-integration-content {
+    min-width: 0 !important;
+  }
+
+  .sa-layout .sa-integration-content strong {
+    font-size: 9px !important;
+  }
+
+  .sa-layout .sa-integration-content p {
+    font-size: 7px !important;
+
+    line-height: 1.4 !important;
+  }
+
+
+  /* ==========================================================
+     INTERNATIONAL
+     ========================================================== */
+
+  .sa-layout .sa-international-card {
+    width: 100% !important;
+
+    min-width: 0 !important;
+
+    display: flex !important;
+
+    flex-direction: column !important;
+
+    align-items: flex-start !important;
+
+    gap: 14px !important;
+
+    padding: 15px !important;
+
+    border-radius: 12px !important;
+  }
+
+  .sa-layout .sa-international-main {
+    width: 100% !important;
+
+    min-width: 0 !important;
+
+    gap: 9px !important;
+  }
+
+  .sa-layout .sa-international-icon {
+    width: 34px !important;
+    height: 34px !important;
+
+    min-width: 34px !important;
+
+    font-size: 14px !important;
+  }
+
+  .sa-layout .sa-international-main strong {
+    font-size: 10px !important;
+  }
+
+  .sa-layout .sa-international-main p {
+    max-width: 100% !important;
+
+    font-size: 8px !important;
+
+    line-height: 1.45 !important;
+  }
+
+  .sa-layout .sa-international-items {
+    width: 100% !important;
+
+    justify-content: flex-start !important;
+
+    gap: 6px !important;
+  }
+
+  .sa-layout .sa-international-item {
+    font-size: 8px !important;
+
+    padding:
+      5px 7px !important;
+  }
+
+
+  /* ==========================================================
+     TABLEAUX
+     ========================================================== */
+
+  .sa-layout .sa-table-wrapper,
+  .sa-layout .sa-table-container,
+  .sa-layout .sa-pricing-table-wrapper {
+    width: 100% !important;
+
+    max-width: 100% !important;
+
+    overflow-x: auto !important;
+
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .sa-layout table {
+    min-width: 680px !important;
+  }
+
+
+  /* ==========================================================
+     BOUTONS
+     ========================================================== */
+
+  .sa-layout .sa-primary-button,
+  .sa-layout .sa-secondary-button {
+    min-height: 38px !important;
+
+    padding:
+      0 12px !important;
+
+    border-radius: 9px !important;
+
+    font-size: 9px !important;
+  }
+
+
+  /* ==========================================================
+     FOOTER
+     ========================================================== */
+
+  .sa-layout .sa-footer {
+    width: 100% !important;
+
+    display: flex !important;
+
+    align-items: flex-start !important;
+
+    flex-direction: column !important;
+
+    gap: 9px !important;
+
+    padding:
+      18px 0 8px !important;
+  }
+
+  .sa-layout .sa-footer-center {
+    text-align: left !important;
+
+    font-size: 8px !important;
+  }
+
+  .sa-layout .sa-footer-status {
+    font-size: 8px !important;
+  }
+}
+
+
+/* ============================================================
+   4. PETITS TÉLÉPHONES — 560 PX
+   ============================================================ */
+
+@media (max-width: 560px) {
+
+  .sa-layout .sa-content {
+    padding:
+      13px 10px 25px !important;
+  }
+
+  .sa-layout .sa-brand {
+    padding:
+      12px 13px !important;
+  }
+
+  .sa-layout .sa-sidebar-scroll {
+    padding:
+      7px 8px 10px !important;
+  }
+
+  .sa-layout .sa-nav {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sa-layout .sa-nav-link {
+    min-height: 41px !important;
+
+    padding:
+      7px 8px !important;
+
+    font-size: 9px !important;
+  }
+
+  .sa-layout .sa-nav-icon {
+    width: 21px !important;
+
+    min-width: 21px !important;
+
+    max-width: 21px !important;
+
+    height: 21px !important;
+
+    font-size: 13px !important;
+  }
+
+  .sa-layout .sa-nav-link > span:not(.sa-nav-icon),
+  .sa-layout .sa-nav-link .sa-nav-label,
+  .sa-layout .sa-nav-link span {
+    font-size: 9px !important;
+  }
+
+
+  /* Statistiques en une colonne si nécessaire */
+
+  .sa-layout .sa-stats-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+
+    gap: 7px !important;
+  }
+
+  .sa-layout .sa-stat-card {
+    padding: 12px !important;
+  }
+
+  .sa-layout .sa-stat-value {
+    font-size: 20px !important;
+  }
+
+
+  /* Cartes */
+
+  .sa-layout .sa-module-grid,
+  .sa-layout .sa-governance-grid,
+  .sa-layout .sa-integration-grid,
+  .sa-layout .sa-quick-actions {
+    gap: 7px !important;
+  }
+
+  .sa-layout .sa-module-card,
+  .sa-layout .sa-governance-card,
+  .sa-layout .sa-integration-card {
+    padding: 11px !important;
+  }
+
+
+  /* Welcome */
+
+  .sa-layout .sa-welcome {
+    padding: 17px !important;
+
+    border-radius: 13px !important;
+  }
+
+  .sa-layout .sa-welcome h1 {
+    font-size: 23px !important;
+  }
+
+  .sa-layout .sa-welcome p {
+    font-size: 9px !important;
+  }
+}
+
+
+/* ============================================================
+   5. TRÈS PETITS ÉCRANS — 380 PX
+   ============================================================ */
+
+@media (max-width: 380px) {
+
+  .sa-layout .sa-header {
+    padding:
+      0 9px !important;
+  }
+
+  .sa-layout .sa-content {
+    padding:
+      11px 8px 22px !important;
+  }
+
+  .sa-layout .sa-nav {
+    grid-template-columns:
+      1fr !important;
+  }
+
+  .sa-layout .sa-nav-link {
+    min-height: 40px !important;
+  }
+
+  .sa-layout .sa-stats-grid {
+    grid-template-columns:
+      1fr !important;
+  }
+
+  .sa-layout .sa-module-grid,
+  .sa-layout .sa-governance-grid,
+  .sa-layout .sa-integration-grid,
+  .sa-layout .sa-quick-actions {
+    grid-template-columns:
+      1fr !important;
+  }
+
+  .sa-layout .sa-welcome h1 {
+    font-size: 21px !important;
+  }
+
+  .sa-layout .sa-section-header h2 {
+    font-size: 14px !important;
+  }
+}
+
+
+/* ============================================================
+   6. EMPÊCHER LES DÉBORDEMENTS HORIZONTAUX
+   ============================================================ */
+
+@media (max-width: 800px) {
+
+  .sa-layout .sa-content,
+  .sa-layout .sa-section,
+  .sa-layout .sa-section-header,
+  .sa-layout .sa-welcome,
+  .sa-layout .sa-stats-grid,
+  .sa-layout .sa-module-grid,
+  .sa-layout .sa-governance-grid,
+  .sa-layout .sa-integration-grid,
+  .sa-layout .sa-quick-actions {
+    max-width: 100% !important;
+
+    overflow-x: hidden !important;
+  }
+
+  .sa-layout input,
+  .sa-layout select,
+  .sa-layout textarea {
+    max-width: 100% !important;
+  }
+
+  .sa-layout pre,
+  .sa-layout code {
+    max-width: 100% !important;
+
+    overflow-x: auto !important;
+  }
+}
+
+
+/* ============================================================
+   FIN — RESPONSIVE SUPER ADMIN
+   ============================================================ */
