@@ -3,7 +3,9 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
+  type KeyboardEvent,
 } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
@@ -587,6 +589,15 @@ const paymentLabels = useMemo(
   const [search, setSearch] =
     useState("");
 
+  // Champ dédié aux douchettes/scanners code-barres USB ou Bluetooth.
+  // La plupart des scanners se comportent comme un clavier et envoient
+  // le code suivi de la touche Entrée.
+  const [barcodeScan, setBarcodeScan] =
+    useState("");
+
+  const barcodeInputRef =
+    useRef<HTMLInputElement>(null);
+
   const [categoryFilter, setCategoryFilter] =
     useState("all");
 
@@ -944,7 +955,7 @@ const paymentLabels = useMemo(
    */
 
   const categories = useMemo(() => {
-    const values = products
+    const values: string[] = products
       .map(
         (product) =>
           product.category
@@ -1191,6 +1202,151 @@ const paymentLabels = useMemo(
     setTimeout(() => {
       setMessage("");
     }, 1800);
+  }
+
+  /*
+   * =========================================================
+   * SCANNER CODE-BARRES
+   * =========================================================
+   *
+   * Un scanner USB/Bluetooth envoie généralement :
+   *   1. le code-barres
+   *   2. puis Entrée
+   *
+   * On recherche d'abord le code-barres exact, puis le SKU.
+   * Chaque scan ajoute le produit au panier.
+   * Aucun paiement et aucune vente ne sont enregistrés
+   * pendant le scan. La validation intervient uniquement
+   * depuis le bouton d'encaissement.
+   */
+
+  function focusBarcodeScanner() {
+    if (typeof window === "undefined") return;
+
+    window.requestAnimationFrame(() => {
+      barcodeInputRef.current?.focus();
+      barcodeInputRef.current?.select();
+    });
+  }
+
+  async function handleBarcodeScan(rawCode: string) {
+    const code = rawCode.trim();
+
+    if (!code || processing) {
+      focusBarcodeScanner();
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    const normalizedCode = code.toLowerCase();
+
+    const product = products.find((item) => {
+      const barcode = (item.barcode || "").trim().toLowerCase();
+      const sku = (item.sku || "").trim().toLowerCase();
+      return barcode === normalizedCode || sku === normalizedCode;
+    });
+
+    if (!product) {
+      setBarcodeScan("");
+      focusBarcodeScanner();
+      setError(
+        isEnglish
+          ? `Product not found for barcode: ${code}`
+          : `Produit introuvable pour le code-barres : ${code}`
+      );
+      return;
+    }
+
+    if (product.stock_quantity <= 0) {
+      setBarcodeScan("");
+      focusBarcodeScanner();
+      setError(
+        interpolate(text.stockInsufficient, {
+          product: product.name,
+          quantity: 0,
+        })
+      );
+      return;
+    }
+
+    const existingItem = cart.find(
+      (item) => item.product_id === product.id
+    );
+
+    if (existingItem) {
+      const newQuantity = existingItem.quantity + 1;
+
+      if (newQuantity > product.stock_quantity) {
+        setBarcodeScan("");
+        focusBarcodeScanner();
+        setError(
+          interpolate(text.stockInsufficient, {
+            product: product.name,
+            quantity: product.stock_quantity,
+          })
+        );
+        return;
+      }
+
+      setCart((current) =>
+        current.map((item) => {
+          if (item.product_id !== product.id) return item;
+
+          const total =
+            item.unit_price * newQuantity - item.discount;
+
+          return {
+            ...item,
+            quantity: newQuantity,
+            total: Math.max(0, total),
+          };
+        })
+      );
+
+      setBarcodeScan("");
+      focusBarcodeScanner();
+      setMessage(
+        isEnglish
+          ? `${product.name} — quantity ${newQuantity}`
+          : `${product.name} — quantité ${newQuantity}`
+      );
+
+      setTimeout(() => setMessage(""), 1800);
+      return;
+    }
+
+    const newItem: CartItem = {
+      product_id: product.id,
+      name: product.name,
+      unit: product.unit,
+      unit_price: Number(product.selling_price),
+      quantity: 1,
+      discount: 0,
+      total: Number(product.selling_price),
+    };
+
+    setCart((current) => [...current, newItem]);
+    setBarcodeScan("");
+    focusBarcodeScanner();
+
+    setMessage(
+      isEnglish
+        ? `${product.name} added to cart`
+        : `${product.name} ajouté au panier`
+    );
+
+    setTimeout(() => setMessage(""), 1800);
+  }
+
+  function handleBarcodeKeyDown(
+    event: KeyboardEvent<HTMLInputElement>
+  ) {
+    if (event.key !== "Enter") return;
+
+    event.preventDefault();
+    void handleBarcodeScan(barcodeScan);
   }
 
   function updateQuantity(
@@ -1493,38 +1649,56 @@ const paymentLabels = useMemo(
    * =========================================================
    */
 
-  async function completeSale() {
-    if (
-      !userId ||
-      !pharmacyId
-    ) {
-      setError(
-        text.sessionError
+  async function completeSale(
+    cartOverride?: CartItem[],
+    totalsOverride?: {
+      subtotal: number;
+      itemDiscount: number;
+      globalDiscount: number;
+      tax: number;
+      total: number;
+      amountPaid: number;
+    }
+  ) {
+    const saleCart = cartOverride ?? cart;
+    const saleSubtotal =
+      totalsOverride?.subtotal ?? subtotal;
+    const saleItemDiscount =
+      totalsOverride?.itemDiscount ?? itemDiscount;
+    const saleGlobalDiscount =
+      totalsOverride?.globalDiscount ?? safeGlobalDiscount;
+    const saleTax =
+      totalsOverride?.tax ?? tax;
+    const saleTotal =
+      totalsOverride?.total ?? total;
+    const saleAmountPaid =
+      Number(
+        totalsOverride?.amountPaid ?? amountPaid
       );
+    const saleChange = Math.max(
+      0,
+      saleAmountPaid - saleTotal
+    );
+    const saleRemaining = Math.max(
+      0,
+      saleTotal - saleAmountPaid
+    );
+
+    if (!userId || !pharmacyId) {
+      setError(text.sessionError);
       return;
     }
 
-    if (cart.length === 0) {
-      setError(
-        text.cartEmpty
-      );
+    if (saleCart.length === 0) {
+      setError(text.cartEmpty);
       return;
     }
 
-    if (
-      Number(amountPaid) <
-      total
-    ) {
+    if (saleAmountPaid < saleTotal) {
       setError(
-        interpolate(
-          text.amountInsufficient,
-          {
-            amount:
-              formatMoney(
-                remaining
-              ),
-          }
-        )
+        interpolate(text.amountInsufficient, {
+          amount: formatMoney(saleRemaining),
+        })
       );
       return;
     }
@@ -1534,353 +1708,186 @@ const paymentLabels = useMemo(
     setMessage("");
 
     try {
-      /*
-       * VÉRIFICATION FINALE DU STOCK
-       */
+      // Vérification finale du stock directement dans Supabase.
+      for (const item of saleCart) {
+        const { data: currentProduct, error: stockError } =
+          await supabase
+            .from("products")
+            .select("id, name, stock_quantity")
+            .eq("id", item.product_id)
+            .eq("pharmacy_id", pharmacyId)
+            .single();
 
-      for (const item of cart) {
-        const {
-          data: currentProduct,
-          error: stockError,
-        } = await supabase
-          .from("products")
-          .select(
-            "id, name, stock_quantity"
-          )
-          .eq(
-            "id",
-            item.product_id
-          )
-          .eq(
-            "pharmacy_id",
-            pharmacyId
-          )
-          .single();
-
-        if (
-          stockError ||
-          !currentProduct
-        ) {
+        if (stockError || !currentProduct) {
           throw new Error(
-            interpolate(
-              text.productMissing,
-              {
-                product:
-                  item.name,
-              }
-            )
+            interpolate(text.productMissing, {
+              product: item.name,
+            })
           );
         }
 
         if (
-          Number(
-            currentProduct.stock_quantity
-          ) <
+          Number(currentProduct.stock_quantity) <
           item.quantity
         ) {
           throw new Error(
-            interpolate(
-              text.stockInsufficient,
-              {
-                product:
-                  item.name,
-                quantity:
-                  currentProduct.stock_quantity,
-              }
-            )
+            interpolate(text.stockInsufficient, {
+              product: item.name,
+              quantity: currentProduct.stock_quantity,
+            })
           );
         }
       }
 
-      /*
-       * NUMÉRO
-       */
+      const saleNumber = generateSaleNumber();
+      const saleCreatedAt = new Date().toISOString();
 
-      const saleNumber =
-        generateSaleNumber();
+      const { data: sale, error: saleError } =
+        await supabase
+          .from("sales")
+          .insert({
+            pharmacy_id: pharmacyId,
+            user_id: userId,
+            sale_number: saleNumber,
+            subtotal: saleSubtotal,
+            discount:
+              saleGlobalDiscount + saleItemDiscount,
+            tax: saleTax,
+            total: saleTotal,
+            status: "completed",
+            customer_name:
+              customerName.trim() || null,
+            customer_phone:
+              customerPhone.trim() || null,
+            notes: notes.trim() || null,
+          })
+          .select()
+          .single();
 
-      const saleCreatedAt =
-        new Date().toISOString();
-
-      /*
-       * CRÉATION DE LA VENTE
-       */
-
-      const {
-        data: sale,
-        error: saleError,
-      } = await supabase
-        .from("sales")
-        .insert({
-          pharmacy_id:
-            pharmacyId,
-          user_id:
-            userId,
-          sale_number:
-            saleNumber,
-          subtotal,
-          discount:
-            safeGlobalDiscount +
-            itemDiscount,
-          tax,
-          total,
-          status:
-            "completed",
-          customer_name:
-            customerName.trim() ||
-            null,
-          customer_phone:
-            customerPhone.trim() ||
-            null,
-          notes:
-            notes.trim() ||
-            null,
-        })
-        .select()
-        .single();
-
-      if (
-        saleError ||
-        !sale
-      ) {
+      if (saleError || !sale) {
         throw new Error(
-          saleError?.message ||
-            text.saleCreationError
+          saleError?.message || text.saleCreationError
         );
       }
 
-      /*
-       * ARTICLES
-       */
+      const saleItems = saleCart.map((item) => ({
+        sale_id: sale.id,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount: item.discount,
+        total: item.total,
+      }));
 
-      const saleItems =
-        cart.map((item) => ({
-          sale_id:
-            sale.id,
-          product_id:
-            item.product_id,
-          quantity:
-            item.quantity,
-          unit_price:
-            item.unit_price,
-          discount:
-            item.discount,
-          total:
-            item.total,
-        }));
-
-      const {
-        error: itemsError,
-      } = await supabase
+      const { error: itemsError } = await supabase
         .from("sale_items")
-        .insert(
-          saleItems
-        );
+        .insert(saleItems);
 
       if (itemsError) {
         throw new Error(
-          interpolate(
-            text.saleItemsError,
-            {
-              error:
-                itemsError.message,
-            }
-          )
+          interpolate(text.saleItemsError, {
+            error: itemsError.message,
+          })
         );
       }
 
-      /*
-       * PAIEMENT
-       */
-
-      const {
-        error: paymentError,
-      } = await supabase
+      const { error: paymentError } = await supabase
         .from("payments")
         .insert({
-          pharmacy_id:
-            pharmacyId,
-          sale_id:
-            sale.id,
-          amount:
-            total,
-          method:
-            paymentMethod,
+          pharmacy_id: pharmacyId,
+          sale_id: sale.id,
+          amount: saleTotal,
+          method: paymentMethod,
         });
 
       if (paymentError) {
         throw new Error(
-          interpolate(
-            text.paymentError,
-            {
-              error:
-                paymentError.message,
-            }
-          )
+          interpolate(text.paymentError, {
+            error: paymentError.message,
+          })
         );
       }
 
-      /*
-       * STOCK + MOUVEMENT
-       */
-
-      for (const item of cart) {
-        const product =
-          products.find(
-            (productItem) =>
-              productItem.id ===
-              item.product_id
-          );
+      for (const item of saleCart) {
+        const product = products.find(
+          (productItem) =>
+            productItem.id === item.product_id
+        );
 
         if (!product) {
           throw new Error(
-            interpolate(
-              text.catalogueMissing,
-              {
-                product:
-                  item.name,
-              }
-            )
+            interpolate(text.catalogueMissing, {
+              product: item.name,
+            })
           );
         }
 
         const newQuantity =
-          Number(
-            product.stock_quantity
-          ) -
+          Number(product.stock_quantity) -
           item.quantity;
 
-        const {
-          error:
-            updateStockError,
-        } = await supabase
-          .from("products")
-          .update({
-            stock_quantity:
-              newQuantity,
-          })
-          .eq(
-            "id",
-            item.product_id
-          )
-          .eq(
-            "pharmacy_id",
-            pharmacyId
-          );
+        const { error: updateStockError } =
+          await supabase
+            .from("products")
+            .update({ stock_quantity: newQuantity })
+            .eq("id", item.product_id)
+            .eq("pharmacy_id", pharmacyId);
 
-        if (
-          updateStockError
-        ) {
+        if (updateStockError) {
           throw new Error(
-            interpolate(
-              text.stockUpdateError,
-              {
-                product:
-                  item.name,
-                error:
-                  updateStockError.message,
-              }
-            )
+            interpolate(text.stockUpdateError, {
+              product: item.name,
+              error: updateStockError.message,
+            })
           );
         }
 
-        const {
-          error:
-            movementError,
-        } = await supabase
-          .from(
-            "stock_movements"
-          )
-          .insert({
-            pharmacy_id:
-              pharmacyId,
-            product_id:
-              item.product_id,
-            user_id:
-              userId,
-            type:
-              "exit",
-            quantity:
-              item.quantity,
-            reason:
-              isEnglish
-                ? "Sale"
-                : "Vente",
-            reference:
-              saleNumber,
-          });
+        const { error: movementError } =
+          await supabase
+            .from("stock_movements")
+            .insert({
+              pharmacy_id: pharmacyId,
+              product_id: item.product_id,
+              user_id: userId,
+              type: "exit",
+              quantity: item.quantity,
+              reason: isEnglish ? "Sale" : "Vente",
+              reference: saleNumber,
+            });
 
-        if (
-          movementError
-        ) {
+        if (movementError) {
           throw new Error(
-            interpolate(
-              text.movementError,
-              {
-                product:
-                  item.name,
-                error:
-                  movementError.message,
-              }
-            )
+            interpolate(text.movementError, {
+              product: item.name,
+              error: movementError.message,
+            })
           );
         }
       }
 
-      /*
-       * REÇU
-       */
-
-      const receiptData:
-        ReceiptData = {
+      const receiptData: ReceiptData = {
         saleNumber,
-        createdAt:
-          saleCreatedAt,
+        createdAt: saleCreatedAt,
         pharmacyName:
           pharmacy?.name ||
-          (
-            isEnglish
-              ? "Pharmacy"
-              : "Pharmacie"
-          ),
-        pharmacyAddress:
-          pharmacy?.address ||
-          "",
-        pharmacyCity:
-          pharmacy?.city ||
-          "",
+          (isEnglish ? "Pharmacy" : "Pharmacie"),
+        pharmacyAddress: pharmacy?.address || "",
+        pharmacyCity: pharmacy?.city || "",
         customerName:
-          customerName.trim() ||
-          text.counterCustomer,
-        customerPhone:
-          customerPhone.trim() ||
-          "",
-        items: cart.map(
-          (item) => ({
-            ...item,
-          })
-        ),
-        subtotal,
-        itemDiscount,
-        globalDiscount:
-          safeGlobalDiscount,
-        tax,
-        total,
-        amountPaid:
-          Number(
-            amountPaid
-          ),
-        change,
+          customerName.trim() || text.counterCustomer,
+        customerPhone: customerPhone.trim() || "",
+        items: saleCart.map((item) => ({ ...item })),
+        subtotal: saleSubtotal,
+        itemDiscount: saleItemDiscount,
+        globalDiscount: saleGlobalDiscount,
+        tax: saleTax,
+        total: saleTotal,
+        amountPaid: saleAmountPaid,
+        change: saleChange,
         paymentMethod,
         currency,
-        notes:
-          notes.trim() ||
-          "",
+        notes: notes.trim() || "",
       };
-
-      /*
-       * NETTOYAGE
-       */
 
       setCart([]);
       setCustomerName("");
@@ -1888,37 +1895,21 @@ const paymentLabels = useMemo(
       setNotes("");
       setDiscount(0);
       setAmountPaid(0);
-      setPaymentMethod(
-        "cash"
-      );
+      setPaymentMethod("cash");
       setShowCheckout(false);
 
-      /*
-       * ACTUALISATION
-       */
-
       await Promise.all([
-        loadProducts(
-          pharmacyId
-        ),
-        loadSales(
-          pharmacyId
-        ),
+        loadProducts(pharmacyId),
+        loadSales(pharmacyId),
       ]);
 
       setMessage(
-        interpolate(
-          text.saleSaved,
-          {
-            number:
-              saleNumber,
-          }
-        )
+        interpolate(text.saleSaved, {
+          number: saleNumber,
+        })
       );
 
-      setReceipt(
-        receiptData
-      );
+      setReceipt(receiptData);
     } catch (err) {
       setError(
         err instanceof Error
@@ -1927,7 +1918,6 @@ const paymentLabels = useMemo(
       );
     } finally {
       setProcessing(false);
-      
     }
   }
     /*
@@ -2875,6 +2865,65 @@ const paymentLabels = useMemo(
                   : text.productsPlural}
 
               </span>
+
+            </div>
+
+            {/* SCANNER CODE-BARRES */}
+
+            <div className="pf-sales-scanner">
+
+              <div className="pf-sales-scanner-main">
+                <span className="pf-sales-scanner-icon">▣</span>
+
+                <div className="pf-sales-scanner-copy">
+                  <strong>
+                    {isEnglish
+                      ? "Barcode scanner"
+                      : "Scanner code-barres"}
+                  </strong>
+                  <span>
+                    {isEnglish
+                      ? "Scan a product to add it automatically to the cart."
+                      : "Scannez un produit pour l'ajouter automatiquement au panier."}
+                  </span>
+                </div>
+
+                <span className="pf-sales-scanner-mode">
+                  {isEnglish
+                    ? "Scan → Cart"
+                    : "Scan → Panier"}
+                </span>
+              </div>
+
+              <input
+                ref={barcodeInputRef}
+                className="pf-sales-scanner-input"
+                value={barcodeScan}
+                onChange={(event) =>
+                  setBarcodeScan(event.target.value)
+                }
+                onKeyDown={handleBarcodeKeyDown}
+                placeholder={
+                  isEnglish
+                    ? "Scan barcode, then press Enter…"
+                    : "Scannez le code-barres puis appuyez sur Entrée…"
+                }
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus
+                disabled={processing}
+              />
+
+              <button
+                type="button"
+                className="pf-sales-scanner-button"
+                onClick={() =>
+                  void handleBarcodeScan(barcodeScan)
+                }
+                disabled={!barcodeScan.trim() || processing}
+              >
+                ✓ {isEnglish ? "Add to cart" : "Ajouter au panier"}
+              </button>
 
             </div>
 
@@ -4174,8 +4223,8 @@ const paymentLabels = useMemo(
               <button
                 type="button"
                 className="pf-sales-confirm-btn"
-                onClick={
-                  completeSale
+                onClick={() =>
+                  void completeSale()
                 }
                 disabled={
                   processing ||
