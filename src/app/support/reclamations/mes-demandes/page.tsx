@@ -9,6 +9,10 @@ import {
 
 import Link from "next/link";
 
+/* ============================================================
+   TYPES
+============================================================ */
+
 type ReclamationStatus =
   | "open"
   | "in_progress"
@@ -58,6 +62,10 @@ type ApiResponse = {
   reclamations?: Reclamation[];
 };
 
+/* ============================================================
+   CONSTANTES
+============================================================ */
+
 const STATUS_LABELS: Record<
   ReclamationStatus,
   string
@@ -79,7 +87,17 @@ const PRIORITY_LABELS: Record<
   urgent: "Urgente",
 };
 
-function formatDate(value: string) {
+/* ============================================================
+   FORMAT DATE
+============================================================ */
+
+function formatDate(
+  value: string | null | undefined
+) {
+  if (!value) {
+    return "—";
+  }
+
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -92,8 +110,35 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+/* ============================================================
+   FORMAT HEURE
+============================================================ */
+
+function formatTime(
+  value: string | null | undefined
+) {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+/* ============================================================
+   STATUT
+============================================================ */
+
 function getStatusClass(
-  status: ReclamationStatus
+  status: string | null | undefined
 ) {
   switch (status) {
     case "open":
@@ -116,7 +161,28 @@ function getStatusClass(
   }
 }
 
-function getPriorityClass(priority: Priority) {
+function getStatusLabel(
+  status: string | null | undefined
+) {
+  if (
+    status &&
+    status in STATUS_LABELS
+  ) {
+    return STATUS_LABELS[
+      status as ReclamationStatus
+    ];
+  }
+
+  return status || "Inconnu";
+}
+
+/* ============================================================
+   PRIORITÉ
+============================================================ */
+
+function getPriorityClass(
+  priority: string | null | undefined
+) {
   switch (priority) {
     case "urgent":
       return "priority-urgent";
@@ -127,38 +193,125 @@ function getPriorityClass(priority: Priority) {
     case "low":
       return "priority-low";
 
+    case "normal":
+      return "priority-normal";
+
     default:
       return "priority-normal";
   }
 }
 
+function getPriorityLabel(
+  priority: string | null | undefined
+) {
+  if (
+    priority &&
+    priority in PRIORITY_LABELS
+  ) {
+    return PRIORITY_LABELS[
+      priority as Priority
+    ];
+  }
+
+  return priority || "Normale";
+}
+
+/* ============================================================
+   NORMALISATION
+============================================================ */
+
+function normalizeReclamation(
+  value: Reclamation
+): Reclamation {
+  return {
+    ...value,
+
+    reference:
+      value.reference || "Sans référence",
+
+    subject:
+      value.subject || "Sans objet",
+
+    message:
+      value.message || "",
+
+    status:
+      value.status || "open",
+
+    priority:
+      value.priority || "normal",
+
+    admin_reply:
+      value.admin_reply || null,
+
+    resolution:
+      value.resolution || null,
+
+    messages:
+      Array.isArray(value.messages)
+        ? value.messages
+        : [],
+  };
+}
+
+/* ============================================================
+   COMPOSANT
+============================================================ */
+
 export default function MesDemandesPage() {
-  const [reclamations, setReclamations] = useState<
-    Reclamation[]
-  >([]);
+  const [
+    reclamations,
+    setReclamations,
+  ] = useState<Reclamation[]>([]);
 
-  const [selectedId, setSelectedId] = useState<
-    string | null
-  >(null);
+  const [
+    selectedId,
+    setSelectedId,
+  ] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [error, setError] = useState("");
+  const [
+    refreshing,
+    setRefreshing,
+  ] = useState(false);
 
-  const [search, setSearch] = useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  const [statusFilter, setStatusFilter] = useState<
+  const [
+    search,
+    setSearch,
+  ] = useState("");
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState<
     "all" | ReclamationStatus
   >("all");
 
-  const [lastUpdated, setLastUpdated] =
-    useState<Date | null>(null);
+  const [
+    lastUpdated,
+    setLastUpdated,
+  ] = useState<Date | null>(null);
+
+  /* ==========================================================
+     CHARGEMENT
+  ========================================================== */
 
   const loadReclamations = useCallback(
     async (showLoading = true) => {
       try {
         if (showLoading) {
           setLoading(true);
+        } else {
+          setRefreshing(true);
         }
 
         setError("");
@@ -168,11 +321,22 @@ export default function MesDemandesPage() {
           {
             method: "GET",
             cache: "no-store",
+            headers: {
+              Accept: "application/json",
+            },
           }
         );
 
-        const data =
-          (await response.json()) as ApiResponse;
+        let data: ApiResponse = {};
+
+        try {
+          data =
+            (await response.json()) as ApiResponse;
+        } catch {
+          throw new Error(
+            "Le serveur a retourné une réponse invalide."
+          );
+        }
 
         if (!response.ok) {
           throw new Error(
@@ -181,18 +345,39 @@ export default function MesDemandesPage() {
           );
         }
 
-        const items = Array.isArray(data.reclamations)
-          ? data.reclamations
+        if (data.success === false) {
+          throw new Error(
+            data.error ||
+              "Impossible de récupérer vos réclamations."
+          );
+        }
+
+        const items = Array.isArray(
+          data.reclamations
+        )
+          ? data.reclamations.map(
+              normalizeReclamation
+            )
           : [];
 
         setReclamations(items);
 
         setLastUpdated(new Date());
 
+        /*
+         * Garder la réclamation actuellement sélectionnée
+         * si elle existe encore.
+         *
+         * Sinon sélectionner automatiquement la première.
+         */
+
         setSelectedId((current) => {
           if (
             current &&
-            items.some((item) => item.id === current)
+            items.some(
+              (item) =>
+                item.id === current
+            )
           ) {
             return current;
           }
@@ -214,90 +399,145 @@ export default function MesDemandesPage() {
         if (showLoading) {
           setLoading(false);
         }
+
+        setRefreshing(false);
       }
     },
     []
   );
 
+  /* ==========================================================
+     CHARGEMENT INITIAL + AUTO REFRESH
+  ========================================================== */
+
   useEffect(() => {
     void loadReclamations();
 
-    /*
-     * Actualisation automatique toutes les 30 secondes.
-     *
-     * Cela permet au client de voir une nouvelle réponse
-     * du Super Admin sans devoir actualiser manuellement
-     * la page.
-     */
-
-    const interval = window.setInterval(() => {
-      void loadReclamations(false);
-    }, 30000);
+    const interval =
+      window.setInterval(() => {
+        void loadReclamations(false);
+      }, 30000);
 
     return () => {
       window.clearInterval(interval);
     };
   }, [loadReclamations]);
 
-  const filteredReclamations = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  /* ==========================================================
+     RECHERCHE + FILTRE
+  ========================================================== */
 
-    return reclamations.filter((item) => {
-      const matchesSearch =
-        !query ||
-        item.reference
-          .toLowerCase()
-          .includes(query) ||
-        item.subject
-          .toLowerCase()
-          .includes(query) ||
-        item.message
-          .toLowerCase()
-          .includes(query);
+  const filteredReclamations =
+    useMemo(() => {
+      const query =
+        search.trim().toLowerCase();
 
-      const matchesStatus =
-        statusFilter === "all" ||
-        item.status === statusFilter;
+      return reclamations.filter(
+        (item) => {
+          const searchableText = [
+            item.reference,
+            item.subject,
+            item.message,
+            item.admin_reply || "",
+            item.resolution || "",
+            ...item.messages.map(
+              (message) =>
+                message.message
+            ),
+          ]
+            .join(" ")
+            .toLowerCase();
 
-      return matchesSearch && matchesStatus;
-    });
-  }, [
-    reclamations,
-    search,
-    statusFilter,
-  ]);
+          const matchesSearch =
+            !query ||
+            searchableText.includes(
+              query
+            );
+
+          const matchesStatus =
+            statusFilter === "all" ||
+            item.status ===
+              statusFilter;
+
+          return (
+            matchesSearch &&
+            matchesStatus
+          );
+        }
+      );
+    }, [
+      reclamations,
+      search,
+      statusFilter,
+    ]);
+
+  /* ==========================================================
+     RÉCLAMATION SÉLECTIONNÉE
+  ========================================================== */
 
   const selectedReclamation =
-    reclamations.find(
-      (item) => item.id === selectedId
-    ) || null;
+    useMemo(() => {
+      return (
+        reclamations.find(
+          (item) =>
+            item.id === selectedId
+        ) || null
+      );
+    }, [
+      reclamations,
+      selectedId,
+    ]);
+
+  /* ==========================================================
+     STATISTIQUES
+  ========================================================== */
 
   const statistics = useMemo(() => {
     return {
       total: reclamations.length,
 
       open: reclamations.filter(
-        (item) => item.status === "open"
+        (item) =>
+          item.status === "open"
       ).length,
 
       progress: reclamations.filter(
         (item) =>
-          item.status === "in_progress"
+          item.status ===
+          "in_progress"
+      ).length,
+
+      waiting: reclamations.filter(
+        (item) =>
+          item.status ===
+          "waiting_client"
       ).length,
 
       resolved: reclamations.filter(
         (item) =>
-          item.status === "resolved" ||
+          item.status ===
+            "resolved" ||
           item.status === "closed"
       ).length,
     };
   }, [reclamations]);
 
+  /* ==========================================================
+     RENDU
+  ========================================================== */
+
   return (
     <main className="page">
       <div className="container">
+
+        {/* ====================================================
+            HEADER
+        ==================================================== */}
+
         <header className="header">
-          <div>
+
+          <div className="header-content">
+
             <Link
               href="/support/reclamations"
               className="back-link"
@@ -309,12 +549,17 @@ export default function MesDemandesPage() {
               SUPPORT PHARMAFLOW
             </div>
 
-            <h1>Mes réclamations</h1>
+            <h1>
+              Mes réclamations
+            </h1>
 
             <p>
-              Consultez vos demandes, les réponses du
-              support et l&apos;état de leur traitement.
+              Consultez vos demandes,
+              les réponses du support
+              et l&apos;état de leur
+              traitement.
             </p>
+
           </div>
 
           <Link
@@ -322,62 +567,141 @@ export default function MesDemandesPage() {
             className="new-button"
           >
             <span>＋</span>
+
             Nouvelle réclamation
           </Link>
+
         </header>
 
+        {/* ====================================================
+            STATISTIQUES
+        ==================================================== */}
+
         <section className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon">📋</div>
 
-            <div>
-              <span>Total</span>
-              <strong>{statistics.total}</strong>
+          <div className="stat-card">
+
+            <div className="stat-icon">
+              📋
             </div>
+
+            <div className="stat-content">
+
+              <span>
+                Total
+              </span>
+
+              <strong>
+                {statistics.total}
+              </strong>
+
+            </div>
+
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon">🆕</div>
 
-            <div>
-              <span>Nouvelles</span>
-              <strong>{statistics.open}</strong>
+            <div className="stat-icon">
+              🆕
             </div>
+
+            <div className="stat-content">
+
+              <span>
+                Nouvelles
+              </span>
+
+              <strong>
+                {statistics.open}
+              </strong>
+
+            </div>
+
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon">🔄</div>
 
-            <div>
-              <span>En traitement</span>
+            <div className="stat-icon">
+              🔄
+            </div>
+
+            <div className="stat-content">
+
+              <span>
+                En traitement
+              </span>
+
               <strong>
                 {statistics.progress}
               </strong>
+
             </div>
+
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon">✓</div>
 
-            <div>
-              <span>Résolues</span>
+            <div className="stat-icon">
+              ⏳
+            </div>
+
+            <div className="stat-content">
+
+              <span>
+                En attente
+              </span>
+
+              <strong>
+                {statistics.waiting}
+              </strong>
+
+            </div>
+
+          </div>
+
+          <div className="stat-card">
+
+            <div className="stat-icon">
+              ✓
+            </div>
+
+            <div className="stat-content">
+
+              <span>
+                Résolues
+              </span>
+
               <strong>
                 {statistics.resolved}
               </strong>
+
             </div>
+
           </div>
+
         </section>
+
+        {/* ====================================================
+            ERREUR
+        ==================================================== */}
 
         {error && (
           <div className="error-banner">
-            <div>!</div>
 
-            <section>
+            <div className="error-icon">
+              !
+            </div>
+
+            <div className="error-content">
+
               <strong>
-                Impossible de charger vos réclamations
+                Impossible de charger vos
+                réclamations
               </strong>
 
-              <p>{error}</p>
+              <p>
+                {error}
+              </p>
 
               <button
                 type="button"
@@ -387,47 +711,96 @@ export default function MesDemandesPage() {
               >
                 Réessayer
               </button>
-            </section>
+
+            </div>
+
           </div>
         )}
 
+        {/* ====================================================
+            ESPACE PRINCIPAL
+        ==================================================== */}
+
         <section className="workspace">
+
+          {/* ==================================================
+              LISTE
+          ================================================== */}
+
           <aside className="list-panel">
+
             <div className="list-header">
-              <div>
-                <span>VOS DEMANDES</span>
+
+              <div className="list-title">
+
+                <span>
+                  VOS DEMANDES
+                </span>
 
                 <strong>
-                  {filteredReclamations.length}
+                  {
+                    filteredReclamations.length
+                  }
                 </strong>
+
               </div>
 
-              {lastUpdated && (
-                <small>
-                  Mis à jour à{" "}
-                  {lastUpdated.toLocaleTimeString(
-                    "fr-FR",
-                    {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }
-                  )}
-                </small>
-              )}
+              <div className="update-info">
+
+                {refreshing ? (
+                  <span className="refreshing">
+                    Actualisation...
+                  </span>
+                ) : lastUpdated ? (
+                  <small>
+                    Mis à jour à{" "}
+                    {formatTime(
+                      lastUpdated.toISOString()
+                    )}
+                  </small>
+                ) : null}
+
+              </div>
+
             </div>
 
+            {/* =================================================
+                FILTRES
+            ================================================= */}
+
             <div className="filters">
+
               <div className="search-box">
-                <span>⌕</span>
+
+                <span className="search-icon">
+                  ⌕
+                </span>
 
                 <input
                   type="text"
                   value={search}
                   onChange={(event) =>
-                    setSearch(event.target.value)
+                    setSearch(
+                      event.target.value
+                    )
                   }
-                  placeholder="Rechercher..."
+                  placeholder="Rechercher une demande..."
+                  aria-label="Rechercher une réclamation"
                 />
+
+                {search && (
+                  <button
+                    type="button"
+                    className="clear-search"
+                    onClick={() =>
+                      setSearch("")
+                    }
+                    aria-label="Effacer la recherche"
+                  >
+                    ×
+                  </button>
+                )}
+
               </div>
 
               <select
@@ -439,7 +812,9 @@ export default function MesDemandesPage() {
                       | ReclamationStatus
                   )
                 }
+                aria-label="Filtrer par statut"
               >
+
                 <option value="all">
                   Tous les statuts
                 </option>
@@ -463,18 +838,27 @@ export default function MesDemandesPage() {
                 <option value="closed">
                   Clôturées
                 </option>
+
               </select>
+
             </div>
 
+            {/* =================================================
+                LISTE DES RÉCLAMATIONS
+            ================================================= */}
+
             <div className="reclamation-list">
+
               {loading ? (
                 <>
                   <div className="skeleton-item" />
                   <div className="skeleton-item" />
                   <div className="skeleton-item" />
                 </>
-              ) : filteredReclamations.length === 0 ? (
+              ) : filteredReclamations.length ===
+                0 ? (
                 <div className="empty-list">
+
                   <div className="empty-icon">
                     📭
                   </div>
@@ -484,12 +868,14 @@ export default function MesDemandesPage() {
                   </strong>
 
                   <p>
-                    {reclamations.length === 0
+                    {reclamations.length ===
+                    0
                       ? "Vous n'avez encore envoyé aucune réclamation."
-                      : "Aucune demande ne correspond à votre recherche."}
+                      : "Aucune demande ne correspond à votre recherche ou à votre filtre."}
                   </p>
 
-                  {reclamations.length === 0 && (
+                  {reclamations.length ===
+                    0 && (
                     <Link
                       href="/support/reclamations"
                       className="empty-button"
@@ -497,18 +883,20 @@ export default function MesDemandesPage() {
                       Créer une réclamation
                     </Link>
                   )}
+
                 </div>
               ) : (
                 filteredReclamations.map(
                   (reclamation) => {
+
                     const hasAdminReply =
+                      Boolean(
+                        reclamation.admin_reply
+                      ) ||
                       reclamation.messages.some(
                         (message) =>
                           message.sender_type ===
                           "admin"
-                      ) ||
-                      Boolean(
-                        reclamation.admin_reply
                       );
 
                     const isSelected =
@@ -530,27 +918,31 @@ export default function MesDemandesPage() {
                           )
                         }
                       >
+
                         <div className="item-top">
+
                           <span
                             className={`status-badge ${getStatusClass(
                               reclamation.status
                             )}`}
                           >
-                            {
-                              STATUS_LABELS[
-                                reclamation.status
-                              ]
-                            }
+                            {getStatusLabel(
+                              reclamation.status
+                            )}
                           </span>
 
                           {hasAdminReply && (
-                            <span className="reply-dot">
+                            <span
+                              className="reply-indicator"
+                              title="Le support a répondu"
+                            >
                               💬
                             </span>
                           )}
+
                         </div>
 
-                        <strong>
+                        <strong className="item-subject">
                           {reclamation.subject}
                         </strong>
 
@@ -558,11 +950,13 @@ export default function MesDemandesPage() {
                           {reclamation.reference}
                         </span>
 
-                        <p>
-                          {reclamation.message}
+                        <p className="item-message">
+                          {reclamation.message ||
+                            "Aucun message initial."}
                         </p>
 
                         <div className="item-bottom">
+
                           <span>
                             {formatDate(
                               reclamation.updated_at
@@ -574,24 +968,33 @@ export default function MesDemandesPage() {
                               reclamation.priority
                             )}`}
                           >
-                            {
-                              PRIORITY_LABELS[
-                                reclamation.priority
-                              ]
-                            }
+                            {getPriorityLabel(
+                              reclamation.priority
+                            )}
                           </span>
+
                         </div>
+
                       </button>
                     );
                   }
                 )
               )}
+
             </div>
+
           </aside>
 
+          {/* ==================================================
+              DÉTAIL
+          ================================================== */}
+
           <section className="detail-panel">
+
             {!selectedReclamation ? (
+
               <div className="detail-empty">
+
                 <div className="detail-empty-icon">
                   💬
                 </div>
@@ -601,18 +1004,32 @@ export default function MesDemandesPage() {
                 </h2>
 
                 <p>
-                  Sélectionnez une demande à gauche pour
-                  consulter son historique et les réponses
-                  du support.
+                  Sélectionnez une demande à
+                  gauche pour consulter son
+                  historique et les réponses
+                  du support PharmaFlow.
                 </p>
+
               </div>
+
             ) : (
+
               <>
+
+                {/* ============================================
+                    EN-TÊTE DÉTAIL
+                ============================================ */}
+
                 <div className="detail-header">
-                  <div>
+
+                  <div className="detail-heading">
+
                     <div className="reference-line">
-                      <span>
-                        {selectedReclamation.reference}
+
+                      <span className="detail-reference">
+                        {
+                          selectedReclamation.reference
+                        }
                       </span>
 
                       <span
@@ -620,16 +1037,17 @@ export default function MesDemandesPage() {
                           selectedReclamation.status
                         )}`}
                       >
-                        {
-                          STATUS_LABELS[
-                            selectedReclamation.status
-                          ]
-                        }
+                        {getStatusLabel(
+                          selectedReclamation.status
+                        )}
                       </span>
+
                     </div>
 
                     <h2>
-                      {selectedReclamation.subject}
+                      {
+                        selectedReclamation.subject
+                      }
                     </h2>
 
                     <p>
@@ -638,89 +1056,169 @@ export default function MesDemandesPage() {
                         selectedReclamation.created_at
                       )}
                     </p>
+
                   </div>
 
                   <button
                     type="button"
-                    className="refresh-button"
+                    className={`refresh-button ${
+                      refreshing
+                        ? "is-refreshing"
+                        : ""
+                    }`}
                     onClick={() =>
-                      void loadReclamations()
+                      void loadReclamations(
+                        false
+                      )
                     }
+                    disabled={refreshing}
                     title="Actualiser"
+                    aria-label="Actualiser les réclamations"
                   >
                     ↻
                   </button>
+
                 </div>
 
+                {/* ============================================
+                    MÉTADONNÉES
+                ============================================ */}
+
                 <div className="detail-meta">
-                  <div>
-                    <span>Priorité</span>
+
+                  <div className="meta-card">
+
+                    <span>
+                      Priorité
+                    </span>
 
                     <strong
                       className={getPriorityClass(
                         selectedReclamation.priority
                       )}
                     >
-                      {
-                        PRIORITY_LABELS[
-                          selectedReclamation
-                            .priority
-                        ]
-                      }
+                      {getPriorityLabel(
+                        selectedReclamation.priority
+                      )}
                     </strong>
+
                   </div>
 
-                  <div>
-                    <span>Dernière mise à jour</span>
+                  <div className="meta-card">
+
+                    <span>
+                      Dernière mise à jour
+                    </span>
 
                     <strong>
                       {formatDate(
                         selectedReclamation.updated_at
                       )}
                     </strong>
+
                   </div>
 
                   {selectedReclamation.resolved_at && (
-                    <div>
-                      <span>Résolue le</span>
+                    <div className="meta-card">
+
+                      <span>
+                        Résolue le
+                      </span>
 
                       <strong>
                         {formatDate(
                           selectedReclamation.resolved_at
                         )}
                       </strong>
+
                     </div>
                   )}
+
+                  {selectedReclamation.closed_at && (
+                    <div className="meta-card">
+
+                      <span>
+                        Clôturée le
+                      </span>
+
+                      <strong>
+                        {formatDate(
+                          selectedReclamation.closed_at
+                        )}
+                      </strong>
+
+                    </div>
+                  )}
+
                 </div>
 
+                {/* ============================================
+                    CONVERSATION
+                ============================================ */}
+
                 <div className="conversation">
+
                   <div className="conversation-title">
-                    <span>
-                      CONVERSATION
-                    </span>
+
+                    <div>
+
+                      <span>
+                        CONVERSATION
+                      </span>
+
+                      <h3>
+                        Échanges avec PharmaFlow
+                      </h3>
+
+                    </div>
 
                     <small>
-                      {selectedReclamation.messages
-                        .length}{" "}
+                      {
+                        selectedReclamation
+                          .messages.length
+                      }{" "}
                       message
-                      {selectedReclamation.messages
-                        .length > 1
-                        ? "s"
-                        : ""}
+                      {
+                        selectedReclamation
+                          .messages.length > 1
+                          ? "s"
+                          : ""
+                      }
                     </small>
+
                   </div>
 
                   <div className="messages">
-                    {selectedReclamation.messages
-                      .length === 0 ? (
+
+                    {selectedReclamation
+                      .messages.length ===
+                    0 ? (
+
                       <div className="no-messages">
+
+                        <div className="no-message-icon">
+                          💬
+                        </div>
+
+                        <strong>
+                          Aucun message dans
+                          l&apos;historique
+                        </strong>
+
                         <p>
-                          Aucun message dans l&apos;historique.
+                          Votre demande a bien été
+                          enregistrée. Les échanges
+                          apparaîtront ici lorsqu&apos;ils
+                          seront disponibles.
                         </p>
+
                       </div>
+
                     ) : (
+
                       selectedReclamation.messages.map(
                         (message) => {
+
                           const isAdmin =
                             message.sender_type ===
                             "admin";
@@ -729,28 +1227,36 @@ export default function MesDemandesPage() {
                             message.sender_type ===
                             "system";
 
+                          const isClient =
+                            message.sender_type ===
+                            "client";
+
                           return (
                             <div
                               key={message.id}
                               className={`message-row ${
                                 isAdmin
                                   ? "admin-message"
-                                  : message.sender_type ===
-                                      "client"
+                                  : isClient
                                     ? "client-message"
                                     : "system-message"
                               }`}
                             >
+
                               <div className="message-avatar">
+
                                 {isAdmin
                                   ? "🛡️"
                                   : isSystem
                                     ? "⚙️"
                                     : "👤"}
+
                               </div>
 
                               <div className="message-content">
+
                                 <div className="message-author">
+
                                   <strong>
                                     {isAdmin
                                       ? "Support PharmaFlow"
@@ -764,17 +1270,26 @@ export default function MesDemandesPage() {
                                       message.created_at
                                     )}
                                   </span>
+
                                 </div>
 
                                 <div className="message-bubble">
-                                  {message.message}
+                                  {
+                                    message.message
+                                  }
                                 </div>
+
                               </div>
+
                             </div>
                           );
                         }
                       )
                     )}
+
+                    {/* ========================================
+                        ADMIN_REPLY DE SECOURS
+                    ======================================== */}
 
                     {selectedReclamation
                       .admin_reply &&
@@ -782,16 +1297,20 @@ export default function MesDemandesPage() {
                         (message) =>
                           message.sender_type ===
                             "admin" &&
-                          message.message ===
-                            selectedReclamation.admin_reply
+                          message.message.trim() ===
+                            selectedReclamation.admin_reply?.trim()
                       ) && (
+
                         <div className="message-row admin-message">
+
                           <div className="message-avatar">
                             🛡️
                           </div>
 
                           <div className="message-content">
+
                             <div className="message-author">
+
                               <strong>
                                 Support PharmaFlow
                               </strong>
@@ -799,6 +1318,7 @@ export default function MesDemandesPage() {
                               <span>
                                 Réponse du support
                               </span>
+
                             </div>
 
                             <div className="message-bubble">
@@ -806,17 +1326,25 @@ export default function MesDemandesPage() {
                                 selectedReclamation.admin_reply
                               }
                             </div>
+
                           </div>
+
                         </div>
                       )}
 
+                    {/* ========================================
+                        RÉSOLUTION
+                    ======================================== */}
+
                     {selectedReclamation.resolution && (
                       <div className="resolution-box">
+
                         <div className="resolution-icon">
                           ✓
                         </div>
 
-                        <div>
+                        <div className="resolution-content">
+
                           <strong>
                             Résolution
                           </strong>
@@ -826,39 +1354,70 @@ export default function MesDemandesPage() {
                               selectedReclamation.resolution
                             }
                           </p>
+
                         </div>
+
                       </div>
                     )}
+
                   </div>
+
                 </div>
+
+                {/* ============================================
+                    ATTENTE CLIENT
+                ============================================ */}
 
                 {selectedReclamation.status ===
                   "waiting_client" && (
+
                   <div className="waiting-banner">
-                    <div>💬</div>
+
+                    <div className="banner-icon">
+                      💬
+                    </div>
 
                     <div>
+
                       <strong>
-                        Le support attend votre réponse
+                        Le support attend votre
+                        réponse
                       </strong>
 
                       <p>
-                        Une prochaine étape permettra de
-                        répondre directement au support
-                        depuis cette conversation.
+                        Votre réclamation nécessite
+                        une réponse ou une
+                        information complémentaire.
+                        Vous pourrez poursuivre la
+                        conversation lorsque la
+                        réponse client sera disponible
+                        dans PharmaFlow.
                       </p>
+
                     </div>
+
                   </div>
                 )}
 
-                {(selectedReclamation.status ===
-                  "resolved" ||
+                {/* ============================================
+                    RÉSOLUE / CLÔTURÉE
+                ============================================ */}
+
+                {(
                   selectedReclamation.status ===
-                    "closed") && (
+                    "resolved" ||
+                  selectedReclamation.status ===
+                    "closed"
+                ) && (
+
                   <div className="resolved-banner">
-                    <div>✓</div>
+
+                    <div className="banner-icon">
+                      ✓
+                    </div>
 
                     <div>
+
                       <strong>
                         Cette réclamation a été{" "}
                         {selectedReclamation.status ===
@@ -869,19 +1428,35 @@ export default function MesDemandesPage() {
                       </strong>
 
                       <p>
-                        Vous pouvez consulter l&apos;historique
-                        complet de votre demande ci-dessus.
+                        Vous pouvez consulter
+                        l&apos;historique complet de
+                        votre demande ci-dessus.
                       </p>
+
                     </div>
+
                   </div>
                 )}
+
               </>
             )}
+
           </section>
+
         </section>
+
       </div>
 
+      {/* ======================================================
+          STYLES
+      ====================================================== */}
+
       <style jsx>{`
+
+        /* ====================================================
+           BASE
+        ==================================================== */
+
         .page {
           min-height: 100vh;
           background:
@@ -897,9 +1472,13 @@ export default function MesDemandesPage() {
 
         .container {
           width: 100%;
-          max-width: 1280px;
+          max-width: 1380px;
           margin: 0 auto;
         }
+
+        /* ====================================================
+           HEADER
+        ==================================================== */
 
         .header {
           display: flex;
@@ -909,13 +1488,19 @@ export default function MesDemandesPage() {
           margin-bottom: 28px;
         }
 
+        .header-content {
+          min-width: 0;
+        }
+
         .back-link {
           display: inline-flex;
+          align-items: center;
           margin-bottom: 18px;
           color: #64748b;
           text-decoration: none;
           font-size: 13px;
           font-weight: 700;
+          transition: color 0.2s ease;
         }
 
         .back-link:hover {
@@ -952,7 +1537,7 @@ export default function MesDemandesPage() {
           justify-content: center;
           gap: 9px;
           min-height: 46px;
-          padding: 0 17px;
+          padding: 0 18px;
           border-radius: 12px;
           background: #2563eb;
           color: #fff;
@@ -960,17 +1545,33 @@ export default function MesDemandesPage() {
           font-size: 13px;
           font-weight: 750;
           white-space: nowrap;
-          box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+          box-shadow:
+            0 10px 24px
+            rgba(37, 99, 235, 0.18);
+          transition:
+            transform 0.2s ease,
+            background 0.2s ease;
         }
 
         .new-button:hover {
           background: #1d4ed8;
+          transform: translateY(-1px);
         }
+
+        .new-button span {
+          font-size: 18px;
+          line-height: 1;
+        }
+
+        /* ====================================================
+           STATISTIQUES
+        ==================================================== */
 
         .stats-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 15px;
+          grid-template-columns:
+            repeat(5, minmax(0, 1fr));
+          gap: 14px;
           margin-bottom: 20px;
         }
 
@@ -978,22 +1579,29 @@ export default function MesDemandesPage() {
           display: flex;
           align-items: center;
           gap: 13px;
+          min-width: 0;
           padding: 18px;
           border: 1px solid #e3e9f2;
           border-radius: 16px;
           background: #fff;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.045);
+          box-shadow:
+            0 10px 28px
+            rgba(15, 23, 42, 0.045);
         }
 
         .stat-icon {
-          width: 40px;
-          height: 40px;
-          flex: 0 0 40px;
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
           display: grid;
           place-items: center;
           border-radius: 12px;
           background: #eff6ff;
           font-size: 18px;
+        }
+
+        .stat-content {
+          min-width: 0;
         }
 
         .stat-card span {
@@ -1002,13 +1610,19 @@ export default function MesDemandesPage() {
           color: #64748b;
           font-size: 11px;
           font-weight: 650;
+          white-space: nowrap;
         }
 
         .stat-card strong {
           display: block;
           color: #111827;
           font-size: 21px;
+          line-height: 1.1;
         }
+
+        /* ====================================================
+           ERREUR
+        ==================================================== */
 
         .error-banner {
           display: flex;
@@ -1021,27 +1635,35 @@ export default function MesDemandesPage() {
           color: #991b1b;
         }
 
-        .error-banner > div {
-          width: 26px;
-          height: 26px;
-          flex: 0 0 26px;
+        .error-icon {
+          width: 28px;
+          height: 28px;
+          flex: 0 0 28px;
           display: grid;
           place-items: center;
           border-radius: 50%;
           background: #fee2e2;
+          color: #b91c1c;
           font-weight: 850;
         }
 
-        .error-banner strong {
+        .error-content {
+          min-width: 0;
+        }
+
+        .error-content strong {
+          display: block;
           font-size: 13px;
         }
 
-        .error-banner p {
+        .error-content p {
           margin: 4px 0 8px;
+          color: #991b1b;
           font-size: 12px;
+          line-height: 1.5;
         }
 
-        .error-banner button {
+        .error-content button {
           border: 0;
           padding: 0;
           background: transparent;
@@ -1053,16 +1675,27 @@ export default function MesDemandesPage() {
           text-decoration: underline;
         }
 
+        /* ====================================================
+           WORKSPACE
+        ==================================================== */
+
         .workspace {
           display: grid;
-          grid-template-columns: 390px minmax(0, 1fr);
-          min-height: 680px;
+          grid-template-columns:
+            400px minmax(0, 1fr);
+          min-height: 720px;
           overflow: hidden;
           border: 1px solid #e1e7f0;
           border-radius: 20px;
           background: #fff;
-          box-shadow: 0 15px 45px rgba(15, 23, 42, 0.06);
+          box-shadow:
+            0 15px 45px
+            rgba(15, 23, 42, 0.06);
         }
+
+        /* ====================================================
+           LISTE
+        ==================================================== */
 
         .list-panel {
           min-width: 0;
@@ -1075,26 +1708,27 @@ export default function MesDemandesPage() {
           align-items: flex-end;
           justify-content: space-between;
           gap: 10px;
-          padding: 19px 18px 14px;
+          min-height: 67px;
+          padding: 15px 18px 14px;
           border-bottom: 1px solid #edf1f6;
         }
 
-        .list-header > div {
+        .list-title {
           display: flex;
           align-items: center;
           gap: 9px;
         }
 
-        .list-header span {
+        .list-title span {
           color: #64748b;
           font-size: 10px;
           font-weight: 850;
           letter-spacing: 0.1em;
         }
 
-        .list-header strong {
-          min-width: 23px;
-          height: 23px;
+        .list-title strong {
+          min-width: 24px;
+          height: 24px;
           display: grid;
           place-items: center;
           border-radius: 50%;
@@ -1103,10 +1737,20 @@ export default function MesDemandesPage() {
           font-size: 11px;
         }
 
-        .list-header small {
+        .update-info {
           color: #94a3b8;
           font-size: 10px;
+          white-space: nowrap;
         }
+
+        .refreshing {
+          color: #2563eb;
+          font-weight: 700;
+        }
+
+        /* ====================================================
+           FILTRES
+        ==================================================== */
 
         .filters {
           display: flex;
@@ -1125,9 +1769,19 @@ export default function MesDemandesPage() {
           border: 1px solid #dce3ed;
           border-radius: 10px;
           background: #fff;
+          transition:
+            border-color 0.2s ease,
+            box-shadow 0.2s ease;
         }
 
-        .search-box span {
+        .search-box:focus-within {
+          border-color: #93c5fd;
+          box-shadow:
+            0 0 0 3px
+            rgba(37, 99, 235, 0.08);
+        }
+
+        .search-icon {
           color: #94a3b8;
           font-size: 17px;
         }
@@ -1144,8 +1798,27 @@ export default function MesDemandesPage() {
           font-size: 12px;
         }
 
+        .search-box input::placeholder {
+          color: #94a3b8;
+        }
+
+        .clear-search {
+          width: 23px;
+          height: 23px;
+          flex: 0 0 23px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 50%;
+          background: #f1f5f9;
+          color: #64748b;
+          cursor: pointer;
+        }
+
         .filters select {
-          width: 130px;
+          width: 140px;
+          height: 39px;
+          padding: 0 8px;
           border: 1px solid #dce3ed;
           border-radius: 10px;
           background: #fff;
@@ -1153,10 +1826,15 @@ export default function MesDemandesPage() {
           font-family: inherit;
           font-size: 11px;
           outline: 0;
+          cursor: pointer;
         }
 
+        /* ====================================================
+           LISTE RÉCLAMATIONS
+        ==================================================== */
+
         .reclamation-list {
-          max-height: 620px;
+          max-height: 650px;
           overflow-y: auto;
         }
 
@@ -1171,6 +1849,9 @@ export default function MesDemandesPage() {
           text-align: left;
           font-family: inherit;
           cursor: pointer;
+          transition:
+            background 0.2s ease,
+            box-shadow 0.2s ease;
         }
 
         .reclamation-item:hover {
@@ -1179,7 +1860,8 @@ export default function MesDemandesPage() {
 
         .reclamation-item.selected {
           background: #eff6ff;
-          box-shadow: inset 3px 0 0 #2563eb;
+          box-shadow:
+            inset 3px 0 0 #2563eb;
         }
 
         .item-top {
@@ -1190,7 +1872,7 @@ export default function MesDemandesPage() {
           margin-bottom: 8px;
         }
 
-        .reclamation-item > strong {
+        .item-subject {
           display: block;
           margin-bottom: 5px;
           overflow: hidden;
@@ -1205,12 +1887,16 @@ export default function MesDemandesPage() {
           display: block;
           margin-bottom: 8px;
           color: #2563eb;
-          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-family:
+            ui-monospace,
+            SFMono-Regular,
+            Menlo,
+            monospace;
           font-size: 9px;
           font-weight: 750;
         }
 
-        .reclamation-item > p {
+        .item-message {
           margin: 0;
           display: -webkit-box;
           overflow: hidden;
@@ -1231,13 +1917,21 @@ export default function MesDemandesPage() {
           font-size: 10px;
         }
 
-        .reply-dot {
+        .reply-indicator {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           font-size: 13px;
         }
+
+        /* ====================================================
+           BADGES
+        ==================================================== */
 
         .status-badge {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           min-height: 22px;
           padding: 0 8px;
           border-radius: 999px;
@@ -1291,13 +1985,17 @@ export default function MesDemandesPage() {
           color: #dc2626;
         }
 
+        /* ====================================================
+           DÉTAIL
+        ==================================================== */
+
         .detail-panel {
           min-width: 0;
           background: #fff;
         }
 
         .detail-empty {
-          min-height: 680px;
+          min-height: 720px;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -1307,8 +2005,8 @@ export default function MesDemandesPage() {
         }
 
         .detail-empty-icon {
-          width: 66px;
-          height: 66px;
+          width: 68px;
+          height: 68px;
           display: grid;
           place-items: center;
           margin-bottom: 18px;
@@ -1331,12 +2029,21 @@ export default function MesDemandesPage() {
           line-height: 1.65;
         }
 
+        /* ====================================================
+           DÉTAIL HEADER
+        ==================================================== */
+
         .detail-header {
           display: flex;
+          align-items: flex-start;
           justify-content: space-between;
           gap: 20px;
           padding: 25px 27px 20px;
           border-bottom: 1px solid #edf1f6;
+        }
+
+        .detail-heading {
+          min-width: 0;
         }
 
         .reference-line {
@@ -1347,9 +2054,13 @@ export default function MesDemandesPage() {
           margin-bottom: 9px;
         }
 
-        .reference-line > span:first-child {
+        .detail-reference {
           color: #2563eb;
-          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-family:
+            ui-monospace,
+            SFMono-Regular,
+            Menlo,
+            monospace;
           font-size: 10px;
           font-weight: 800;
         }
@@ -1359,6 +2070,7 @@ export default function MesDemandesPage() {
           color: #111827;
           font-size: 22px;
           line-height: 1.3;
+          word-break: break-word;
         }
 
         .detail-header p {
@@ -1371,39 +2083,72 @@ export default function MesDemandesPage() {
           width: 39px;
           height: 39px;
           flex: 0 0 39px;
+          display: grid;
+          place-items: center;
           border: 1px solid #dce3ed;
           border-radius: 10px;
           background: #fff;
           color: #475569;
           font-size: 18px;
           cursor: pointer;
+          transition:
+            border-color 0.2s ease,
+            color 0.2s ease;
         }
 
-        .refresh-button:hover {
+        .refresh-button:hover:not(:disabled) {
           border-color: #93c5fd;
           color: #2563eb;
         }
 
+        .refresh-button:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .refresh-button.is-refreshing {
+          animation: rotate-refresh 0.9s
+            linear infinite;
+        }
+
+        @keyframes rotate-refresh {
+          from {
+            transform: rotate(0deg);
+          }
+
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        /* ====================================================
+           META
+        ==================================================== */
+
         .detail-meta {
           display: flex;
           flex-wrap: wrap;
-          gap: 10px;
+          gap: 0;
           padding: 15px 27px;
           border-bottom: 1px solid #edf1f6;
           background: #fbfcfe;
         }
 
-        .detail-meta > div {
-          min-width: 140px;
-          padding-right: 18px;
+        .meta-card {
+          min-width: 150px;
+          padding: 0 18px;
           border-right: 1px solid #e5eaf1;
         }
 
-        .detail-meta > div:last-child {
+        .meta-card:first-child {
+          padding-left: 0;
+        }
+
+        .meta-card:last-child {
           border-right: 0;
         }
 
-        .detail-meta span {
+        .meta-card span {
           display: block;
           margin-bottom: 4px;
           color: #94a3b8;
@@ -1413,9 +2158,13 @@ export default function MesDemandesPage() {
           letter-spacing: 0.06em;
         }
 
-        .detail-meta strong {
+        .meta-card strong {
           font-size: 12px;
         }
+
+        /* ====================================================
+           CONVERSATION
+        ==================================================== */
 
         .conversation {
           padding: 23px 27px 30px;
@@ -1423,21 +2172,34 @@ export default function MesDemandesPage() {
 
         .conversation-title {
           display: flex;
-          align-items: center;
+          align-items: flex-end;
           justify-content: space-between;
+          gap: 15px;
           margin-bottom: 18px;
         }
 
+        .conversation-title > div {
+          min-width: 0;
+        }
+
         .conversation-title span {
-          color: #475569;
+          display: block;
+          color: #2563eb;
           font-size: 10px;
           font-weight: 850;
           letter-spacing: 0.1em;
         }
 
+        .conversation-title h3 {
+          margin: 4px 0 0;
+          color: #334155;
+          font-size: 15px;
+        }
+
         .conversation-title small {
           color: #94a3b8;
           font-size: 10px;
+          white-space: nowrap;
         }
 
         .messages {
@@ -1445,6 +2207,10 @@ export default function MesDemandesPage() {
           flex-direction: column;
           gap: 18px;
         }
+
+        /* ====================================================
+           MESSAGES
+        ==================================================== */
 
         .message-row {
           display: flex;
@@ -1527,8 +2293,8 @@ export default function MesDemandesPage() {
         }
 
         .system-message .message-content {
-          max-width: 620px;
           width: 100%;
+          max-width: 620px;
         }
 
         .system-message .message-author {
@@ -1538,9 +2304,43 @@ export default function MesDemandesPage() {
         .system-message .message-bubble {
           border-style: dashed;
           background: #fafafa;
-          text-align: center;
           color: #64748b;
+          text-align: center;
         }
+
+        /* ====================================================
+           PAS DE MESSAGE
+        ==================================================== */
+
+        .no-messages {
+          padding: 30px 20px;
+          border: 1px dashed #dce3ed;
+          border-radius: 14px;
+          text-align: center;
+        }
+
+        .no-message-icon {
+          margin-bottom: 8px;
+          font-size: 22px;
+        }
+
+        .no-messages strong {
+          display: block;
+          color: #475569;
+          font-size: 12px;
+        }
+
+        .no-messages p {
+          max-width: 430px;
+          margin: 6px auto 0;
+          color: #94a3b8;
+          font-size: 11px;
+          line-height: 1.55;
+        }
+
+        /* ====================================================
+           RÉSOLUTION
+        ==================================================== */
 
         .resolution-box {
           display: flex;
@@ -1565,24 +2365,34 @@ export default function MesDemandesPage() {
           font-weight: 900;
         }
 
-        .resolution-box strong {
+        .resolution-content {
+          min-width: 0;
+        }
+
+        .resolution-content strong {
           display: block;
           color: #166534;
           font-size: 12px;
         }
 
-        .resolution-box p {
+        .resolution-content p {
           margin: 4px 0 0;
           color: #475569;
           font-size: 12px;
           line-height: 1.6;
           white-space: pre-wrap;
+          word-break: break-word;
         }
+
+        /* ====================================================
+           BANNIÈRES
+        ==================================================== */
 
         .waiting-banner,
         .resolved-banner {
           display: flex;
           gap: 12px;
+          align-items: flex-start;
           margin: 0 27px 25px;
           padding: 14px 16px;
           border-radius: 13px;
@@ -1596,6 +2406,16 @@ export default function MesDemandesPage() {
         .resolved-banner {
           border: 1px solid #bbf7d0;
           background: #f0fdf4;
+        }
+
+        .banner-icon {
+          width: 30px;
+          height: 30px;
+          flex: 0 0 30px;
+          display: grid;
+          place-items: center;
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.75);
         }
 
         .waiting-banner strong,
@@ -1613,17 +2433,12 @@ export default function MesDemandesPage() {
           line-height: 1.55;
         }
 
-        .no-messages {
-          padding: 30px;
-          border: 1px dashed #dce3ed;
-          border-radius: 14px;
-          text-align: center;
-          color: #94a3b8;
-          font-size: 12px;
-        }
+        /* ====================================================
+           EMPTY LIST
+        ==================================================== */
 
         .empty-list {
-          padding: 45px 22px;
+          padding: 55px 22px;
           text-align: center;
         }
 
@@ -1645,6 +2460,7 @@ export default function MesDemandesPage() {
         }
 
         .empty-list p {
+          max-width: 280px;
           margin: 7px auto 17px;
           color: #94a3b8;
           font-size: 11px;
@@ -1663,7 +2479,17 @@ export default function MesDemandesPage() {
           text-decoration: none;
           font-size: 11px;
           font-weight: 750;
+          transition:
+            background 0.2s ease;
         }
+
+        .empty-button:hover {
+          background: #dbeafe;
+        }
+
+        /* ====================================================
+           SKELETON
+        ==================================================== */
 
         .skeleton-item {
           height: 145px;
@@ -1677,7 +2503,8 @@ export default function MesDemandesPage() {
               #f1f5f9 63%
             );
           background-size: 400% 100%;
-          animation: skeleton 1.4s ease infinite;
+          animation:
+            skeleton 1.4s ease infinite;
         }
 
         @keyframes skeleton {
@@ -1690,19 +2517,53 @@ export default function MesDemandesPage() {
           }
         }
 
-        @media (max-width: 1000px) {
+        /* ====================================================
+           TABLETTE
+        ==================================================== */
+
+        @media (max-width: 1200px) {
+
           .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns:
+              repeat(3, minmax(0, 1fr));
           }
 
           .workspace {
-            grid-template-columns: 330px minmax(0, 1fr);
+            grid-template-columns:
+              350px minmax(0, 1fr);
           }
+
         }
 
+        /* ====================================================
+           TABLETTE PETITE
+        ==================================================== */
+
+        @media (max-width: 1000px) {
+
+          .stats-grid {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .workspace {
+            grid-template-columns:
+              330px minmax(0, 1fr);
+          }
+
+        }
+
+        /* ====================================================
+           MOBILE
+        ==================================================== */
+
         @media (max-width: 800px) {
+
           .page {
-            padding: 25px 14px 50px;
+            padding:
+              25px
+              14px
+              50px;
           }
 
           .header {
@@ -1721,21 +2582,42 @@ export default function MesDemandesPage() {
 
           .list-panel {
             border-right: 0;
-            border-bottom: 1px solid #e7ebf2;
+            border-bottom:
+              1px solid #e7ebf2;
           }
 
           .reclamation-list {
-            max-height: 400px;
+            max-height: 420px;
           }
 
           .detail-empty {
             min-height: 350px;
           }
+
+          .detail-header,
+          .detail-meta,
+          .conversation {
+            padding-left: 20px;
+            padding-right: 20px;
+          }
+
+          .waiting-banner,
+          .resolved-banner {
+            margin-left: 20px;
+            margin-right: 20px;
+          }
+
         }
 
+        /* ====================================================
+           PETIT MOBILE
+        ==================================================== */
+
         @media (max-width: 560px) {
+
           .stats-grid {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
             gap: 9px;
           }
 
@@ -1750,6 +2632,10 @@ export default function MesDemandesPage() {
             font-size: 15px;
           }
 
+          .stat-card span {
+            font-size: 10px;
+          }
+
           .stat-card strong {
             font-size: 18px;
           }
@@ -1760,20 +2646,21 @@ export default function MesDemandesPage() {
 
           .filters select {
             width: 100%;
-            height: 39px;
           }
 
-          .detail-header,
-          .detail-meta,
-          .conversation {
-            padding-left: 17px;
-            padding-right: 17px;
+          .list-header {
+            align-items: flex-start;
+            flex-direction: column;
           }
 
-          .waiting-banner,
-          .resolved-banner {
-            margin-left: 17px;
-            margin-right: 17px;
+          .update-info {
+            align-self: flex-end;
+          }
+
+          .detail-header {
+            padding:
+              19px
+              17px;
           }
 
           .detail-header h2 {
@@ -1782,16 +2669,87 @@ export default function MesDemandesPage() {
 
           .detail-meta {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 15px;
+            padding:
+              15px
+              17px;
           }
 
-          .detail-meta > div {
+          .meta-card {
             min-width: 0;
-            padding-right: 10px;
+            padding: 0;
             border-right: 0;
           }
+
+          .conversation {
+            padding:
+              20px
+              17px
+              25px;
+          }
+
+          .waiting-banner,
+          .resolved-banner {
+            margin-left: 17px;
+            margin-right: 17px;
+          }
+
+          .message-content {
+            max-width: calc(
+              100% - 44px
+            );
+          }
+
+          .message-bubble {
+            font-size: 12px;
+          }
+
+          .conversation-title {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
         }
+
+        /* ====================================================
+           TRÈS PETIT MOBILE
+        ==================================================== */
+
+        @media (max-width: 380px) {
+
+          .page {
+            padding-left: 10px;
+            padding-right: 10px;
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .stat-card {
+            padding: 14px;
+          }
+
+          .detail-meta {
+            grid-template-columns: 1fr;
+          }
+
+          .detail-header {
+            gap: 10px;
+          }
+
+          .refresh-button {
+            width: 36px;
+            height: 36px;
+            flex-basis: 36px;
+          }
+
+        }
+
       `}</style>
+
     </main>
   );
 }

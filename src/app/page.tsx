@@ -106,10 +106,6 @@ const TEXT = {
     solutionsOwnerText:
       "Suivez les performances, les ventes, le stock et l'activité de vos établissements.",
 
-    /* =====================================================
-       COMMENT ÇA MARCHE
-    ====================================================== */
-
     howItWorksEyebrow: "DÉMARRER AVEC PHARMAFLOW",
     howItWorksTitle: "Votre pharmacie en quelques étapes.",
     howItWorksText:
@@ -245,7 +241,6 @@ const TEXT = {
       "©️ 2026 PharmaFlow Africa. Tous droits réservés.",
 
     close: "Fermer",
-
     menu: "Menu",
   },
 
@@ -340,10 +335,6 @@ const TEXT = {
     solutionsOwner: "For owners",
     solutionsOwnerText:
       "Track performance, sales, inventory and activity across your business.",
-
-    /* =====================================================
-       HOW IT WORKS
-    ====================================================== */
 
     howItWorksEyebrow: "GET STARTED WITH PHARMAFLOW",
     howItWorksTitle: "Your pharmacy in a few simple steps.",
@@ -480,7 +471,6 @@ const TEXT = {
       "©️ 2026 PharmaFlow Africa. All rights reserved.",
 
     close: "Close",
-
     menu: "Menu",
   },
 } as const;
@@ -616,7 +606,8 @@ export default function HomePage() {
     const previousOverflow =
       document.body.style.overflow;
 
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow =
+      "hidden";
 
     return () => {
       document.body.style.overflow =
@@ -654,7 +645,7 @@ export default function HomePage() {
     <main className="pf-home">
 
       {/* =====================================================
-          NAVIGATION
+          HEADER / NAVIGATION
       ====================================================== */}
 
       <header className="pf-home-header">
@@ -706,7 +697,9 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() =>
-                scrollToSection("solutions")
+                scrollToSection(
+                  "solutions",
+                )
               }
             >
               {t.navSolutions}
@@ -752,6 +745,7 @@ export default function HomePage() {
           <div className="pf-home-actions">
 
             <div className="pf-home-language">
+
               <button
                 type="button"
                 className={
@@ -785,6 +779,7 @@ export default function HomePage() {
               >
                 EN
               </button>
+
             </div>
 
             <Link
@@ -816,6 +811,7 @@ export default function HomePage() {
             >
               {mobileMenu ? "×" : "☰"}
             </button>
+
           </div>
         </div>
       </header>
@@ -992,6 +988,7 @@ export default function HomePage() {
               <div className="pf-home-dashboard-chart">
 
                 <div className="pf-home-chart-heading">
+
                   <strong>
                     {t.recentActivity}
                   </strong>
@@ -1001,6 +998,7 @@ export default function HomePage() {
                       ? "7 jours"
                       : "7 days"}
                   </span>
+
                 </div>
 
                 <div className="pf-home-chart">
@@ -1132,9 +1130,7 @@ export default function HomePage() {
                 </div>
 
               </div>
-
             </div>
-
           </div>
 
         </div>
@@ -1162,17 +1158,17 @@ export default function HomePage() {
           )}
 
         </div>
-
       </section>
 
       {/* =====================================================
-          CHIFFRES
+          STATISTIQUES
       ====================================================== */}
 
       <section className="pf-home-metrics">
 
         <div className="pf-home-metric">
           <strong>7</strong>
+
           <span>
             {locale === "fr"
               ? "jours gratuits"
@@ -1182,6 +1178,7 @@ export default function HomePage() {
 
         <div className="pf-home-metric">
           <strong>24/7</strong>
+
           <span>
             {locale === "fr"
               ? "plateforme accessible"
@@ -1191,6 +1188,7 @@ export default function HomePage() {
 
         <div className="pf-home-metric">
           <strong>5</strong>
+
           <span>
             {locale === "fr"
               ? "rôles professionnels"
@@ -1200,6 +1198,7 @@ export default function HomePage() {
 
         <div className="pf-home-metric">
           <strong>∞</strong>
+
           <span>
             {locale === "fr"
               ? "possibilités de croissance"
@@ -1210,7 +1209,7 @@ export default function HomePage() {
       </section>
 
       {/* =====================================================
-          FEATURES
+          FONCTIONNALITÉS
       ====================================================== */}
 
       <section
@@ -1558,6 +1557,7 @@ export default function HomePage() {
               {locale === "fr"
                 ? "Votre espace pharmacie"
                 : "Your pharmacy workspace"}
+
               <span>→</span>
             </span>
 
@@ -1585,6 +1585,7 @@ export default function HomePage() {
               {locale === "fr"
                 ? "Produits & stock"
                 : "Products & inventory"}
+
               <span>→</span>
             </span>
 
@@ -1612,6 +1613,7 @@ export default function HomePage() {
               {locale === "fr"
                 ? "Gestion de l'équipe"
                 : "Team management"}
+
               <span>→</span>
             </span>
 
@@ -1639,6 +1641,7 @@ export default function HomePage() {
               {locale === "fr"
                 ? "Scanner → Panier → Vente"
                 : "Scan → Cart → Sale"}
+
               <span>→</span>
             </span>
 
@@ -1666,6 +1669,7 @@ export default function HomePage() {
               {locale === "fr"
                 ? "Tableau de bord"
                 : "Dashboard"}
+
               <span>→</span>
             </span>
 
@@ -1682,6 +1686,7 @@ export default function HomePage() {
             </span>
 
             <div>
+
               <strong>
                 {t.howItWorksCta}
               </strong>
@@ -1689,6 +1694,7 @@ export default function HomePage() {
               <p>
                 {t.howItWorksText}
               </p>
+
             </div>
 
           </div>
@@ -1713,11 +1719,10 @@ export default function HomePage() {
           </div>
 
         </div>
-
       </section>
 
       {/* =====================================================
-          GLOBAL
+          INTERNATIONAL
       ====================================================== */}
 
       <section className="pf-home-global">
@@ -1752,6 +1757,7 @@ export default function HomePage() {
 
             <div className="pf-home-global-card">
               <span>🌍</span>
+
               <strong>
                 {t.country}
               </strong>
@@ -1759,6 +1765,7 @@ export default function HomePage() {
 
             <div className="pf-home-global-card">
               <span>💱</span>
+
               <strong>
                 {t.currency}
               </strong>
@@ -1766,6 +1773,7 @@ export default function HomePage() {
 
             <div className="pf-home-global-card">
               <span>🌐</span>
+
               <strong>
                 {t.language}
               </strong>
@@ -1773,18 +1781,18 @@ export default function HomePage() {
 
             <div className="pf-home-global-card">
               <span>💳</span>
+
               <strong>
                 {t.paymentMethods}
               </strong>
             </div>
 
           </div>
-
         </div>
       </section>
 
       {/* =====================================================
-          SECURITY
+          SÉCURITÉ
       ====================================================== */}
 
       <section
@@ -1836,6 +1844,7 @@ export default function HomePage() {
 
               <div>
                 <span>✓</span>
+
                 <strong>
                   {t.securityItem1}
                 </strong>
@@ -1843,6 +1852,7 @@ export default function HomePage() {
 
               <div>
                 <span>✓</span>
+
                 <strong>
                   {t.securityItem2}
                 </strong>
@@ -1850,6 +1860,7 @@ export default function HomePage() {
 
               <div>
                 <span>✓</span>
+
                 <strong>
                   {t.securityItem3}
                 </strong>
@@ -1857,6 +1868,7 @@ export default function HomePage() {
 
               <div>
                 <span>✓</span>
+
                 <strong>
                   {t.securityItem4}
                 </strong>
@@ -1911,6 +1923,7 @@ export default function HomePage() {
             </div>
 
             <div>
+
               <h3>
                 {t.supportAi}
               </h3>
@@ -1918,6 +1931,7 @@ export default function HomePage() {
               <p>
                 {t.supportAiText}
               </p>
+
             </div>
 
             <Link href="/support">
@@ -1934,6 +1948,7 @@ export default function HomePage() {
             </div>
 
             <div>
+
               <h3>
                 {t.supportHuman}
               </h3>
@@ -1941,6 +1956,7 @@ export default function HomePage() {
               <p>
                 {t.supportHumanText}
               </p>
+
             </div>
 
             <Link href="/support">
@@ -1957,6 +1973,7 @@ export default function HomePage() {
             </div>
 
             <div>
+
               <h3>
                 {t.supportPayment}
               </h3>
@@ -1964,6 +1981,7 @@ export default function HomePage() {
               <p>
                 {t.supportPaymentText}
               </p>
+
             </div>
 
             <Link href="/support?category=payment">
@@ -2060,6 +2078,8 @@ export default function HomePage() {
 
         <div className="pf-home-pricing-grid">
 
+          {/* PLAN MENSUEL */}
+
           <article
             className={`pf-home-price-card ${
               billing === "monthly"
@@ -2076,6 +2096,7 @@ export default function HomePage() {
 
               <h3>
                 {t.monthlyPrice}
+
                 <small>
                   {t.xaf}
                 </small>
@@ -2121,6 +2142,8 @@ export default function HomePage() {
 
           </article>
 
+          {/* PLAN ANNUEL */}
+
           <article
             className={`pf-home-price-card popular ${
               billing === "yearly"
@@ -2141,6 +2164,7 @@ export default function HomePage() {
 
               <h3>
                 {t.yearlyPrice}
+
                 <small>
                   {t.xaf}
                 </small>
@@ -2263,7 +2287,6 @@ export default function HomePage() {
             </a>
 
           </div>
-
         </div>
       </section>
 
@@ -2320,6 +2343,8 @@ export default function HomePage() {
 
         <div className="pf-home-footer-main">
 
+          {/* MARQUE */}
+
           <div className="pf-home-footer-brand">
 
             <Link
@@ -2346,6 +2371,8 @@ export default function HomePage() {
 
           </div>
 
+          {/* PRODUIT */}
+
           <div className="pf-home-footer-column">
 
             <h3>
@@ -2366,9 +2393,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() =>
-                scrollToSection(
-                  "solutions",
-                )
+                scrollToSection("solutions")
               }
             >
               {t.footerSolutions}
@@ -2388,15 +2413,15 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() =>
-                scrollToSection(
-                  "tarifs",
-                )
+                scrollToSection("tarifs")
               }
             >
               {t.footerPricing}
             </button>
 
           </div>
+
+          {/* ENTREPRISE */}
 
           <div className="pf-home-footer-column">
 
@@ -2420,6 +2445,8 @@ export default function HomePage() {
 
           </div>
 
+          {/* ASSISTANCE */}
+
           <div className="pf-home-footer-column">
 
             <h3>
@@ -2439,6 +2466,8 @@ export default function HomePage() {
             </Link>
 
           </div>
+
+          {/* LÉGAL */}
 
           <div className="pf-home-footer-column">
 
@@ -2466,6 +2495,8 @@ export default function HomePage() {
           </div>
 
         </div>
+
+        {/* CONTACT FOOTER */}
 
         <div className="pf-home-footer-contact">
 
@@ -2502,6 +2533,8 @@ export default function HomePage() {
           </div>
 
         </div>
+
+        {/* FOOTER BOTTOM */}
 
         <div className="pf-home-footer-bottom">
 

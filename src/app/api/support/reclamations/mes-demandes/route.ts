@@ -3,12 +3,21 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/app/lib/supabase/server";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 
+type ReclamationMessage = {
+  id: string;
+  reclamation_id: string;
+  sender_user_id: string | null;
+  sender_type: "client" | "admin" | "system";
+  message: string;
+  created_at: string;
+};
+
 export async function GET() {
   try {
     /*
-     * ------------------------------------------------------------
-     * 1. Vérifier l'utilisateur connecté
-     * ------------------------------------------------------------
+     * ============================================================
+     * 1. VÉRIFIER L'UTILISATEUR CONNECTÉ
+     * ============================================================
      */
 
     const supabase = await createClient();
@@ -29,23 +38,34 @@ export async function GET() {
     }
 
     /*
-     * ------------------------------------------------------------
-     * 2. Client administrateur serveur
-     * ------------------------------------------------------------
+     * ============================================================
+     * 2. CLIENT ADMINISTRATEUR SERVEUR
+     * ============================================================
+     *
+     * Ce client est utilisé uniquement côté serveur.
      *
      * IMPORTANT :
-     * Le client admin est utilisé uniquement côté serveur.
-     * On filtre obligatoirement avec client_user_id = user.id.
+     * Nous filtrons toujours avec :
      *
-     * Le client ne peut donc récupérer que SES réclamations.
+     * client_user_id = user.id
+     *
+     * afin que le client ne puisse récupérer que ses propres
+     * réclamations.
      */
 
     const adminClient = createAdminClient();
 
     /*
-     * ------------------------------------------------------------
-     * 3. Récupérer les réclamations du client
-     * ------------------------------------------------------------
+     * ============================================================
+     * 3. RÉCUPÉRER LES RÉCLAMATIONS DU CLIENT
+     * ============================================================
+     *
+     * IMPORTANT :
+     * La table "reclamations" ne contient pas de colonne "message".
+     *
+     * Le contenu des messages est récupéré séparément depuis :
+     *
+     * reclamation_messages
      */
 
     const {
@@ -58,7 +78,6 @@ export async function GET() {
           id,
           reference,
           subject,
-          message,
           status,
           priority,
           admin_reply,
@@ -83,17 +102,16 @@ export async function GET() {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Impossible de récupérer vos réclamations.",
+          error: "Impossible de récupérer vos réclamations.",
         },
         { status: 500 }
       );
     }
 
     /*
-     * ------------------------------------------------------------
-     * 4. S'il n'y a aucune réclamation
-     * ------------------------------------------------------------
+     * ============================================================
+     * 4. AUCUNE RÉCLAMATION
+     * ============================================================
      */
 
     if (!reclamations || reclamations.length === 0) {
@@ -104,9 +122,9 @@ export async function GET() {
     }
 
     /*
-     * ------------------------------------------------------------
-     * 5. Récupérer les IDs
-     * ------------------------------------------------------------
+     * ============================================================
+     * 5. RÉCUPÉRER LES IDS DES RÉCLAMATIONS
+     * ============================================================
      */
 
     const reclamationIds = reclamations.map(
@@ -114,9 +132,12 @@ export async function GET() {
     );
 
     /*
-     * ------------------------------------------------------------
-     * 6. Récupérer les messages
-     * ------------------------------------------------------------
+     * ============================================================
+     * 6. RÉCUPÉRER LES MESSAGES
+     * ============================================================
+     *
+     * Les messages sont récupérés uniquement pour les réclamations
+     * appartenant déjà à l'utilisateur connecté.
      */
 
     const {
@@ -156,56 +177,101 @@ export async function GET() {
     }
 
     /*
-     * ------------------------------------------------------------
-     * 7. Organiser les messages par réclamation
-     * ------------------------------------------------------------
+     * ============================================================
+     * 7. ORGANISER LES MESSAGES PAR RÉCLAMATION
+     * ============================================================
      */
 
     const messagesByReclamation: Record<
       string,
-      Array<{
-        id: string;
-        reclamation_id: string;
-        sender_user_id: string | null;
-        sender_type: "client" | "admin" | "system";
-        message: string;
-        created_at: string;
-      }>
+      ReclamationMessage[]
     > = {};
 
-    for (const message of messages || []) {
+    for (const message of (messages || []) as ReclamationMessage[]) {
       if (!messagesByReclamation[message.reclamation_id]) {
         messagesByReclamation[message.reclamation_id] = [];
       }
 
-      messagesByReclamation[message.reclamation_id].push(
-        message
-      );
+      messagesByReclamation[message.reclamation_id].push(message);
     }
 
     /*
-     * ------------------------------------------------------------
-     * 8. Construire la réponse finale
-     * ------------------------------------------------------------
+     * ============================================================
+     * 8. CONSTRUIRE LA RÉPONSE FINALE
+     * ============================================================
+     *
+     * La page cliente attend :
+     *
+     * {
+     *   id,
+     *   reference,
+     *   subject,
+     *   message,
+     *   status,
+     *   priority,
+     *   admin_reply,
+     *   resolution,
+     *   created_at,
+     *   updated_at,
+     *   resolved_at,
+     *   closed_at,
+     *   messages
+     * }
+     *
+     * Comme "message" n'existe pas directement dans "reclamations",
+     * nous construisons ce champ à partir du premier message client.
      */
 
-    const result = reclamations.map((reclamation) => ({
-      ...reclamation,
+    const result = reclamations.map((reclamation) => {
+      const reclamationMessages =
+        messagesByReclamation[reclamation.id] || [];
 
-      messages:
-        messagesByReclamation[reclamation.id] || [],
-    }));
+      /*
+       * Premier message envoyé par le client.
+       *
+       * On cherche le premier message dont sender_type = "client".
+       */
+
+      const firstClientMessage =
+        reclamationMessages.find(
+          (message) => message.sender_type === "client"
+        ) || null;
+
+      /*
+       * Si aucun message client n'est trouvé, on utilise une chaîne
+       * vide plutôt que d'inventer un contenu.
+       */
+
+      const initialMessage =
+        firstClientMessage?.message || "";
+
+      return {
+        ...reclamation,
+
+        message: initialMessage,
+
+        messages: reclamationMessages,
+      };
+    });
 
     /*
-     * ------------------------------------------------------------
-     * 9. Retourner les données au client
-     * ------------------------------------------------------------
+     * ============================================================
+     * 9. RÉPONSE API
+     * ============================================================
      */
 
-    return NextResponse.json({
-      success: true,
-      reclamations: result,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        reclamations: result,
+      },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   } catch (error) {
     console.error(
       "[MES RECLAMATIONS] Erreur inattendue:",
@@ -215,10 +281,11 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error:
-          "Une erreur inattendue est survenue.",
+        error: "Une erreur inattendue est survenue.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
