@@ -18,6 +18,7 @@ const TEXT = {
     navHome: "Accueil",
     navFeatures: "Fonctionnalités",
     navSolutions: "Solutions",
+    navHowItWorks: "Comment ça marche ?",
     navPricing: "Tarifs",
     navSupport: "Support",
     login: "Se connecter",
@@ -104,6 +105,43 @@ const TEXT = {
     solutionsOwner: "Pour le propriétaire",
     solutionsOwnerText:
       "Suivez les performances, les ventes, le stock et l'activité de vos établissements.",
+
+    /* =====================================================
+       COMMENT ÇA MARCHE
+    ====================================================== */
+
+    howItWorksEyebrow: "DÉMARRER AVEC PHARMAFLOW",
+    howItWorksTitle: "Votre pharmacie en quelques étapes.",
+    howItWorksText:
+      "Découvrez comment créer votre espace PharmaFlow, configurer votre pharmacie, ajouter vos produits et commencer à vendre.",
+
+    step1Title: "Créez votre compte",
+    step1Text:
+      "Inscrivez votre pharmacie en quelques minutes et profitez de votre période d'essai gratuite.",
+    step1Button: "Créer mon compte",
+
+    step2Title: "Configurez votre pharmacie",
+    step2Text:
+      "Renseignez les informations de votre pharmacie et préparez votre espace de gestion.",
+
+    step3Title: "Ajoutez vos produits",
+    step3Text:
+      "Enregistrez vos produits, prix, codes-barres, catégories, stocks et informations importantes.",
+
+    step4Title: "Ajoutez votre équipe",
+    step4Text:
+      "Créez les accès de vos pharmaciens, caissiers et employés avec les permissions adaptées à chaque rôle.",
+
+    step5Title: "Commencez à vendre",
+    step5Text:
+      "Sélectionnez directement un produit ou utilisez un scanner de code-barres pour l'ajouter automatiquement au panier.",
+
+    step6Title: "Gérez votre activité",
+    step6Text:
+      "Suivez vos ventes, votre stock, vos mouvements et vos rapports depuis votre tableau de bord.",
+
+    howItWorksCta: "Commencer maintenant",
+    howItWorksGuide: "Voir le guide complet",
 
     globalEyebrow: "PENSÉ POUR L'AFRIQUE ET L'INTERNATIONAL",
     globalTitle: "Une pharmacie connectée, où que vous soyez.",
@@ -215,6 +253,7 @@ const TEXT = {
     navHome: "Home",
     navFeatures: "Features",
     navSolutions: "Solutions",
+    navHowItWorks: "How it works?",
     navPricing: "Pricing",
     navSupport: "Support",
     login: "Log in",
@@ -301,6 +340,43 @@ const TEXT = {
     solutionsOwner: "For owners",
     solutionsOwnerText:
       "Track performance, sales, inventory and activity across your business.",
+
+    /* =====================================================
+       HOW IT WORKS
+    ====================================================== */
+
+    howItWorksEyebrow: "GET STARTED WITH PHARMAFLOW",
+    howItWorksTitle: "Your pharmacy in a few simple steps.",
+    howItWorksText:
+      "Discover how to create your PharmaFlow account, set up your pharmacy, add your products and start selling.",
+
+    step1Title: "Create your account",
+    step1Text:
+      "Register your pharmacy in just a few minutes and enjoy your free trial.",
+    step1Button: "Create my account",
+
+    step2Title: "Set up your pharmacy",
+    step2Text:
+      "Enter your pharmacy information and prepare your management workspace.",
+
+    step3Title: "Add your products",
+    step3Text:
+      "Register your products, prices, barcodes, categories, stock and important information.",
+
+    step4Title: "Add your team",
+    step4Text:
+      "Create access for pharmacists, cashiers and employees with permissions adapted to each role.",
+
+    step5Title: "Start selling",
+    step5Text:
+      "Select a product directly or scan its barcode to automatically add it to the cart.",
+
+    step6Title: "Manage your business",
+    step6Text:
+      "Track your sales, inventory, stock movements and reports from your dashboard.",
+
+    howItWorksCta: "Get started",
+    howItWorksGuide: "View the complete guide",
 
     globalEyebrow: "BUILT FOR AFRICA AND THE WORLD",
     globalTitle: "A connected pharmacy, wherever you are.",
@@ -639,6 +715,17 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() =>
+                scrollToSection(
+                  "comment-ca-marche",
+                )
+              }
+            >
+              {t.navHowItWorks}
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
                 scrollToSection("tarifs")
               }
             >
@@ -782,7 +869,7 @@ export default function HomePage() {
                 }
               >
                 <span className="pf-home-play">
-                  ▶
+                  ▶️
                 </span>
 
                 {t.heroSecondary}
@@ -813,10 +900,6 @@ export default function HomePage() {
             </div>
 
           </div>
-
-          {/* =================================================
-              APERÇU TABLEAU DE BORD
-          ================================================== */}
 
           <div className="pf-home-dashboard-wrap">
 
@@ -959,7 +1042,7 @@ export default function HomePage() {
       </section>
 
       {/* =====================================================
-          BANDEAU PROMOTIONNEL / PUBLICITÉ
+          BANDEAU PUBLICITAIRE
       ====================================================== */}
 
       <section className="pf-home-ad-section">
@@ -1083,7 +1166,7 @@ export default function HomePage() {
       </section>
 
       {/* =====================================================
-          CHIFFRES / PREUVE VISUELLE
+          CHIFFRES
       ====================================================== */}
 
       <section className="pf-home-metrics">
@@ -1396,6 +1479,241 @@ export default function HomePage() {
           </article>
 
         </div>
+      </section>
+
+      {/* =====================================================
+          COMMENT ÇA MARCHE
+      ====================================================== */}
+
+      <section
+        id="comment-ca-marche"
+        className="pf-home-section pf-home-how"
+      >
+
+        <div className="pf-home-section-heading">
+
+          <span>
+            {t.howItWorksEyebrow}
+          </span>
+
+          <h2>
+            {t.howItWorksTitle}
+          </h2>
+
+          <p>
+            {t.howItWorksText}
+          </p>
+
+        </div>
+
+        <div className="pf-home-how-grid">
+
+          <article className="pf-home-how-card">
+
+            <div className="pf-home-how-number">
+              01
+            </div>
+
+            <div className="pf-home-how-icon">
+              👤
+            </div>
+
+            <h3>
+              {t.step1Title}
+            </h3>
+
+            <p>
+              {t.step1Text}
+            </p>
+
+            <Link
+              href="/register"
+              className="pf-home-how-link"
+            >
+              {t.step1Button}
+              <span>→</span>
+            </Link>
+
+          </article>
+
+          <article className="pf-home-how-card">
+
+            <div className="pf-home-how-number">
+              02
+            </div>
+
+            <div className="pf-home-how-icon">
+              🏥
+            </div>
+
+            <h3>
+              {t.step2Title}
+            </h3>
+
+            <p>
+              {t.step2Text}
+            </p>
+
+            <span className="pf-home-how-link">
+              {locale === "fr"
+                ? "Votre espace pharmacie"
+                : "Your pharmacy workspace"}
+              <span>→</span>
+            </span>
+
+          </article>
+
+          <article className="pf-home-how-card">
+
+            <div className="pf-home-how-number">
+              03
+            </div>
+
+            <div className="pf-home-how-icon">
+              💊
+            </div>
+
+            <h3>
+              {t.step3Title}
+            </h3>
+
+            <p>
+              {t.step3Text}
+            </p>
+
+            <span className="pf-home-how-link">
+              {locale === "fr"
+                ? "Produits & stock"
+                : "Products & inventory"}
+              <span>→</span>
+            </span>
+
+          </article>
+
+          <article className="pf-home-how-card">
+
+            <div className="pf-home-how-number">
+              04
+            </div>
+
+            <div className="pf-home-how-icon">
+              👥
+            </div>
+
+            <h3>
+              {t.step4Title}
+            </h3>
+
+            <p>
+              {t.step4Text}
+            </p>
+
+            <span className="pf-home-how-link">
+              {locale === "fr"
+                ? "Gestion de l'équipe"
+                : "Team management"}
+              <span>→</span>
+            </span>
+
+          </article>
+
+          <article className="pf-home-how-card featured">
+
+            <div className="pf-home-how-number">
+              05
+            </div>
+
+            <div className="pf-home-how-icon">
+              🛒
+            </div>
+
+            <h3>
+              {t.step5Title}
+            </h3>
+
+            <p>
+              {t.step5Text}
+            </p>
+
+            <span className="pf-home-how-link">
+              {locale === "fr"
+                ? "Scanner → Panier → Vente"
+                : "Scan → Cart → Sale"}
+              <span>→</span>
+            </span>
+
+          </article>
+
+          <article className="pf-home-how-card">
+
+            <div className="pf-home-how-number">
+              06
+            </div>
+
+            <div className="pf-home-how-icon">
+              📊
+            </div>
+
+            <h3>
+              {t.step6Title}
+            </h3>
+
+            <p>
+              {t.step6Text}
+            </p>
+
+            <span className="pf-home-how-link">
+              {locale === "fr"
+                ? "Tableau de bord"
+                : "Dashboard"}
+              <span>→</span>
+            </span>
+
+          </article>
+
+        </div>
+
+        <div className="pf-home-how-bottom">
+
+          <div className="pf-home-how-bottom-copy">
+
+            <span className="pf-home-how-bottom-icon">
+              🚀
+            </span>
+
+            <div>
+              <strong>
+                {t.howItWorksCta}
+              </strong>
+
+              <p>
+                {t.howItWorksText}
+              </p>
+            </div>
+
+          </div>
+
+          <div className="pf-home-how-bottom-actions">
+
+            <Link
+              href="/register"
+              className="pf-home-primary-button"
+            >
+              {t.howItWorksCta}
+              <span>→</span>
+            </Link>
+
+            <Link
+              href="/comment-ca-marche"
+              className="pf-home-secondary-button"
+            >
+              📖 {t.howItWorksGuide}
+            </Link>
+
+          </div>
+
+        </div>
+
       </section>
 
       {/* =====================================================
@@ -2060,6 +2378,17 @@ export default function HomePage() {
               type="button"
               onClick={() =>
                 scrollToSection(
+                  "comment-ca-marche",
+                )
+              }
+            >
+              {t.navHowItWorks}
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                scrollToSection(
                   "tarifs",
                 )
               }
@@ -2137,8 +2466,6 @@ export default function HomePage() {
           </div>
 
         </div>
-
-        {/* CONTACT FOOTER */}
 
         <div className="pf-home-footer-contact">
 

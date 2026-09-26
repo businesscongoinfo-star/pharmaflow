@@ -42,6 +42,14 @@ type SupportMessage = {
   created_at: string;
 };
 
+type TeamMember = {
+  id: string;
+  role: string | null;
+  permissions: unknown;
+  is_active: boolean | null;
+  created_at: string;
+};
+
 /*
 |--------------------------------------------------------------------------
 | STATUTS
@@ -78,6 +86,93 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 /*
 |--------------------------------------------------------------------------
+| RÔLES / PERMISSIONS
+|--------------------------------------------------------------------------
+*/
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
+function normalizePermissions(
+  permissions: unknown,
+): Record<string, boolean> {
+  if (
+    permissions &&
+    typeof permissions === "object" &&
+    !Array.isArray(permissions)
+  ) {
+    return permissions as Record<string, boolean>;
+  }
+
+  if (Array.isArray(permissions)) {
+    return permissions.reduce<Record<string, boolean>>(
+      (result, permission) => {
+        if (typeof permission === "string") {
+          result[permission] = true;
+        }
+
+        return result;
+      },
+      {},
+    );
+  }
+
+  return {};
+}
+
+function isTechnical(role: unknown) {
+  const value = normalizeRole(role);
+
+  return (
+    value === "technical" ||
+    value === "technique" ||
+    value === "technicien" ||
+    value === "technicalagent"
+  );
+}
+
+function isAdministrator(role: unknown) {
+  const value = normalizeRole(role);
+
+  return (
+    value === "superadmin" ||
+    value === "superadministrateur" ||
+    value === "platformadmin" ||
+    value === "administrator" ||
+    value === "admin"
+  );
+}
+
+function canManageSupport(
+  role: unknown,
+  permissions: unknown,
+) {
+  const normalizedPermissions =
+    normalizePermissions(permissions);
+
+  return (
+    normalizedPermissions["support.manage"] === true ||
+    isTechnical(role) ||
+    isAdministrator(role)
+  );
+}
+
+function canAssignSupport(
+  role: unknown,
+  permissions: unknown,
+) {
+  return canManageSupport(
+    role,
+    permissions,
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
 | OUTILS
 |--------------------------------------------------------------------------
 */
@@ -85,9 +180,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 function formatDate(
   value: string | null | undefined,
 ) {
-  if (!value) {
-    return "—";
-  }
+  if (!value) return "—";
 
   const date = new Date(value);
 
@@ -101,12 +194,6 @@ function formatDate(
   }).format(date);
 }
 
-/*
-|--------------------------------------------------------------------------
-| LABEL STATUT
-|--------------------------------------------------------------------------
-*/
-
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     new: "Nouveau",
@@ -119,12 +206,6 @@ function statusLabel(status: string) {
 
   return labels[status] ?? status;
 }
-
-/*
-|--------------------------------------------------------------------------
-| CLASSE STATUT
-|--------------------------------------------------------------------------
-*/
 
 function statusClass(status: string) {
   switch (status) {
@@ -144,18 +225,10 @@ function statusClass(status: string) {
       return "status new";
 
     case "open":
-      return "status open";
-
     default:
       return "status open";
   }
 }
-
-/*
-|--------------------------------------------------------------------------
-| LABEL PRIORITÉ
-|--------------------------------------------------------------------------
-*/
 
 function priorityLabel(priority: string) {
   const labels: Record<string, string> = {
@@ -169,12 +242,6 @@ function priorityLabel(priority: string) {
 
   return labels[priority] ?? priority;
 }
-
-/*
-|--------------------------------------------------------------------------
-| CLASSE PRIORITÉ
-|--------------------------------------------------------------------------
-*/
 
 function priorityClass(priority: string) {
   switch (priority) {
@@ -196,28 +263,12 @@ function priorityClass(priority: string) {
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| LABEL CATÉGORIE
-|--------------------------------------------------------------------------
-*/
-
 function categoryLabel(category: string) {
-  return (
-    CATEGORY_LABELS[category] ??
-    category
-  );
+  return CATEGORY_LABELS[category] ?? category;
 }
 
-/*
-|--------------------------------------------------------------------------
-| LABEL EXPÉDITEUR
-|--------------------------------------------------------------------------
-*/
-
 function senderLabel(senderType: string) {
-  const value =
-    senderType.toLowerCase();
+  const value = senderType.toLowerCase();
 
   if (
     value === "agent" ||
@@ -236,18 +287,15 @@ function senderLabel(senderType: string) {
     return "Client";
   }
 
+  if (value === "system") {
+    return "Système PharmaFlow";
+  }
+
   return senderType;
 }
 
-/*
-|--------------------------------------------------------------------------
-| CLASSE MESSAGE
-|--------------------------------------------------------------------------
-*/
-
 function senderClass(senderType: string) {
-  const value =
-    senderType.toLowerCase();
+  const value = senderType.toLowerCase();
 
   if (
     value === "agent" ||
@@ -263,17 +311,38 @@ function senderClass(senderType: string) {
 
 /*
 |--------------------------------------------------------------------------
-| PRENDRE EN CHARGE LE TICKET
+| VÉRIFICATION CENTRALISÉE
 |--------------------------------------------------------------------------
 */
 
-async function takeTicket(
-  ticketId: string,
-) {
+async function requireSupportManager() {
+  const member = await requireAgent();
+
+  const allowed = canManageSupport(
+    member.role,
+    member.permissions,
+  );
+
+  if (!allowed) {
+    throw new Error(
+      "Vous n'êtes pas autorisé à gérer les tickets support.",
+    );
+  }
+
+  return member;
+}
+
+/*
+|--------------------------------------------------------------------------
+| PRENDRE EN CHARGE
+|--------------------------------------------------------------------------
+*/
+
+async function takeTicket(ticketId: string) {
   "use server";
 
   const member =
-    await requireAgent();
+    await requireSupportManager();
 
   const supabase =
     createAdminClient();
@@ -293,7 +362,7 @@ async function takeTicket(
 
   if (error) {
     console.error(
-      "Take ticket error:",
+      "[SUPPORT] takeTicket:",
       error,
     );
 
@@ -306,9 +375,119 @@ async function takeTicket(
     `/agent/support/ticket/${ticketId}`,
   );
 
-  revalidatePath(
-    "/agent/support",
+  revalidatePath("/agent/support");
+
+  redirect(
+    `/agent/support/ticket/${ticketId}`,
   );
+}
+
+/*
+|--------------------------------------------------------------------------
+| ASSIGNER / TRANSFÉRER
+|--------------------------------------------------------------------------
+*/
+
+async function assignTicket(
+  ticketId: string,
+  formData: FormData,
+) {
+  "use server";
+
+  const member =
+    await requireSupportManager();
+
+  const assignedTo =
+    String(
+      formData.get("assigned_to") ?? "",
+    ).trim();
+
+  if (!assignedTo) {
+    throw new Error(
+      "Membre de l'équipe invalide.",
+    );
+  }
+
+  const supabase =
+    createAdminClient();
+
+  /*
+   * Vérifier que le membre existe réellement
+   * et qu'il est actif.
+   */
+  const {
+    data: target,
+    error: targetError,
+  } = await supabase
+    .from("platform_team_members")
+    .select(
+      `
+        id,
+        role,
+        permissions,
+        is_active,
+        created_at
+      `,
+    )
+    .eq("id", assignedTo)
+    .maybeSingle();
+
+  if (targetError) {
+    console.error(
+      "[SUPPORT] target member:",
+      targetError,
+    );
+
+    throw new Error(
+      "Impossible de vérifier le membre sélectionné.",
+    );
+  }
+
+  if (!target) {
+    throw new Error(
+      "Le membre sélectionné n'existe pas.",
+    );
+  }
+
+  if (target.is_active === false) {
+    throw new Error(
+      "Ce membre de l'équipe est désactivé.",
+    );
+  }
+
+  const now =
+    new Date().toISOString();
+
+  const { error } =
+    await supabase
+      .from("support_tickets")
+      .update({
+        assigned_to: target.id,
+        status: "in_progress",
+        updated_at: now,
+      })
+      .eq("id", ticketId);
+
+  if (error) {
+    console.error(
+      "[SUPPORT] assignTicket:",
+      error,
+    );
+
+    throw new Error(
+      "Impossible de transférer le ticket.",
+    );
+  }
+
+  revalidatePath(
+    `/agent/support/ticket/${ticketId}`,
+  );
+
+  revalidatePath("/agent/support");
+
+  revalidatePath("/agent/technique");
+
+  void member;
 
   redirect(
     `/agent/support/ticket/${ticketId}`,
@@ -327,7 +506,7 @@ async function updateTicketStatus(
 ) {
   "use server";
 
-  await requireAgent();
+  await requireSupportManager();
 
   const rawStatus =
     String(
@@ -344,25 +523,25 @@ async function updateTicketStatus(
     );
   }
 
-  const status =
-    rawStatus as TicketStatus;
-
   const supabase =
     createAdminClient();
+
+  const now =
+    new Date().toISOString();
 
   const { error } =
     await supabase
       .from("support_tickets")
       .update({
-        status,
-        updated_at:
-          new Date().toISOString(),
+        status:
+          rawStatus as TicketStatus,
+        updated_at: now,
       })
       .eq("id", ticketId);
 
   if (error) {
     console.error(
-      "Update ticket status error:",
+      "[SUPPORT] updateStatus:",
       error,
     );
 
@@ -375,9 +554,7 @@ async function updateTicketStatus(
     `/agent/support/ticket/${ticketId}`,
   );
 
-  revalidatePath(
-    "/agent/support",
-  );
+  revalidatePath("/agent/support");
 
   redirect(
     `/agent/support/ticket/${ticketId}`,
@@ -386,7 +563,7 @@ async function updateTicketStatus(
 
 /*
 |--------------------------------------------------------------------------
-| ENVOYER UNE RÉPONSE
+| RÉPONDRE
 |--------------------------------------------------------------------------
 */
 
@@ -397,7 +574,7 @@ async function sendTicketMessage(
   "use server";
 
   const member =
-    await requireAgent();
+    await requireSupportManager();
 
   const message =
     String(
@@ -422,9 +599,6 @@ async function sendTicketMessage(
   const now =
     new Date().toISOString();
 
-  /*
-   * Enregistrer le message.
-   */
   const {
     error: messageError,
   } = await supabase
@@ -439,7 +613,7 @@ async function sendTicketMessage(
 
   if (messageError) {
     console.error(
-      "Send support message error:",
+      "[SUPPORT] sendMessage:",
       messageError,
     );
 
@@ -448,9 +622,6 @@ async function sendTicketMessage(
     );
   }
 
-  /*
-   * Mettre à jour le ticket.
-   */
   const {
     error: ticketError,
   } = await supabase
@@ -465,7 +636,7 @@ async function sendTicketMessage(
 
   if (ticketError) {
     console.error(
-      "Update ticket after message error:",
+      "[SUPPORT] updateAfterMessage:",
       ticketError,
     );
 
@@ -478,9 +649,7 @@ async function sendTicketMessage(
     `/agent/support/ticket/${ticketId}`,
   );
 
-  revalidatePath(
-    "/agent/support",
-  );
+  revalidatePath("/agent/support");
 
   redirect(
     `/agent/support/ticket/${ticketId}`,
@@ -489,7 +658,7 @@ async function sendTicketMessage(
 
 /*
 |--------------------------------------------------------------------------
-| RÉSOUDRE LE TICKET
+| RÉSOUDRE
 |--------------------------------------------------------------------------
 */
 
@@ -499,7 +668,7 @@ async function resolveTicket(
   "use server";
 
   const member =
-    await requireAgent();
+    await requireSupportManager();
 
   const supabase =
     createAdminClient();
@@ -520,7 +689,7 @@ async function resolveTicket(
 
   if (error) {
     console.error(
-      "Resolve ticket error:",
+      "[SUPPORT] resolve:",
       error,
     );
 
@@ -533,9 +702,7 @@ async function resolveTicket(
     `/agent/support/ticket/${ticketId}`,
   );
 
-  revalidatePath(
-    "/agent/support",
-  );
+  revalidatePath("/agent/support");
 
   redirect(
     `/agent/support/ticket/${ticketId}`,
@@ -544,7 +711,7 @@ async function resolveTicket(
 
 /*
 |--------------------------------------------------------------------------
-| FERMER LE TICKET
+| FERMER
 |--------------------------------------------------------------------------
 */
 
@@ -553,7 +720,7 @@ async function closeTicket(
 ) {
   "use server";
 
-  await requireAgent();
+  await requireSupportManager();
 
   const supabase =
     createAdminClient();
@@ -572,7 +739,7 @@ async function closeTicket(
 
   if (error) {
     console.error(
-      "Close ticket error:",
+      "[SUPPORT] close:",
       error,
     );
 
@@ -585,9 +752,7 @@ async function closeTicket(
     `/agent/support/ticket/${ticketId}`,
   );
 
-  revalidatePath(
-    "/agent/support",
-  );
+  revalidatePath("/agent/support");
 
   redirect(
     `/agent/support/ticket/${ticketId}`,
@@ -603,31 +768,26 @@ async function closeTicket(
 export default async function SupportTicketDetailPage({
   params,
 }: PageProps) {
-  /*
-   * Next.js 16 :
-   * params est une Promise.
-   */
-  const { id } =
-    await params;
+  const { id } = await params;
 
-  /*
-   * IMPORTANT :
-   * requireAgent() retourne directement
-   * l'agent/membre.
-   *
-   * On ne fait donc PAS :
-   * const { member } = await requireAgent();
-   */
   const member =
     await requireAgent();
+
+  const canManage =
+    canManageSupport(
+      member.role,
+      member.permissions,
+    );
+
+  if (!canManage) {
+    redirect("/agent/support");
+  }
 
   const supabase =
     createAdminClient();
 
   /*
-   * ==========================================================
-   * RÉCUPÉRER LE TICKET
-   * ==========================================================
+   * TICKET
    */
 
   const {
@@ -657,7 +817,7 @@ export default async function SupportTicketDetailPage({
 
   if (ticketError) {
     console.error(
-      "Support ticket detail error:",
+      "[SUPPORT] ticket:",
       ticketError,
     );
   }
@@ -667,9 +827,7 @@ export default async function SupportTicketDetailPage({
   }
 
   /*
-   * ==========================================================
-   * RÉCUPÉRER LES MESSAGES
-   * ==========================================================
+   * MESSAGES
    */
 
   const {
@@ -694,8 +852,40 @@ export default async function SupportTicketDetailPage({
 
   if (messagesError) {
     console.error(
-      "Support messages error:",
+      "[SUPPORT] messages:",
       messagesError,
+    );
+  }
+
+  /*
+   * MEMBRES DE L'ÉQUIPE
+   *
+   * On ne récupère que les membres actifs.
+   */
+
+  const {
+    data: teamMembers,
+    error: teamError,
+  } = await supabase
+    .from("platform_team_members")
+    .select(
+      `
+        id,
+        role,
+        permissions,
+        is_active,
+        created_at
+      `,
+    )
+    .eq("is_active", true)
+    .order("created_at", {
+      ascending: true,
+    });
+
+  if (teamError) {
+    console.error(
+      "[SUPPORT] team:",
+      teamError,
     );
   }
 
@@ -705,28 +895,50 @@ export default async function SupportTicketDetailPage({
   const ticketMessages =
     (messages ?? []) as SupportMessage[];
 
+  const activeMembers =
+    (teamMembers ?? []) as TeamMember[];
+
   /*
-   * ==========================================================
-   * RENDU
-   * ==========================================================
+   * Les rôles réellement utiles au transfert.
+   *
+   * On ne suppose pas qu'une colonne "team" existe.
    */
+
+  const transferableMembers =
+    activeMembers.filter(
+      (item) => {
+        const role =
+          normalizeRole(item.role);
+
+        return (
+          role === "support" ||
+          role === "supportagent" ||
+          role === "technical" ||
+          role === "technique" ||
+          role === "technicien" ||
+          role === "technicalagent" ||
+          role === "operations" ||
+          role === "operationsagent" ||
+          role === "superadmin" ||
+          role === "superadministrateur" ||
+          role === "platformadmin" ||
+          role === "administrator" ||
+          role === "admin"
+        );
+      },
+    );
 
   return (
     <main className="ticket-page">
       <div className="page-shell">
 
-        {/* =====================================================
-            HEADER
-        ===================================================== */}
+        {/* HEADER */}
 
         <header className="page-header">
-
           <div className="header-left">
-
             <Link
               href="/agent/support"
               className="back-button"
-              aria-label="Retour au support"
             >
               ←
             </Link>
@@ -742,11 +954,9 @@ export default async function SupportTicketDetailPage({
               </h1>
 
               <p>
-                Traitement et résolution
-                du problème client.
+                Traitement et résolution du problème client.
               </p>
             </div>
-
           </div>
 
           <Link
@@ -755,17 +965,12 @@ export default async function SupportTicketDetailPage({
           >
             👤 Espace Agent
           </Link>
-
         </header>
 
-        {/* =====================================================
-            BARRE STATUT
-        ===================================================== */}
+        {/* STATUT */}
 
         <section className="status-bar">
-
           <div className="status-group">
-
             <span
               className={statusClass(
                 ticketData.status,
@@ -785,7 +990,6 @@ export default async function SupportTicketDetailPage({
                 ticketData.priority,
               )}
             </span>
-
           </div>
 
           <div className="status-date">
@@ -796,29 +1000,18 @@ export default async function SupportTicketDetailPage({
               )}
             </strong>
           </div>
-
         </section>
-
-        {/* =====================================================
-            GRILLE PRINCIPALE
-        ===================================================== */}
 
         <div className="content-grid">
 
-          {/* ===================================================
-              COLONNE PRINCIPALE
-          =================================================== */}
+          {/* COLONNE PRINCIPALE */}
 
           <section className="main-column">
 
-            {/* =================================================
-                INFORMATIONS DU TICKET
-            ================================================= */}
+            {/* INFORMATIONS */}
 
             <article className="card">
-
               <div className="card-header">
-
                 <div>
                   <span className="card-kicker">
                     DEMANDE CLIENT
@@ -833,16 +1026,11 @@ export default async function SupportTicketDetailPage({
                 <div className="ticket-icon">
                   🎫
                 </div>
-
               </div>
 
               <div className="ticket-meta-grid">
-
                 <div className="meta-item">
-                  <span>
-                    Catégorie
-                  </span>
-
+                  <span>Catégorie</span>
                   <strong>
                     {categoryLabel(
                       ticketData.category,
@@ -851,10 +1039,7 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div className="meta-item">
-                  <span>
-                    Priorité
-                  </span>
-
+                  <span>Priorité</span>
                   <strong>
                     {priorityLabel(
                       ticketData.priority,
@@ -863,10 +1048,7 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div className="meta-item">
-                  <span>
-                    Créé le
-                  </span>
-
+                  <span>Créé le</span>
                   <strong>
                     {formatDate(
                       ticketData.created_at,
@@ -875,53 +1057,39 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div className="meta-item">
-                  <span>
-                    Mis à jour
-                  </span>
-
+                  <span>Mis à jour</span>
                   <strong>
                     {formatDate(
                       ticketData.updated_at,
                     )}
                   </strong>
                 </div>
-
               </div>
-
             </article>
 
-            {/* =================================================
-                CENTRE D'INTERVENTION
-            ================================================= */}
+            {/* INTERVENTION */}
 
             <article className="card intervention-card">
 
               <div className="intervention-header">
-
                 <div>
                   <span className="card-kicker">
                     ACTION AGENT
                   </span>
 
                   <h2>
-                    Centre d&apos;intervention
+                    Centre d'intervention
                   </h2>
 
                   <p>
-                    Répondez au client et
-                    faites évoluer le dossier.
+                    Répondez au client et faites évoluer le dossier.
                   </p>
                 </div>
 
                 <div className="intervention-icon">
                   ⚡
                 </div>
-
               </div>
-
-              {/* =================================================
-                  FORMULAIRE DE RÉPONSE
-              ================================================= */}
 
               <form
                 action={sendTicketMessage.bind(
@@ -930,7 +1098,6 @@ export default async function SupportTicketDetailPage({
                 )}
                 className="response-form"
               >
-
                 <label htmlFor="message">
                   Réponse au client
                 </label>
@@ -950,12 +1117,7 @@ export default async function SupportTicketDetailPage({
                 >
                   ✉️ Envoyer la réponse
                 </button>
-
               </form>
-
-              {/* =================================================
-                  ACTIONS RAPIDES
-              ================================================= */}
 
               <div className="quick-actions">
 
@@ -1027,12 +1189,77 @@ export default async function SupportTicketDetailPage({
                     🔒 Fermer le ticket
                   </button>
                 </form>
-
               </div>
 
-              {/* =================================================
-                  ÉDITEUR DE STATUT
-              ================================================= */}
+              {/* TRANSFERT */}
+
+              <div className="assignment-editor">
+
+                <div className="section-label">
+                  🔄 Transférer le ticket
+                </div>
+
+                <p className="assignment-help">
+                  Affectez ce ticket à un membre actif de l'équipe Support,
+                  Technique ou Administration.
+                </p>
+
+                {transferableMembers.length === 0 ? (
+                  <div className="no-team">
+                    Aucun membre actif disponible pour le transfert.
+                  </div>
+                ) : (
+                  <form
+                    action={assignTicket.bind(
+                      null,
+                      ticketData.id,
+                    )}
+                    className="assignment-form"
+                  >
+                    <select
+                      name="assigned_to"
+                      defaultValue={
+                        ticketData.assigned_to ?? ""
+                      }
+                      required
+                      aria-label="Membre responsable"
+                    >
+                      <option value="">
+                        Sélectionner un responsable
+                      </option>
+
+                      {transferableMembers.map(
+                        (teamMember) => (
+                          <option
+                            key={teamMember.id}
+                            value={teamMember.id}
+                          >
+                            {teamMember.role ||
+                              "Membre équipe"}{" "}
+                            —{" "}
+                            {teamMember.id ===
+                            ticketData.assigned_to
+                              ? "Responsable actuel"
+                              : teamMember.id.slice(
+                                  0,
+                                  8,
+                                )}
+                          </option>
+                        ),
+                      )}
+                    </select>
+
+                    <button
+                      type="submit"
+                      className="secondary-action"
+                    >
+                      🔄 Affecter
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* STATUT */}
 
               <div className="status-editor">
 
@@ -1047,7 +1274,6 @@ export default async function SupportTicketDetailPage({
                   )}
                   className="status-form"
                 >
-
                   <select
                     name="status"
                     defaultValue={
@@ -1086,21 +1312,15 @@ export default async function SupportTicketDetailPage({
                   >
                     Enregistrer
                   </button>
-
                 </form>
-
               </div>
-
             </article>
 
-            {/* =================================================
-                HISTORIQUE CONVERSATION
-            ================================================= */}
+            {/* CONVERSATION */}
 
             <article className="card">
 
               <div className="card-header">
-
                 <div>
                   <span className="card-kicker">
                     HISTORIQUE
@@ -1117,12 +1337,10 @@ export default async function SupportTicketDetailPage({
                     ? "s"
                     : ""}
                 </span>
-
               </div>
 
               {ticketMessages.length === 0 ? (
                 <div className="empty-state">
-
                   <div className="empty-icon">
                     💬
                   </div>
@@ -1132,15 +1350,11 @@ export default async function SupportTicketDetailPage({
                   </h3>
 
                   <p>
-                    Envoyez la première
-                    réponse au client
-                    ci-dessus.
+                    Envoyez la première réponse au client.
                   </p>
-
                 </div>
               ) : (
                 <div className="messages-list">
-
                   {ticketMessages.map(
                     (message) => (
                       <div
@@ -1149,9 +1363,7 @@ export default async function SupportTicketDetailPage({
                           message.sender_type,
                         )}
                       >
-
                         <div className="message-top">
-
                           <strong>
                             {senderLabel(
                               message.sender_type,
@@ -1163,33 +1375,22 @@ export default async function SupportTicketDetailPage({
                               message.created_at,
                             )}
                           </time>
-
                         </div>
 
                         <div className="message-body">
                           {message.message}
                         </div>
-
                       </div>
                     ),
                   )}
-
                 </div>
               )}
-
             </article>
-
           </section>
 
-          {/* ===================================================
-              SIDEBAR
-          =================================================== */}
+          {/* SIDEBAR */}
 
           <aside className="sidebar">
-
-            {/* =================================================
-                CLIENT
-            ================================================= */}
 
             <section className="card">
 
@@ -1214,15 +1415,12 @@ export default async function SupportTicketDetailPage({
                     Client PharmaFlow
                   </span>
                 </div>
-
               </div>
 
               <div className="info-list">
 
                 <div>
-                  <span>
-                    Email
-                  </span>
+                  <span>Email</span>
 
                   {ticketData.customer_email ? (
                     <a
@@ -1238,9 +1436,7 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div>
-                  <span>
-                    Téléphone
-                  </span>
+                  <span>Téléphone</span>
 
                   {ticketData.customer_phone ? (
                     <a
@@ -1256,9 +1452,7 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div>
-                  <span>
-                    Catégorie
-                  </span>
+                  <span>Catégorie</span>
 
                   <strong>
                     {categoryLabel(
@@ -1266,14 +1460,10 @@ export default async function SupportTicketDetailPage({
                     )}
                   </strong>
                 </div>
-
               </div>
-
             </section>
 
-            {/* =================================================
-                AFFECTATION
-            ================================================= */}
+            {/* AFFECTATION */}
 
             <section className="card">
 
@@ -1299,14 +1489,10 @@ export default async function SupportTicketDetailPage({
                     Non assigné
                   </strong>
                 )}
-
               </div>
-
             </section>
 
-            {/* =================================================
-                DOSSIER
-            ================================================= */}
+            {/* DOSSIER */}
 
             <section className="card">
 
@@ -1317,9 +1503,7 @@ export default async function SupportTicketDetailPage({
               <div className="info-list">
 
                 <div>
-                  <span>
-                    Numéro
-                  </span>
+                  <span>Numéro</span>
 
                   <strong>
                     {ticketData.ticket_number}
@@ -1327,9 +1511,7 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div>
-                  <span>
-                    Statut
-                  </span>
+                  <span>Statut</span>
 
                   <strong>
                     {statusLabel(
@@ -1339,9 +1521,7 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div>
-                  <span>
-                    Priorité
-                  </span>
+                  <span>Priorité</span>
 
                   <strong>
                     {priorityLabel(
@@ -1351,22 +1531,16 @@ export default async function SupportTicketDetailPage({
                 </div>
 
                 <div>
-                  <span>
-                    Messages
-                  </span>
+                  <span>Messages</span>
 
                   <strong>
                     {ticketMessages.length}
                   </strong>
                 </div>
-
               </div>
-
             </section>
 
-            {/* =================================================
-                CONTACT
-            ================================================= */}
+            {/* CONTACT */}
 
             <section className="card">
 
@@ -1398,21 +1572,13 @@ export default async function SupportTicketDetailPage({
               {!ticketData.customer_email &&
                 !ticketData.customer_phone && (
                   <div className="no-contact">
-                    Aucun moyen de contact
-                    renseigné.
+                    Aucun moyen de contact renseigné.
                   </div>
                 )}
-
             </section>
-
           </aside>
-
         </div>
       </div>
-
-      {/* =======================================================
-          STYLE
-      ======================================================= */}
 
       <style>{`
 
@@ -1438,10 +1604,6 @@ export default async function SupportTicketDetailPage({
           max-width: 1450px;
           margin: 0 auto;
         }
-
-        /* ======================================================
-           HEADER
-        ====================================================== */
 
         .page-header {
           display: flex;
@@ -1512,18 +1674,8 @@ export default async function SupportTicketDetailPage({
           color: white;
           font-weight: 700;
           font-size: 14px;
-          transition: all .2s ease;
           white-space: nowrap;
         }
-
-        .agent-button:hover {
-          background: #0b625c;
-          transform: translateY(-1px);
-        }
-
-        /* ======================================================
-           STATUS BAR
-        ====================================================== */
 
         .status-bar {
           display: flex;
@@ -1621,10 +1773,6 @@ export default async function SupportTicketDetailPage({
           color: #405858;
         }
 
-        /* ======================================================
-           GRID
-        ====================================================== */
-
         .content-grid {
           display: grid;
           grid-template-columns:
@@ -1641,10 +1789,6 @@ export default async function SupportTicketDetailPage({
           gap: 20px;
           min-width: 0;
         }
-
-        /* ======================================================
-           CARD
-        ====================================================== */
 
         .card {
           background: white;
@@ -1684,10 +1828,6 @@ export default async function SupportTicketDetailPage({
           font-size: 21px;
         }
 
-        /* ======================================================
-           META
-        ====================================================== */
-
         .ticket-meta-grid {
           display: grid;
           grid-template-columns:
@@ -1718,10 +1858,6 @@ export default async function SupportTicketDetailPage({
           word-break: break-word;
         }
 
-        /* ======================================================
-           INTERVENTION
-        ====================================================== */
-
         .intervention-header {
           display: flex;
           justify-content: space-between;
@@ -1735,10 +1871,6 @@ export default async function SupportTicketDetailPage({
           font-size: 13px;
           line-height: 1.5;
         }
-
-        /* ======================================================
-           FORMULAIRE RÉPONSE
-        ====================================================== */
 
         .response-form {
           display: flex;
@@ -1764,11 +1896,6 @@ export default async function SupportTicketDetailPage({
           color: #203a39;
           background: #fbfdfd;
           line-height: 1.55;
-          transition: all .2s ease;
-        }
-
-        .response-form textarea::placeholder {
-          color: #9aabab;
         }
 
         .response-form textarea:focus {
@@ -1788,22 +1915,12 @@ export default async function SupportTicketDetailPage({
           font-family: inherit;
           font-weight: 800;
           font-size: 13px;
-          transition: all .2s ease;
         }
 
         .primary-action {
           color: white;
           background: #0f766e;
         }
-
-        .primary-action:hover {
-          background: #0b625c;
-          transform: translateY(-1px);
-        }
-
-        /* ======================================================
-           ACTIONS RAPIDES
-        ====================================================== */
 
         .quick-actions {
           margin-top: 22px;
@@ -1836,11 +1953,6 @@ export default async function SupportTicketDetailPage({
           font-family: inherit;
           font-weight: 800;
           font-size: 12px;
-          transition: all .2s ease;
-        }
-
-        .quick-button:hover {
-          transform: translateY(-1px);
         }
 
         .quick-button.blue {
@@ -1863,22 +1975,27 @@ export default async function SupportTicketDetailPage({
           color: #475569;
         }
 
-        /* ======================================================
-           STATUS EDITOR
-        ====================================================== */
-
+        .assignment-editor,
         .status-editor {
           margin-top: 20px;
           padding-top: 20px;
           border-top: 1px solid #edf2f2;
         }
 
+        .assignment-help {
+          margin: 6px 0 10px;
+          color: #718181;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .assignment-form,
         .status-form {
           display: flex;
           gap: 10px;
-          margin-top: 10px;
         }
 
+        .assignment-form select,
         .status-form select {
           flex: 1;
           min-width: 0;
@@ -1891,34 +2008,18 @@ export default async function SupportTicketDetailPage({
           color: #294141;
         }
 
-        .status-form select:focus {
-          border-color: #0f766e;
-          box-shadow:
-            0 0 0 3px
-            rgba(15,118,110,.10);
-        }
-
         .secondary-action {
           color: #285050;
           background: #eef5f4;
-        }
-
-        .secondary-action:hover {
-          background: #e0eeec;
-        }
-
-        /* ======================================================
-           MESSAGES
-        ====================================================== */
-
-        .message-count {
-          padding: 7px 10px;
-          border-radius: 999px;
-          background: #eef8f7;
-          color: #0f766e;
-          font-size: 12px;
-          font-weight: 800;
           white-space: nowrap;
+        }
+
+        .no-team {
+          padding: 12px;
+          border-radius: 10px;
+          background: #fff8e8;
+          color: #946200;
+          font-size: 12px;
         }
 
         .messages-list {
@@ -1971,9 +2072,14 @@ export default async function SupportTicketDetailPage({
           color: #273b3b;
         }
 
-        /* ======================================================
-           SIDEBAR
-        ====================================================== */
+        .message-count {
+          padding: 7px 10px;
+          border-radius: 999px;
+          background: #eef8f7;
+          color: #0f766e;
+          font-size: 12px;
+          font-weight: 800;
+        }
 
         .card-title {
           display: flex;
@@ -2051,14 +2157,6 @@ export default async function SupportTicketDetailPage({
           text-decoration: none;
         }
 
-        .info-list a:hover {
-          text-decoration: underline;
-        }
-
-        /* ======================================================
-           AFFECTATION
-        ====================================================== */
-
         .assignment-box {
           padding: 14px;
           border-radius: 12px;
@@ -2075,10 +2173,6 @@ export default async function SupportTicketDetailPage({
           color: #a16207 !important;
         }
 
-        /* ======================================================
-           CONTACT
-        ====================================================== */
-
         .contact-button {
           display: flex;
           justify-content: center;
@@ -2090,7 +2184,6 @@ export default async function SupportTicketDetailPage({
           text-decoration: none;
           font-size: 13px;
           font-weight: 800;
-          transition: all .2s ease;
         }
 
         .contact-button.primary {
@@ -2098,17 +2191,9 @@ export default async function SupportTicketDetailPage({
           background: #0f766e;
         }
 
-        .contact-button.primary:hover {
-          background: #0b625c;
-        }
-
         .contact-button.secondary {
           color: #285050;
           background: #eef5f4;
-        }
-
-        .contact-button.secondary:hover {
-          background: #e0eeec;
         }
 
         .no-contact {
@@ -2119,10 +2204,6 @@ export default async function SupportTicketDetailPage({
           font-size: 12px;
           text-align: center;
         }
-
-        /* ======================================================
-           EMPTY
-        ====================================================== */
 
         .empty-state {
           text-align: center;
@@ -2152,12 +2233,7 @@ export default async function SupportTicketDetailPage({
           font-size: 13px;
         }
 
-        /* ======================================================
-           RESPONSIVE
-        ====================================================== */
-
         @media (max-width: 1100px) {
-
           .content-grid {
             grid-template-columns: 1fr;
           }
@@ -2168,11 +2244,9 @@ export default async function SupportTicketDetailPage({
               repeat(2, minmax(0, 1fr));
             align-items: start;
           }
-
         }
 
         @media (max-width: 800px) {
-
           .ticket-page {
             padding: 18px;
           }
@@ -2191,19 +2265,13 @@ export default async function SupportTicketDetailPage({
             flex-direction: column;
           }
 
-          .status-date {
-            flex-wrap: wrap;
-          }
-
           .ticket-meta-grid {
             grid-template-columns:
               repeat(2, minmax(0, 1fr));
           }
-
         }
 
         @media (max-width: 650px) {
-
           .sidebar {
             grid-template-columns: 1fr;
           }
@@ -2212,6 +2280,7 @@ export default async function SupportTicketDetailPage({
             grid-template-columns: 1fr;
           }
 
+          .assignment-form,
           .status-form {
             flex-direction: column;
           }
@@ -2219,21 +2288,15 @@ export default async function SupportTicketDetailPage({
           .message {
             max-width: 100%;
           }
-
         }
 
         @media (max-width: 500px) {
-
           .ticket-page {
             padding: 12px;
           }
 
           .page-header h1 {
             font-size: 23px;
-          }
-
-          .page-header p {
-            font-size: 12px;
           }
 
           .ticket-meta-grid {
@@ -2245,19 +2308,6 @@ export default async function SupportTicketDetailPage({
             border-radius: 15px;
           }
 
-          .page-header {
-            gap: 14px;
-          }
-
-          .header-left {
-            align-items: flex-start;
-          }
-
-          .back-button {
-            width: 42px;
-            height: 42px;
-          }
-
           .card-header h2,
           .intervention-header h2 {
             font-size: 18px;
@@ -2267,9 +2317,7 @@ export default async function SupportTicketDetailPage({
             flex-direction: column;
             gap: 4px;
           }
-
         }
-
       `}</style>
     </main>
   );

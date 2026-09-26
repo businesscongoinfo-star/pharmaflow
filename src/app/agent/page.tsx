@@ -1,1027 +1,957 @@
 import Link from "next/link";
 
 import { requireAgent } from "@/app/lib/agent/auth";
+import { createAdminClient } from "@/app/lib/supabase/admin";
 
-/*
-|--------------------------------------------------------------------------
-| TYPES
-|--------------------------------------------------------------------------
-*/
-
-type AgentRole =
-  | "support"
-  | "finance"
-  | "technical"
-  | "operations"
-  | "analyst"
-  | "security";
-
-type AgentCardProps = {
-  icon: string;
-  title: string;
-  description: string;
-  href: string;
+type SupportTicket = {
+  id: string;
+  ticket_number: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  category: string | null;
+  subject: string | null;
+  status: string;
+  priority: string;
+  assigned_to: string | null;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
 };
-
-/*
-|--------------------------------------------------------------------------
-| CONFIGURATION DES RÔLES
-|--------------------------------------------------------------------------
-*/
-
-const ROLE_LABELS: Record<AgentRole, string> = {
-  support: "Support",
-  finance: "Finance",
-  technical: "Technique",
-  operations: "Opérations",
-  analyst: "Analyste",
-  security: "Sécurité",
-};
-
-const ROLE_ICONS: Record<AgentRole, string> = {
-  support: "🛟",
-  finance: "💳",
-  technical: "🛠️",
-  operations: "🏥",
-  analyst: "📊",
-  security: "🛡️",
-};
-
-/*
-|--------------------------------------------------------------------------
-| HELPERS
-|--------------------------------------------------------------------------
-*/
 
 function hasPermission(
-  permissions: Record<string, boolean>,
+  permissions: Record<string, boolean> | null | undefined,
   permission: string,
-): boolean {
+) {
   return permissions?.[permission] === true;
 }
 
-function normalizeRole(role: string): AgentRole {
-  const allowedRoles: AgentRole[] = [
-    "support",
-    "finance",
-    "technical",
-    "operations",
-    "analyst",
-    "security",
-  ];
+function statusLabel(status: string) {
+  switch (status) {
+    case "open":
+      return "Ouvert";
 
-  return allowedRoles.includes(role as AgentRole)
-    ? (role as AgentRole)
-    : "support";
+    case "in_progress":
+      return "En cours";
+
+    case "waiting_client":
+      return "En attente du client";
+
+    case "resolved":
+      return "Résolu";
+
+    case "closed":
+      return "Fermé";
+
+    default:
+      return status;
+  }
 }
 
-/*
-|--------------------------------------------------------------------------
-| PAGE AGENT
-|--------------------------------------------------------------------------
-*/
+function priorityLabel(priority: string) {
+  switch (priority) {
+    case "low":
+      return "Faible";
 
-export default async function AgentPage() {
-  /*
-  |--------------------------------------------------------------------------
-  | AUTHENTIFICATION
-  |--------------------------------------------------------------------------
-  |
-  | requireAgent() vérifie notamment :
-  |
-  | 1. utilisateur Supabase connecté
-  | 2. membre présent dans platform_team_members
-  | 3. membre actif
-  | 4. éventuel changement obligatoire du mot de passe
-  |
-  */
+    case "normal":
+      return "Normale";
 
-  const member = await requireAgent();
+    case "high":
+      return "Élevée";
 
-  /*
-  |--------------------------------------------------------------------------
-  | DONNÉES DU MEMBRE
-  |--------------------------------------------------------------------------
-  */
+    case "urgent":
+      return "Urgente";
 
-  const permissions =
-    member.permissions ?? {};
+    default:
+      return priority;
+  }
+}
 
-  const role = normalizeRole(
-    String(member.role ?? "support"),
-  );
+function formatDate(date: string | null) {
+  if (!date) {
+    return "—";
+  }
 
-  const firstName =
-    member.full_name
-      ?.trim()
-      .split(/\s+/)[0] || "Membre";
+  const parsed = new Date(date);
 
-  /*
-  |--------------------------------------------------------------------------
-  | PERMISSIONS SUPPORT
-  |--------------------------------------------------------------------------
-  */
+  if (Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
 
-  const canSupport = hasPermission(
-    permissions,
-    "support.view",
-  );
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
 
-  const canSupportManage = hasPermission(
-    permissions,
-    "support.manage",
-  );
+async function getSupportTickets(): Promise<SupportTicket[]> {
+  const supabase = createAdminClient();
 
-  /*
-  |--------------------------------------------------------------------------
-  | PERMISSIONS PHARMACIES
-  |--------------------------------------------------------------------------
-  */
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .select(
+      `
+        id,
+        ticket_number,
+        customer_name,
+        customer_email,
+        customer_phone,
+        category,
+        subject,
+        status,
+        priority,
+        assigned_to,
+        created_at,
+        updated_at,
+        last_message_at
+      `,
+    )
+    .order("last_message_at", {
+      ascending: false,
+      nullsFirst: false,
+    })
+    .order("created_at", {
+      ascending: false,
+    });
 
-  const canPharmacies = hasPermission(
-    permissions,
-    "pharmacies.view",
-  );
+  if (error) {
+    console.error("[AGENT SUPPORT] Erreur lecture support_tickets:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
 
-  const canPharmaciesManage = hasPermission(
-    permissions,
-    "pharmacies.manage",
-  );
+    return [];
+  }
 
-  /*
-  |--------------------------------------------------------------------------
-  | PERMISSIONS ABONNEMENTS
-  |--------------------------------------------------------------------------
-  */
+  return Array.isArray(data)
+    ? (data as SupportTicket[])
+    : [];
+}
 
-  const canSubscriptions = hasPermission(
-    permissions,
-    "subscriptions.view",
-  );
+export default async function AgentSupportPage() {
+  const agent = await requireAgent();
 
-  const canSubscriptionsManage = hasPermission(
-    permissions,
-    "subscriptions.manage",
-  );
+  const permissions = agent.permissions ?? {};
 
-  /*
-  |--------------------------------------------------------------------------
-  | PERMISSIONS PAIEMENTS
-  |--------------------------------------------------------------------------
-  */
-
-  const canPayments = hasPermission(
-    permissions,
-    "payments.view",
-  );
-
-  const canPaymentsManage = hasPermission(
-    permissions,
-    "payments.manage",
-  );
+  const role = String(agent.role ?? "").toLowerCase();
 
   /*
-  |--------------------------------------------------------------------------
-  | PERMISSIONS TECHNIQUES
-  |--------------------------------------------------------------------------
-  */
+   * Les agents techniques doivent pouvoir accéder au support
+   * même si leurs anciennes permissions ne contiennent pas
+   * encore support.view / support.manage.
+   */
+  const technicalAgent =
+    role === "technical" ||
+    role === "technique" ||
+    role === "technicien";
 
-  const canTechnical = hasPermission(
-    permissions,
-    "technical.view",
-  );
+  const canView =
+    hasPermission(
+      permissions,
+      "support.view",
+    ) || technicalAgent;
 
-  const canTechnicalManage = hasPermission(
-    permissions,
-    "technical.manage",
-  );
+  const canManage =
+    hasPermission(
+      permissions,
+      "support.manage",
+    ) || technicalAgent;
 
-  /*
-  |--------------------------------------------------------------------------
-  | PERMISSIONS ANALYTIQUES
-  |--------------------------------------------------------------------------
-  */
-
-  const canAnalytics = hasPermission(
-    permissions,
-    "analytics.view",
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | PERMISSIONS SÉCURITÉ
-  |--------------------------------------------------------------------------
-  */
-
-  const canSecurity = hasPermission(
-    permissions,
-    "security.view",
-  );
-
-  const canSecurityManage = hasPermission(
-    permissions,
-    "security.manage",
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | MODULES DISPONIBLES
-  |--------------------------------------------------------------------------
-  */
-
-  const hasAnyModule =
-    canSupport ||
-    canPharmacies ||
-    canSubscriptions ||
-    canPayments ||
-    canTechnical ||
-    canAnalytics ||
-    canSecurity;
-
-  /*
-  |--------------------------------------------------------------------------
-  | RENDU
-  |--------------------------------------------------------------------------
-  */
-
-  return (
-    <main className="pf-agent-page">
-      {/* ================================================================
-          HEADER
-      ================================================================ */}
-
-      <header className="pf-agent-header">
-        <div className="pf-agent-brand">
-          <div className="pf-agent-logo">
-            P
+  if (!canView) {
+    return (
+      <main className="agent-access-denied">
+        <div className="agent-denied-card">
+          <div className="agent-denied-icon">
+            🔒
           </div>
 
-          <div className="pf-agent-brand-text">
-            <strong>
-              PharmaFlow
-            </strong>
+          <h1>Accès refusé</h1>
 
-            <span>
-              Centre opérationnel
-            </span>
+          <p>
+            Votre compte ne possède pas la permission
+            nécessaire pour accéder au support.
+          </p>
+
+          <Link href="/agent">
+            ← Retour à mon espace
+          </Link>
+        </div>
+
+        <style>{`
+          .agent-access-denied {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: #f8fafc;
+            font-family: Arial, sans-serif;
+          }
+
+          .agent-denied-card {
+            width: 100%;
+            max-width: 520px;
+            padding: 40px;
+            text-align: center;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+          }
+
+          .agent-denied-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 18px;
+            background: #f1f5f9;
+            font-size: 28px;
+          }
+
+          .agent-denied-card h1 {
+            margin: 0 0 10px;
+            color: #0f172a;
+            font-size: 28px;
+          }
+
+          .agent-denied-card p {
+            margin: 0 0 24px;
+            color: #64748b;
+            line-height: 1.7;
+          }
+
+          .agent-denied-card a {
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: 700;
+          }
+        `}</style>
+      </main>
+    );
+  }
+
+  const tickets = await getSupportTickets();
+
+  const openCount = tickets.filter(
+    (ticket) => ticket.status === "open",
+  ).length;
+
+  const inProgressCount = tickets.filter(
+    (ticket) => ticket.status === "in_progress",
+  ).length;
+
+  const urgentCount = tickets.filter(
+    (ticket) =>
+      ticket.priority === "urgent" &&
+      !["resolved", "closed"].includes(ticket.status),
+  ).length;
+
+  const resolvedCount = tickets.filter(
+    (ticket) =>
+      ticket.status === "resolved" ||
+      ticket.status === "closed",
+  ).length;
+
+  return (
+    <main className="agent-support-page">
+      <header className="agent-support-header">
+        <div>
+          <Link
+            href="/agent"
+            className="agent-back"
+          >
+            ← Mon espace
+          </Link>
+
+          <div className="agent-title-row">
+            <div className="agent-title-icon">
+              🛟
+            </div>
+
+            <div>
+              <h1>
+                Support & Tickets
+              </h1>
+
+              <p>
+                Gérez les demandes envoyées par les
+                clients de PharmaFlow.
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="pf-agent-profile">
-          <div className="pf-agent-avatar">
-            {firstName
-              .charAt(0)
-              .toUpperCase()}
+        <div className="agent-user-box">
+          <div className="agent-avatar">
+            {agent.full_name
+              ?.charAt(0)
+              .toUpperCase() || "A"}
           </div>
 
-          <div className="pf-agent-profile-text">
+          <div>
             <strong>
-              {member.full_name}
+              {agent.full_name}
             </strong>
 
             <span>
-              {ROLE_ICONS[role]}{" "}
-              {ROLE_LABELS[role]}
+              {agent.role}
             </span>
           </div>
         </div>
       </header>
 
-      {/* ================================================================
-          CONTENU PRINCIPAL
-      ================================================================ */}
-
-      <section className="pf-agent-content">
-        {/* ============================================================
-            BIENVENUE
-        ============================================================ */}
-
-        <div className="pf-agent-welcome">
-          <div>
-            <span className="pf-agent-eyebrow">
-              ESPACE ÉQUIPE PHARMAFLOW
+      <section className="agent-support-content">
+        <div className="support-stats">
+          <div className="support-stat">
+            <span className="support-stat-icon">
+              📥
             </span>
 
-            <h1>
-              Bonjour {firstName} 👋
-            </h1>
+            <div>
+              <strong>
+                {openCount}
+              </strong>
 
-            <p>
-              Retrouvez ici les outils auxquels
-              votre compte PharmaFlow a accès.
-            </p>
-          </div>
-
-          <div className="pf-agent-role">
-            <span>
-              Rôle attribué
-            </span>
-
-            <strong>
-              {ROLE_ICONS[role]}{" "}
-              {ROLE_LABELS[role]}
-            </strong>
-          </div>
-        </div>
-
-        {/* ============================================================
-            MODULES
-        ============================================================ */}
-
-        {hasAnyModule ? (
-          <div className="pf-agent-grid">
-            {/* --------------------------------------------------------
-                SUPPORT
-            -------------------------------------------------------- */}
-
-            {canSupport ? (
-              <AgentCard
-                icon="🛟"
-                title="Support & Réclamations"
-                description={
-                  canSupportManage
-                    ? "Gérer les demandes des pharmacies, répondre aux clients et traiter les réclamations."
-                    : "Consulter les demandes des pharmacies et les réclamations autorisées."
-                }
-                href="/agent/support"
-              />
-            ) : null}
-
-            {/* --------------------------------------------------------
-                PHARMACIES
-            -------------------------------------------------------- */}
-
-            {canPharmacies ? (
-              <AgentCard
-                icon="🏥"
-                title="Pharmacies"
-                description={
-                  canPharmaciesManage
-                    ? "Consulter et gérer les pharmacies selon les permissions attribuées."
-                    : "Consulter les pharmacies auxquelles votre compte a accès."
-                }
-                href="/agent/pharmacies"
-              />
-            ) : null}
-
-            {/* --------------------------------------------------------
-                ABONNEMENTS
-            -------------------------------------------------------- */}
-
-            {canSubscriptions ? (
-              <AgentCard
-                icon="📅"
-                title="Abonnements"
-                description={
-                  canSubscriptionsManage
-                    ? "Consulter et gérer les abonnements des pharmacies."
-                    : "Consulter l'état des abonnements."
-                }
-                href="/agent/abonnements"
-              />
-            ) : null}
-
-            {/* --------------------------------------------------------
-                PAIEMENTS
-            -------------------------------------------------------- */}
-
-            {canPayments ? (
-              <AgentCard
-                icon="💳"
-                title="Paiements"
-                description={
-                  canPaymentsManage
-                    ? "Consulter et gérer les opérations de paiement autorisées."
-                    : "Consulter les paiements et informations financières autorisées."
-                }
-                href="/agent/paiements"
-              />
-            ) : null}
-
-            {/* --------------------------------------------------------
-                TECHNIQUE
-            -------------------------------------------------------- */}
-
-            {canTechnical ? (
-              <AgentCard
-                icon="🛠️"
-                title="Technique"
-                description={
-                  canTechnicalManage
-                    ? "Gérer les incidents et problèmes techniques de PharmaFlow."
-                    : "Consulter les incidents et problèmes techniques."
-                }
-                href="/agent/technique"
-              />
-            ) : null}
-
-            {/* --------------------------------------------------------
-                ANALYTIQUE
-            -------------------------------------------------------- */}
-
-            {canAnalytics ? (
-              <AgentCard
-                icon="📊"
-                title="Analytique"
-                description="Consulter les statistiques et rapports autorisés."
-                href="/agent/analytique"
-              />
-            ) : null}
-
-            {/* --------------------------------------------------------
-                SÉCURITÉ
-            -------------------------------------------------------- */}
-
-            {canSecurity ? (
-              <AgentCard
-                icon="🛡️"
-                title="Sécurité"
-                description={
-                  canSecurityManage
-                    ? "Consulter et gérer les éléments de sécurité autorisés."
-                    : "Consulter les informations de sécurité autorisées."
-                }
-                href="/agent/securite"
-              />
-            ) : null}
-          </div>
-        ) : (
-          /* ============================================================
-             AUCUN MODULE
-          ============================================================ */
-
-          <div className="pf-agent-empty">
-            <div className="pf-agent-empty-icon">
-              🔐
+              <span>
+                Nouveaux tickets
+              </span>
             </div>
-
-            <h2>
-              Aucun module disponible
-            </h2>
-
-            <p>
-              Votre compte est actif, mais aucune
-              permission fonctionnelle ne lui a
-              encore été attribuée.
-            </p>
-
-            <p>
-              Contactez un Super Admin pour obtenir
-              les accès nécessaires.
-            </p>
-          </div>
-        )}
-
-        {/* ============================================================
-            INFORMATIONS DU COMPTE
-        ============================================================ */}
-
-        <div className="pf-agent-account">
-          <div className="pf-agent-account-icon">
-            👤
           </div>
 
-          <div className="pf-agent-account-content">
-            <strong>
-              Votre compte
-            </strong>
+          <div className="support-stat">
+            <span className="support-stat-icon">
+              🔄
+            </span>
 
-            <div className="pf-agent-account-grid">
-              <div>
-                <span>
-                  Nom
-                </span>
+            <div>
+              <strong>
+                {inProgressCount}
+              </strong>
 
-                <strong>
-                  {member.full_name}
-                </strong>
-              </div>
+              <span>
+                En cours
+              </span>
+            </div>
+          </div>
 
-              <div>
-                <span>
-                  Email
-                </span>
+          <div className="support-stat">
+            <span className="support-stat-icon">
+              🚨
+            </span>
 
-                <strong>
-                  {member.email}
-                </strong>
-              </div>
+            <div>
+              <strong>
+                {urgentCount}
+              </strong>
 
-              <div>
-                <span>
-                  Fonction
-                </span>
+              <span>
+                Urgents
+              </span>
+            </div>
+          </div>
 
-                <strong>
-                  {ROLE_ICONS[role]}{" "}
-                  {ROLE_LABELS[role]}
-                </strong>
-              </div>
+          <div className="support-stat">
+            <span className="support-stat-icon">
+              ✅
+            </span>
 
-              <div>
-                <span>
-                  Statut
-                </span>
+            <div>
+              <strong>
+                {resolvedCount}
+              </strong>
 
-                <strong className="pf-agent-status">
-                  ● Actif
-                </strong>
-              </div>
+              <span>
+                Résolus / fermés
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ============================================================
-            SÉCURITÉ
-        ============================================================ */}
+        <section className="support-panel">
+          <div className="support-panel-header">
+            <div>
+              <h2>
+                Tickets clients
+              </h2>
 
-        <div className="pf-agent-security">
-          <div className="pf-agent-security-icon">
-            🔐
+              <p>
+                Les demandes créées depuis l'espace
+                public Support apparaissent ici
+                automatiquement.
+              </p>
+            </div>
+
+            <div className="header-badges">
+              <span className="ticket-count">
+                {tickets.length} ticket
+                {tickets.length > 1 ? "s" : ""}
+              </span>
+
+              {canManage && (
+                <span className="permission-badge">
+                  Gestion activée
+                </span>
+              )}
+            </div>
           </div>
 
-          <div>
-            <strong>
-              Accès contrôlé par permissions
-            </strong>
+          {tickets.length === 0 ? (
+            <div className="support-empty">
+              <div className="support-empty-icon">
+                🎉
+              </div>
 
-            <p>
-              Les fonctionnalités visibles dans cet
-              espace dépendent des permissions
-              attribuées à votre compte par un
-              Super Admin.
-            </p>
-          </div>
-        </div>
+              <h3>
+                Aucun ticket pour le moment
+              </h3>
+
+              <p>
+                Les nouvelles demandes envoyées depuis
+                le support client apparaîtront
+                automatiquement ici.
+              </p>
+            </div>
+          ) : (
+            <div className="support-table-wrapper">
+              <table className="support-table">
+                <thead>
+                  <tr>
+                    <th>
+                      Ticket
+                    </th>
+
+                    <th>
+                      Client
+                    </th>
+
+                    <th>
+                      Sujet
+                    </th>
+
+                    <th>
+                      Catégorie
+                    </th>
+
+                    <th>
+                      Priorité
+                    </th>
+
+                    <th>
+                      Statut
+                    </th>
+
+                    <th>
+                      Dernier message
+                    </th>
+
+                    <th />
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {tickets.map(
+                    (ticket) => (
+                      <tr key={ticket.id}>
+                        <td>
+                          <strong className="ticket-number">
+                            {ticket.ticket_number}
+                          </strong>
+                        </td>
+
+                        <td>
+                          <div className="client-cell">
+                            <strong>
+                              {ticket.customer_name ||
+                                "Client"}
+                            </strong>
+
+                            <span>
+                              {ticket.customer_email ||
+                                ticket.customer_phone ||
+                                "—"}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="subject-cell">
+                            {ticket.subject ||
+                              "Demande de support"}
+                          </div>
+                        </td>
+
+                        <td>
+                          <span className="category-badge">
+                            {ticket.category ||
+                              "general"}
+                          </span>
+                        </td>
+
+                        <td>
+                          <span
+                            className={`priority priority-${ticket.priority}`}
+                          >
+                            {priorityLabel(
+                              ticket.priority,
+                            )}
+                          </span>
+                        </td>
+
+                        <td>
+                          <span
+                            className={`status status-${ticket.status}`}
+                          >
+                            {statusLabel(
+                              ticket.status,
+                            )}
+                          </span>
+                        </td>
+
+                        <td>
+                          <span className="date-cell">
+                            {formatDate(
+                              ticket.last_message_at ||
+                                ticket.updated_at ||
+                                ticket.created_at,
+                            )}
+                          </span>
+                        </td>
+
+                        <td>
+                          <Link
+                            href={`/agent/support/ticket/${ticket.id}`}
+                            className="view-button"
+                          >
+                            Voir →
+                          </Link>
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </section>
 
-      {/* ================================================================
-          FOOTER
-      ================================================================ */}
-
-      <footer className="pf-agent-footer">
-        <span>
-          PharmaFlow — Centre opérationnel
-        </span>
-
-        <span>
-          Accès sécurisé
-        </span>
-      </footer>
-
-      {/* ================================================================
-          STYLES
-      ================================================================ */}
-
       <style>{`
-        .pf-agent-page {
+        .agent-support-page {
           min-height: 100vh;
-          background: #f6f8fb;
-          color: #172033;
+          background: #f8fafc;
+          color: #0f172a;
+          font-family: Arial, Helvetica, sans-serif;
         }
 
-        .pf-agent-header {
-          min-height: 76px;
-          padding: 14px 32px;
+        .agent-support-header {
+          min-height: 82px;
+          padding: 18px 32px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 24px;
           background: #ffffff;
-          border-bottom: 1px solid #e6eaf0;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .agent-back {
+          display: inline-block;
+          margin-bottom: 10px;
+          color: #64748b;
+          font-size: 13px;
+          font-weight: 600;
+          text-decoration: none;
+        }
+
+        .agent-back:hover {
+          color: #2563eb;
+        }
+
+        .agent-title-row {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+
+        .agent-title-icon {
+          width: 48px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 14px;
+          background: #eff6ff;
+          font-size: 24px;
+        }
+
+        .agent-title-row h1 {
+          margin: 0 0 4px;
+          font-size: 25px;
+          letter-spacing: -0.5px;
+        }
+
+        .agent-title-row p {
+          margin: 0;
+          color: #64748b;
+          font-size: 14px;
+        }
+
+        .agent-user-box {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 13px;
+          border: 1px solid #e2e8f0;
+          border-radius: 14px;
+          background: #ffffff;
+        }
+
+        .agent-avatar {
+          width: 38px;
+          height: 38px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          background: #2563eb;
+          color: white;
+          font-weight: 800;
+        }
+
+        .agent-user-box strong {
+          display: block;
+          font-size: 13px;
+        }
+
+        .agent-user-box span {
+          display: block;
+          margin-top: 2px;
+          color: #64748b;
+          font-size: 12px;
+          text-transform: capitalize;
+        }
+
+        .agent-support-content {
+          max-width: 1500px;
+          margin: 0 auto;
+          padding: 30px 32px 50px;
+        }
+
+        .support-stats {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .support-stat {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 20px;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 18px;
+          box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+        }
+
+        .support-stat-icon {
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 13px;
+          background: #f1f5f9;
+          font-size: 20px;
+        }
+
+        .support-stat strong {
+          display: block;
+          font-size: 24px;
+          line-height: 1;
+        }
+
+        .support-stat span:not(.support-stat-icon) {
+          display: block;
+          margin-top: 5px;
+          color: #64748b;
+          font-size: 12px;
+        }
+
+        .support-panel {
+          overflow: hidden;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 20px;
+          box-shadow: 0 8px 28px rgba(15, 23, 42, 0.04);
+        }
+
+        .support-panel-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 20px;
-          box-sizing: border-box;
+          padding: 24px;
+          border-bottom: 1px solid #e2e8f0;
         }
 
-        .pf-agent-brand {
+        .support-panel-header h2 {
+          margin: 0 0 6px;
+          font-size: 19px;
+        }
+
+        .support-panel-header p {
+          margin: 0;
+          color: #64748b;
+          font-size: 13px;
+        }
+
+        .header-badges {
           display: flex;
           align-items: center;
-          gap: 12px;
-          min-width: 0;
+          gap: 8px;
         }
 
-        .pf-agent-logo {
-          width: 44px;
-          height: 44px;
-          flex: 0 0 44px;
-          border-radius: 13px;
-          display: grid;
-          place-items: center;
-          background: #0f766e;
-          color: #ffffff;
-          font-size: 19px;
+        .ticket-count {
+          padding: 7px 11px;
+          border-radius: 999px;
+          background: #f1f5f9;
+          color: #475569;
+          font-size: 12px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .permission-badge {
+          padding: 7px 11px;
+          border-radius: 999px;
+          background: #ecfdf5;
+          color: #047857;
+          font-size: 12px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .support-table-wrapper {
+          width: 100%;
+          overflow-x: auto;
+        }
+
+        .support-table {
+          width: 100%;
+          min-width: 1200px;
+          border-collapse: collapse;
+        }
+
+        .support-table th {
+          padding: 14px 18px;
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+          color: #64748b;
+          font-size: 11px;
           font-weight: 800;
+          text-align: left;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
-        .pf-agent-brand-text,
-        .pf-agent-profile-text {
-          min-width: 0;
+        .support-table td {
+          padding: 16px 18px;
+          border-bottom: 1px solid #f1f5f9;
+          vertical-align: middle;
+          font-size: 13px;
         }
 
-        .pf-agent-brand-text strong {
+        .support-table tbody tr:hover {
+          background: #f8fafc;
+        }
+
+        .ticket-number {
+          color: #2563eb;
+          white-space: nowrap;
+        }
+
+        .client-cell strong {
           display: block;
-          color: #172033;
-          font-size: 15px;
-          font-weight: 800;
         }
 
-        .pf-agent-brand-text span {
+        .client-cell span {
           display: block;
-          margin-top: 3px;
-          color: #7a8597;
+          margin-top: 4px;
+          color: #94a3b8;
           font-size: 11px;
         }
 
-        .pf-agent-profile {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          min-width: 0;
-        }
-
-        .pf-agent-avatar {
-          width: 40px;
-          height: 40px;
-          flex: 0 0 40px;
-          border-radius: 50%;
-          display: grid;
-          place-items: center;
-          background: #e8f5f3;
-          color: #0f766e;
-          font-size: 14px;
-          font-weight: 800;
-        }
-
-        .pf-agent-profile-text strong {
-          display: block;
-          max-width: 240px;
+        .subject-cell {
+          max-width: 260px;
           overflow: hidden;
+          color: #334155;
           text-overflow: ellipsis;
           white-space: nowrap;
-          color: #273142;
-          font-size: 13px;
         }
 
-        .pf-agent-profile-text span {
-          display: block;
-          margin-top: 3px;
-          color: #7a8597;
+        .category-badge {
+          display: inline-flex;
+          padding: 6px 9px;
+          border-radius: 8px;
+          background: #f8fafc;
+          color: #475569;
           font-size: 11px;
+          font-weight: 700;
+          text-transform: capitalize;
         }
 
-        .pf-agent-content {
-          width: min(1180px, calc(100% - 40px));
-          margin: 0 auto;
-          padding: 36px 0 28px;
-          box-sizing: border-box;
-        }
-
-        .pf-agent-welcome {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          gap: 24px;
-          margin-bottom: 26px;
-        }
-
-        .pf-agent-eyebrow {
-          display: inline-block;
-          color: #0f766e;
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.9px;
-        }
-
-        .pf-agent-welcome h1 {
-          margin: 7px 0 5px;
-          color: #172033;
-          font-size: 30px;
-          line-height: 1.2;
-          letter-spacing: -0.7px;
-        }
-
-        .pf-agent-welcome p {
-          margin: 0;
-          color: #697586;
-          font-size: 14px;
-          line-height: 1.6;
-        }
-
-        .pf-agent-role {
-          min-width: 180px;
-          padding: 14px 16px;
-          background: #ffffff;
-          border: 1px solid #e5eaf0;
-          border-radius: 15px;
-          box-sizing: border-box;
-        }
-
-        .pf-agent-role span {
-          display: block;
-          color: #8a94a6;
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .pf-agent-role strong {
-          display: block;
-          margin-top: 5px;
-          color: #273142;
-          font-size: 13px;
-        }
-
-        .pf-agent-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 16px;
-        }
-
-        .pf-agent-card {
-          display: block;
-          min-height: 190px;
-          padding: 22px;
-          background: #ffffff;
-          border: 1px solid #e4e9ef;
-          border-radius: 18px;
-          color: inherit;
-          text-decoration: none;
-          box-sizing: border-box;
-          transition:
-            transform 0.15s ease,
-            box-shadow 0.15s ease,
-            border-color 0.15s ease;
-        }
-
-        .pf-agent-card:hover {
-          transform: translateY(-2px);
-          border-color: #cddbd9;
-          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
-        }
-
-        .pf-agent-card-icon {
-          width: 46px;
-          height: 46px;
-          margin-bottom: 16px;
-          border-radius: 14px;
-          display: grid;
-          place-items: center;
-          background: #f0fdf4;
-          font-size: 22px;
-        }
-
-        .pf-agent-card strong {
-          display: block;
-          color: #273142;
-          font-size: 15px;
-          line-height: 1.35;
-        }
-
-        .pf-agent-card p {
-          margin: 8px 0 0;
-          color: #718096;
+        .date-cell {
+          color: #64748b;
+          white-space: nowrap;
           font-size: 12px;
-          line-height: 1.6;
         }
 
-        .pf-agent-empty {
-          padding: 34px 24px;
-          background: #ffffff;
-          border: 1px solid #e4e9ef;
-          border-radius: 18px;
+        .priority,
+        .status {
+          display: inline-flex;
+          align-items: center;
+          padding: 6px 9px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .priority-low {
+          background: #f1f5f9;
+          color: #475569;
+        }
+
+        .priority-normal {
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+
+        .priority-high {
+          background: #fff7ed;
+          color: #c2410c;
+        }
+
+        .priority-urgent {
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+
+        .status-open {
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+
+        .status-in_progress {
+          background: #fff7ed;
+          color: #c2410c;
+        }
+
+        .status-waiting_client {
+          background: #fefce8;
+          color: #a16207;
+        }
+
+        .status-resolved {
+          background: #ecfdf5;
+          color: #047857;
+        }
+
+        .status-closed {
+          background: #f1f5f9;
+          color: #475569;
+        }
+
+        .view-button {
+          display: inline-flex;
+          align-items: center;
+          padding: 8px 12px;
+          border-radius: 9px;
+          background: #eff6ff;
+          color: #2563eb;
+          font-size: 12px;
+          font-weight: 800;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+
+        .view-button:hover {
+          background: #dbeafe;
+        }
+
+        .support-empty {
+          padding: 80px 24px;
           text-align: center;
-          box-sizing: border-box;
         }
 
-        .pf-agent-empty-icon {
-          font-size: 30px;
+        .support-empty-icon {
+          width: 64px;
+          height: 64px;
+          margin: 0 auto 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 20px;
+          background: #ecfdf5;
+          font-size: 28px;
         }
 
-        .pf-agent-empty h2 {
-          margin: 10px 0 5px;
-          color: #273142;
+        .support-empty h3 {
+          margin: 0 0 8px;
           font-size: 18px;
         }
 
-        .pf-agent-empty p {
-          margin: 4px 0;
-          color: #718096;
-          font-size: 13px;
-          line-height: 1.6;
-        }
-
-        .pf-agent-account {
-          margin-top: 20px;
-          display: flex;
-          align-items: flex-start;
-          gap: 13px;
-          padding: 18px;
-          background: #ffffff;
-          border: 1px solid #e5eaf0;
-          border-radius: 17px;
-          box-sizing: border-box;
-        }
-
-        .pf-agent-account-icon {
-          width: 40px;
-          height: 40px;
-          flex: 0 0 40px;
-          border-radius: 12px;
-          display: grid;
-          place-items: center;
-          background: #eef6ff;
-          font-size: 19px;
-        }
-
-        .pf-agent-account-content {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .pf-agent-account-content > strong {
-          display: block;
-          color: #273142;
-          font-size: 13px;
-        }
-
-        .pf-agent-account-grid {
-          margin-top: 14px;
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 14px;
-        }
-
-        .pf-agent-account-grid > div {
-          min-width: 0;
-        }
-
-        .pf-agent-account-grid span {
-          display: block;
-          color: #8a94a6;
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-        }
-
-        .pf-agent-account-grid strong {
-          display: block;
-          margin-top: 4px;
-          color: #344054;
-          font-size: 12px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .pf-agent-status {
-          color: #15803d !important;
-        }
-
-        .pf-agent-security {
-          margin-top: 20px;
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 15px;
-          background: #ffffff;
-          border: 1px solid #e5eaf0;
-          border-radius: 15px;
-          box-sizing: border-box;
-        }
-
-        .pf-agent-security-icon {
-          flex: 0 0 auto;
-          font-size: 19px;
-        }
-
-        .pf-agent-security strong {
-          display: block;
-          color: #344054;
-          font-size: 13px;
-        }
-
-        .pf-agent-security p {
-          margin: 4px 0 0;
-          color: #718096;
-          font-size: 12px;
-          line-height: 1.55;
-        }
-
-        .pf-agent-footer {
-          width: min(1180px, calc(100% - 40px));
+        .support-empty p {
+          max-width: 480px;
           margin: 0 auto;
-          padding: 20px 0 30px;
-          display: flex;
-          justify-content: space-between;
-          gap: 15px;
-          color: #98a2b3;
-          font-size: 11px;
-          border-top: 1px solid #e7ebef;
-          box-sizing: border-box;
+          color: #64748b;
+          line-height: 1.7;
+          font-size: 13px;
         }
 
-        @media (max-width: 980px) {
-          .pf-agent-grid {
+        @media (max-width: 900px) {
+          .support-stats {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
-          .pf-agent-account-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 700px) {
-          .pf-agent-header {
-            padding: 13px 16px;
-          }
-
-          .pf-agent-profile-text {
-            display: none;
-          }
-
-          .pf-agent-content {
-            width: min(calc(100% - 28px), 1180px);
-            padding-top: 26px;
-          }
-
-          .pf-agent-welcome {
-            align-items: stretch;
+          .agent-support-header {
+            align-items: flex-start;
             flex-direction: column;
           }
 
-          .pf-agent-welcome h1 {
-            font-size: 26px;
-          }
-
-          .pf-agent-role {
-            min-width: 0;
-          }
-
-          .pf-agent-footer {
-            width: min(calc(100% - 28px), 1180px);
-            flex-direction: column;
+          .header-badges {
+            flex-wrap: wrap;
           }
         }
 
-        @media (max-width: 560px) {
-          .pf-agent-grid {
+        @media (max-width: 600px) {
+          .agent-support-header,
+          .agent-support-content {
+            padding-left: 16px;
+            padding-right: 16px;
+          }
+
+          .support-stats {
             grid-template-columns: 1fr;
           }
 
-          .pf-agent-account-grid {
-            grid-template-columns: 1fr;
+          .agent-user-box {
+            width: 100%;
           }
 
-          .pf-agent-card {
-            min-height: 160px;
-          }
-
-          .pf-agent-logo {
-            width: 40px;
-            height: 40px;
-            flex-basis: 40px;
-          }
-
-          .pf-agent-brand-text span {
-            display: none;
-          }
-
-          .pf-agent-security {
-            padding: 14px;
+          .support-panel-header {
+            align-items: flex-start;
+            flex-direction: column;
           }
         }
       `}</style>
     </main>
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| COMPOSANT CARTE
-|--------------------------------------------------------------------------
-*/
-
-function AgentCard({
-  icon,
-  title,
-  description,
-  href,
-}: AgentCardProps) {
-  return (
-    <Link
-      href={href}
-      className="pf-agent-card"
-    >
-      <div className="pf-agent-card-icon">
-        {icon}
-      </div>
-
-      <strong>
-        {title}
-      </strong>
-
-      <p>
-        {description}
-      </p>
-    </Link>
   );
 }

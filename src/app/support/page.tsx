@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -11,10 +12,6 @@ import {
 import "./support.css";
 
 type Locale = "fr" | "en";
-
-type BillingCycle =
-  | "monthly"
-  | "yearly";
 
 type SupportCategory =
   | "general"
@@ -667,17 +664,17 @@ export default function SupportPage() {
      CHARGER UNE DEMANDE EXISTANTE
      ======================================================= */
 
-  async function loadTicket() {
-    if (
-      !ticket?.id ||
-      !accessToken
-    ) {
-      return;
-    }
+  const loadTicket = useCallback(
+    async () => {
+      if (
+        !ticket?.id ||
+        !accessToken
+      ) {
+        return;
+      }
 
-    try {
-      const response =
-        await fetch(
+      try {
+        const response = await fetch(
           `/api/support/tickets?ticketId=${encodeURIComponent(
             ticket.id,
           )}&accessToken=${encodeURIComponent(
@@ -685,84 +682,148 @@ export default function SupportPage() {
           )}`,
           {
             method: "GET",
-
             cache: "no-store",
-
             headers: {
-              Accept:
-                "application/json",
+              Accept: "application/json",
             },
           },
         );
 
-      const data =
-        await response.json();
+        const data = await response
+          .json()
+          .catch(() => null);
 
-      if (!response.ok) {
-        throw new Error(
-          data?.error ||
-            "Ticket error",
-        );
-      }
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Impossible de charger la conversation.",
+          );
+        }
 
-      if (!data?.ticket) {
-        throw new Error(
-          "Ticket not found",
-        );
-      }
+        if (!data?.ticket) {
+          throw new Error(
+            "Ticket introuvable.",
+          );
+        }
 
-      setTicket({
-        id:
-          data.ticket.id,
-
-        ticketNumber:
-          data.ticket.ticket_number,
-
-        status:
-          data.ticket.status,
-
-        category:
-          data.ticket.category,
-      });
-
-      const mappedMessages =
-        Array.isArray(
-          data.messages,
-        )
-          ? data.messages.map(
-              (item: {
-                id: string;
-                sender:
-                  | "user"
-                  | "agent"
-                  | "ai";
-                text: string;
-                createdAt: string;
-              }) => ({
-                id: item.id,
-
-                sender:
-                  item.sender,
-
-                text:
-                  item.text,
-
-                createdAt:
-                  item.createdAt,
-              }),
+        setTicket({
+          id: String(data.ticket.id),
+          ticketNumber: String(
+            data.ticket.ticket_number ?? "",
+          ),
+          status: String(
+            data.ticket.status ?? "open",
+          ),
+          category: (
+            ["general", "payment", "technical", "complaint", "commercial"].includes(
+              String(data.ticket.category ?? ""),
             )
-          : [];
+              ? String(data.ticket.category)
+              : "general"
+          ) as SupportCategory,
+        });
 
-      setMessages(
-        mappedMessages,
-      );
-    } catch (error) {
-      console.error(
-        "LOAD SUPPORT TICKET:",
-        error,
-      );
-    }
-  }
+        /*
+         * IMPORTANT : l'API et Supabase utilisent :
+         *
+         * customer / agent / system
+         * message / created_at
+         *
+         * Le composant React utilise :
+         *
+         * user / agent / ai
+         * text / createdAt
+         *
+         * On fait donc ici la conversion proprement.
+         */
+        const mappedMessages: ChatMessage[] =
+          Array.isArray(data.messages)
+            ? data.messages
+                .map(
+                  (item: {
+                    id?: string;
+                    ticket_id?: string;
+                    sender_type?: string;
+                    message?: string;
+                    created_at?: string;
+                  }) => {
+                    const senderType = String(
+                      item.sender_type ?? "",
+                    ).toLowerCase();
+
+                    let sender: ChatSender;
+
+                    if (
+                      senderType === "user" ||
+                      senderType === "customer" ||
+                      senderType === "client"
+                    ) {
+                      sender = "user";
+                    } else if (
+                      senderType === "agent" ||
+                      senderType === "admin" ||
+                      senderType === "support" ||
+                      senderType === "staff"
+                    ) {
+                      sender = "agent";
+                    } else if (
+                      senderType === "ai" ||
+                      senderType === "system"
+                    ) {
+                      sender = "ai";
+                    } else {
+                      // Valeur inconnue : on évite de présenter
+                      // silencieusement un message comme venant d'un conseiller.
+                      sender = "ai";
+                    }
+
+                    return {
+                      id: String(
+                        item.id ??
+                          `${Date.now()}-${Math.random()
+                            .toString(36)
+                            .slice(2)}`,
+                      ),
+                      sender,
+                      text: String(
+                        item.message ?? "",
+                      ),
+                      createdAt:
+                        item.created_at ||
+                        new Date().toISOString(),
+                    };
+                  },
+                )
+                .filter(
+                  (item: ChatMessage) =>
+                    item.text.trim().length > 0,
+                )
+            : [];
+
+        setMessages(mappedMessages);
+
+        console.log(
+          "[PharmaFlow Support] Conversation chargée:",
+          {
+            ticket: data.ticket.ticket_number,
+            messages: mappedMessages.length,
+          },
+        );
+      } catch (error) {
+        console.error(
+          "[PharmaFlow Support] LOAD SUPPORT TICKET:",
+          error,
+        );
+
+        setTicketError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de charger la conversation.",
+        );
+      }
+    },
+    [ticket?.id, accessToken],
+  );
 
 
   /* =======================================================
@@ -792,13 +853,30 @@ export default function SupportPage() {
           parsed?.ticket?.id &&
           parsed?.accessToken
         ) {
-          setTicket(
-            parsed.ticket,
-          );
+          const savedTicket = parsed.ticket;
+
+          setTicket({
+            id: String(savedTicket.id),
+            ticketNumber: String(
+              savedTicket.ticketNumber ??
+                savedTicket.ticket_number ??
+                "",
+            ),
+            status: String(
+              savedTicket.status ?? "open",
+            ),
+            category: (
+              savedTicket.category ??
+              "general"
+            ) as SupportCategory,
+          });
 
           setAccessToken(
-            parsed.accessToken,
+            String(parsed.accessToken),
           );
+
+          setHumanMode(true);
+          setChatStarted(true);
         }
       } catch {
         window.localStorage.removeItem(
@@ -954,9 +1032,23 @@ export default function SupportPage() {
     };
   }, [
     humanMode,
-    ticket?.id,
     ticket?.status,
+    loadTicket,
+  ]);
+
+  useEffect(() => {
+    if (
+      humanMode &&
+      ticket?.id &&
+      accessToken
+    ) {
+      void loadTicket();
+    }
+  }, [
+    humanMode,
+    ticket?.id,
     accessToken,
+    loadTicket,
   ]);
 
 
@@ -1258,8 +1350,9 @@ export default function SupportPage() {
           },
         );
 
-      const data =
-        await response.json();
+      const data = await response
+        .json()
+        .catch(() => null);
 
       if (
         !response.ok ||
@@ -1349,6 +1442,19 @@ export default function SupportPage() {
       return;
     }
 
+    if (
+      email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      setTicketError(
+        locale === "fr"
+          ? "Veuillez indiquer une adresse e-mail valide."
+          : "Please enter a valid email address.",
+      );
+
+      return;
+    }
+
     if (!firstMessage) {
       setTicketError(
         t.requiredMessage,
@@ -1397,8 +1503,9 @@ export default function SupportPage() {
           },
         );
 
-      const data =
-        await response.json();
+      const data = await response
+        .json()
+        .catch(() => null);
 
       if (
         !response.ok ||
@@ -1411,11 +1518,45 @@ export default function SupportPage() {
         );
       }
 
-      const createdTicket =
-        data.ticket as TicketInfo;
+      const rawTicket = data.ticket as {
+        id?: string;
+        ticket_number?: string;
+        ticketNumber?: string;
+        status?: string;
+        category?: string;
+      };
+
+      const createdTicket: TicketInfo = {
+        id: String(rawTicket.id ?? ""),
+        ticketNumber: String(
+          rawTicket.ticket_number ??
+            rawTicket.ticketNumber ??
+            "",
+        ),
+        status: String(
+          rawTicket.status ?? "open",
+        ),
+        category: (
+          rawTicket.category ??
+          selectedCategory ??
+          "general"
+        ) as SupportCategory,
+      };
+
+      if (!createdTicket.id) {
+        throw new Error(
+          "Le serveur a créé une demande sans identifiant de ticket.",
+        );
+      }
 
       const token =
-        data.accessToken as string;
+        String(data.accessToken ?? "").trim();
+
+      if (!token) {
+        throw new Error(
+          "Le serveur a créé la demande sans jeton d'accès.",
+        );
+      }
 
       setTicket(
         createdTicket,
@@ -1425,9 +1566,34 @@ export default function SupportPage() {
         token,
       );
 
-      setTicketCreated(
-        true,
-      );
+      if (data?.message) {
+        const createdMessage =
+          data.message as {
+            id?: string;
+            sender_type?: string;
+            message?: string;
+            created_at?: string;
+          };
+
+        setMessages([
+          {
+            id: String(
+              createdMessage.id ??
+                `${Date.now()}`,
+            ),
+            sender: "user",
+            text: String(
+              createdMessage.message ??
+                firstMessage,
+            ),
+            createdAt:
+              createdMessage.created_at ||
+              new Date().toISOString(),
+          },
+        ]);
+      }
+
+      setTicketCreated(true);
 
       setMessage(
         "",
@@ -1537,8 +1703,9 @@ export default function SupportPage() {
           },
         );
 
-      const data =
-        await response.json();
+      const data = await response
+        .json()
+        .catch(() => null);
 
       if (
         !response.ok ||
@@ -1595,7 +1762,7 @@ export default function SupportPage() {
     );
 
     window.setTimeout(() => {
-      loadTicket();
+      void loadTicket();
     }, 0);
 
     scrollToChat();
@@ -1661,7 +1828,7 @@ export default function SupportPage() {
   function renderMessageText(
     item: ChatMessage,
   ) {
-    return item.text
+    return String(item.text ?? "")
       .split("\n")
       .map(
         (
@@ -1984,17 +2151,17 @@ export default function SupportPage() {
                                 item.id
                               }
                               className={`pf-support-message ${
-                                item.sender ===
-                                "user"
+                                item.sender === "user"
                                   ? "user"
-                                  : "ai"
+                                  : item.sender === "agent"
+                                    ? "agent"
+                                    : "ai"
                               }`}
                             >
 
-                              {item.sender !==
-                                "user" && (
+                              {item.sender !== "user" && (
                                 <div className="pf-support-message-avatar">
-                                  👨‍💼
+                                  {item.sender === "agent" ? "👨‍💼" : "✨"}
                                 </div>
                               )}
 
@@ -2047,6 +2214,7 @@ export default function SupportPage() {
                             t.placeholder
                           }
                           rows={2}
+                          maxLength={5000}
                           disabled={
                             ticketLoading ||
                             ticket.status ===
@@ -2056,6 +2224,7 @@ export default function SupportPage() {
 
                         <button
                           type="submit"
+                          aria-label={t.send}
                           disabled={
                             !message.trim() ||
                             ticketLoading ||
@@ -2154,6 +2323,7 @@ export default function SupportPage() {
                             }
                             autoComplete="name"
                             required
+                            maxLength={120}
                           />
 
                           <input
@@ -2177,6 +2347,7 @@ export default function SupportPage() {
                             }
                             type="email"
                             autoComplete="email"
+                            maxLength={160}
                           />
 
                           <input
@@ -2200,6 +2371,7 @@ export default function SupportPage() {
                             }
                             type="tel"
                             autoComplete="tel"
+                            maxLength={30}
                           />
 
                           <textarea
@@ -2220,6 +2392,7 @@ export default function SupportPage() {
                             }
                             rows={5}
                             required
+                            maxLength={5000}
                           />
 
                           {ticketError && (
@@ -2370,6 +2543,7 @@ export default function SupportPage() {
                         t.placeholder
                       }
                       rows={2}
+                      maxLength={4000}
                       disabled={
                         isThinking
                       }
@@ -2377,6 +2551,7 @@ export default function SupportPage() {
 
                     <button
                       type="submit"
+                      aria-label={t.send}
                       disabled={
                         !message.trim() ||
                         isThinking

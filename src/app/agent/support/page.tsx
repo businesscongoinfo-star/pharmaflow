@@ -38,7 +38,6 @@ type SupportTicket = {
   subject: string | null;
   status: string;
   priority: string;
-  visitor_token_hash: string;
   assigned_to: string | null;
   created_at: string;
   updated_at: string;
@@ -376,7 +375,18 @@ function getItemHref(
 |--------------------------------------------------------------------------
 */
 
-export default async function AgentSupportPage() {
+type AgentSupportPageProps = {
+  searchParams?: Promise<{
+    q?: string;
+    status?: string;
+    source?: string;
+    priority?: string;
+  }>;
+};
+
+export default async function AgentSupportPage({
+  searchParams,
+}: AgentSupportPageProps) {
   /*
   |--------------------------------------------------------------------------
   | AGENT CONNECTÉ
@@ -491,6 +501,34 @@ export default async function AgentSupportPage() {
   |--------------------------------------------------------------------------
   */
 
+  const filters = searchParams
+    ? await searchParams
+    : {};
+
+  const searchQuery = String(filters.q ?? "")
+    .trim()
+    .toLowerCase();
+
+  const statusFilter = String(filters.status ?? "")
+    .trim()
+    .toLowerCase();
+
+  const sourceFilter = String(filters.source ?? "")
+    .trim()
+    .toLowerCase();
+
+  const priorityFilter = String(filters.priority ?? "")
+    .trim()
+    .toLowerCase();
+
+  const hasActiveFilters =
+    Boolean(
+      searchQuery ||
+      statusFilter ||
+      sourceFilter ||
+      priorityFilter,
+    );
+
   const supabase =
     createAdminClient();
 
@@ -544,7 +582,6 @@ export default async function AgentSupportPage() {
         subject,
         status,
         priority,
-        visitor_token_hash,
         assigned_to,
         created_at,
         updated_at,
@@ -813,6 +850,46 @@ export default async function AgentSupportPage() {
           a.createdAt,
         ).getTime(),
     );
+
+  const filteredItems =
+    allItems.filter((item) => {
+      const haystack = [
+        item.reference,
+        item.subject,
+        item.description,
+        item.customerName,
+        item.customerEmail ?? "",
+        item.customerPhone ?? "",
+        item.category,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch =
+        !searchQuery ||
+        haystack.includes(searchQuery);
+
+      const matchesStatus =
+        !statusFilter ||
+        item.status.toLowerCase() ===
+          statusFilter;
+
+      const matchesSource =
+        !sourceFilter ||
+        item.source === sourceFilter;
+
+      const matchesPriority =
+        !priorityFilter ||
+        item.priority.toLowerCase() ===
+          priorityFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesSource &&
+        matchesPriority
+      );
+    });
 
   /*
   |--------------------------------------------------------------------------
@@ -1173,6 +1250,94 @@ export default async function AgentSupportPage() {
       ================================================================ */}
 
       <section className="support-section">
+        <form
+          method="get"
+          className="support-filters"
+          aria-label="Filtres du centre de support"
+        >
+          <div className="support-filter-field support-filter-search">
+            <label htmlFor="support-search">
+              Rechercher
+            </label>
+            <input
+              id="support-search"
+              name="q"
+              type="search"
+              defaultValue={searchQuery}
+              placeholder="Ticket, client, sujet, e-mail..."
+            />
+          </div>
+
+          <div className="support-filter-field">
+            <label htmlFor="support-status">
+              Statut
+            </label>
+            <select
+              id="support-status"
+              name="status"
+              defaultValue={statusFilter}
+            >
+              <option value="">Tous</option>
+              <option value="new">Nouveau</option>
+              <option value="open">Ouvert</option>
+              <option value="in_progress">En cours</option>
+              <option value="pending">En attente</option>
+              <option value="resolved">Résolu</option>
+              <option value="closed">Fermé</option>
+            </select>
+          </div>
+
+          <div className="support-filter-field">
+            <label htmlFor="support-source">
+              Source
+            </label>
+            <select
+              id="support-source"
+              name="source"
+              defaultValue={sourceFilter}
+            >
+              <option value="">Toutes</option>
+              <option value="ticket">Tickets</option>
+              <option value="reclamation">Réclamations</option>
+              <option value="case">Dossiers</option>
+            </select>
+          </div>
+
+          <div className="support-filter-field">
+            <label htmlFor="support-priority">
+              Priorité
+            </label>
+            <select
+              id="support-priority"
+              name="priority"
+              defaultValue={priorityFilter}
+            >
+              <option value="">Toutes</option>
+              <option value="urgent">Urgente</option>
+              <option value="high">Haute</option>
+              <option value="medium">Moyenne</option>
+              <option value="normal">Normale</option>
+              <option value="low">Faible</option>
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            className="support-filter-button"
+          >
+            Rechercher
+          </button>
+
+          {hasActiveFilters ? (
+            <Link
+              href="/agent/support"
+              className="support-filter-reset"
+            >
+              Réinitialiser
+            </Link>
+          ) : null}
+        </form>
+
         <div className="support-section-header">
           <div>
             <span className="support-section-eyebrow">
@@ -1191,15 +1356,15 @@ export default async function AgentSupportPage() {
           </div>
 
           <div className="support-count">
-            {totalCases} demande
-            {totalCases >
-            1
-              ? "s"
+            {filteredItems.length} demande
+            {filteredItems.length > 1 ? "s" : ""}
+            {hasActiveFilters
+              ? ` sur ${totalCases}`
               : ""}
           </div>
         </div>
 
-        {allItems.length ===
+        {filteredItems.length ===
         0 ? (
           <div className="support-empty">
             <div className="support-empty-icon">
@@ -1220,7 +1385,7 @@ export default async function AgentSupportPage() {
           </div>
         ) : (
           <div className="support-list">
-            {allItems.map(
+            {filteredItems.map(
               (item) => (
                 <article
                   key={`${item.source}-${item.id}`}
@@ -1890,6 +2055,78 @@ const supportStyles = `
     font-size: 14px;
   }
 
+  .support-filters {
+    margin-bottom: 13px;
+    padding: 13px;
+    background: #ffffff;
+    border: 1px solid #e4e9ef;
+    border-radius: 14px;
+    display: grid;
+    grid-template-columns: minmax(220px, 1.8fr) repeat(3, minmax(130px, 1fr)) auto auto;
+    align-items: end;
+    gap: 9px;
+  }
+
+  .support-filter-field {
+    min-width: 0;
+  }
+
+  .support-filter-field label {
+    display: block;
+    margin-bottom: 5px;
+    color: #667085;
+    font-size: 9px;
+    font-weight: 800;
+  }
+
+  .support-filter-field input,
+  .support-filter-field select {
+    width: 100%;
+    height: 36px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid #dbe2e8;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #344054;
+    font-size: 10px;
+    outline: none;
+  }
+
+  .support-filter-field input:focus,
+  .support-filter-field select:focus {
+    border-color: #0f766e;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);
+  }
+
+  .support-filter-button,
+  .support-filter-reset {
+    height: 36px;
+    padding: 0 11px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .support-filter-button {
+    border: 0;
+    background: #0f766e;
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  .support-filter-reset {
+    border: 1px solid #dbe2e8;
+    background: #ffffff;
+    color: #667085;
+  }
+
   .support-empty {
     padding: 55px 25px;
     background: #ffffff;
@@ -2018,6 +2255,16 @@ const supportStyles = `
   @media (max-width: 1100px) {
     .support-stats {
       grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 1050px) {
+    .support-filters {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .support-filter-search {
+      grid-column: 1 / -1;
     }
   }
 
