@@ -1,0 +1,563 @@
+/* =========================================================
+   PHARMAFLOW — ABONNEMENT / PAIEMENT
+   International Mobile Money + Carte bancaire
+========================================================= */
+
+.pf-subscription-page {
+  min-height: 100vh;
+  background: #f4f7fb;
+  color: #172033;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.pf-subscription-container {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 36px 0 60px;
+}
+
+.pf-subscription-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #e7ebf2;
+  box-shadow: 0 8px 30px rgba(20, 33, 61, 0.05);
+}
+
+.pf-subscription-brand,
+.pf-subscription-header-actions,
+.pf-subscription-pharmacy,
+.pf-payment-methods,
+.pf-payment-actions,
+.pf-subscription-information {
+  display: flex;
+  align-items: center;
+}
+
+.pf-subscription-brand { gap: 12px; }
+.pf-subscription-header-actions { gap: 10px; }
+
+.pf-subscription-logo {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #0f766e, #0ea5a4);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.22);
+}
+
+.pf-subscription-brand strong {
+  display: block;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.pf-subscription-brand small {
+  display: block;
+  margin-top: 2px;
+  color: #718096;
+  font-size: 12px;
+}
+
+.pf-subscription-intro,
+.pf-subscription-status,
+.pf-subscription-pricing,
+.pf-payment-method-section,
+.pf-subscription-information,
+.pf-subscription-return-section {
+  background: #fff;
+  border: 1px solid #e6ebf2;
+  border-radius: 22px;
+  box-shadow: 0 16px 45px rgba(25, 39, 68, 0.07);
+}
+
+.pf-subscription-intro {
+  margin-bottom: 20px;
+  padding: 30px;
+}
+
+.pf-subscription-eyebrow {
+  display: inline-flex;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #e9f8f5;
+  color: #087f73;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.pf-subscription-intro h1 {
+  margin: 14px 0 8px;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.pf-subscription-intro p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.65;
+}
+
+.pf-subscription-pricing,
+.pf-payment-method-section {
+  margin-top: 20px;
+  padding: 28px;
+}
+
+.pf-subscription-section-title {
+  margin-bottom: 20px;
+}
+
+.pf-subscription-section-title > span {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.pf-subscription-section-title p {
+  margin: 7px 0 0;
+  color: #718096;
+  line-height: 1.55;
+}
+
+.pf-subscription-plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.pf-plan-card {
+  position: relative;
+  padding: 24px;
+  border: 1px solid #e1e8f0;
+  border-radius: 20px;
+  background: #fff;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.pf-plan-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(25, 39, 68, .08);
+}
+
+.pf-plan-card.is-selected,
+.pf-plan-card.selected {
+  border-color: #0f9f92;
+  box-shadow: 0 0 0 3px rgba(15, 159, 146, .10), 0 16px 35px rgba(25, 39, 68, .08);
+}
+
+.pf-plan-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pf-plan-name { font-weight: 800; }
+
+.pf-plan-price {
+  margin: 18px 0;
+  font-size: clamp(30px, 4vw, 40px);
+  font-weight: 900;
+  letter-spacing: -0.045em;
+}
+
+.pf-plan-benefit {
+  margin-top: 10px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.pf-plan-badge {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.pf-btn {
+  min-height: 46px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+
+.pf-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.pf-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.pf-btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #087f73, #0ea5a4);
+  box-shadow: 0 10px 24px rgba(15, 118, 110, .20);
+}
+
+.pf-btn-secondary {
+  color: #25324a;
+  background: #eef2f7;
+}
+
+.pf-payment-methods {
+  align-items: stretch;
+  gap: 14px;
+}
+
+.pf-payment-method {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px;
+  border: 1px solid #e1e8f0;
+  border-radius: 16px;
+  background: #fff;
+  color: #172033;
+  text-align: left;
+  cursor: pointer;
+  transition: .2s ease;
+}
+
+.pf-payment-method:hover:not(:disabled) {
+  border-color: #9ed8d2;
+  box-shadow: 0 10px 24px rgba(25, 39, 68, .06);
+}
+
+.pf-payment-method.is-selected {
+  border-color: #0f9f92;
+  background: #f1fbf9;
+  box-shadow: 0 0 0 3px rgba(15, 159, 146, .09);
+}
+
+.pf-payment-method-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #eef7f6;
+  font-size: 21px;
+}
+
+.pf-payment-method-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.pf-payment-method-content strong,
+.pf-payment-method-content small {
+  display: block;
+}
+
+.pf-payment-method-content small {
+  margin-top: 4px;
+  color: #718096;
+  line-height: 1.45;
+}
+
+.pf-payment-method-radio {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pf-payment-method.is-selected .pf-payment-method-radio {
+  border-color: #0f9f92;
+  background: #0f9f92;
+}
+
+.pf-mobile-money-panel {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid #dce7ee;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fbfefd, #f7fafc);
+}
+
+.pf-mobile-money-panel-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-bottom: 18px;
+}
+
+.pf-mobile-money-panel-icon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #e9f8f5;
+  font-size: 21px;
+}
+
+.pf-mobile-money-panel-header strong,
+.pf-mobile-money-panel-header span {
+  display: block;
+}
+
+.pf-mobile-money-panel-header strong {
+  font-size: 16px;
+}
+
+.pf-mobile-money-panel-header span {
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.pf-mobile-money-field {
+  display: block;
+}
+
+.pf-mobile-money-operators {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pf-mobile-money-operator {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid #cfd9e5;
+  border-radius: 13px;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease, transform .18s ease;
+}
+
+.pf-mobile-money-operator:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #0f9f92;
+}
+
+.pf-mobile-money-operator.is-selected {
+  border-color: #0f9f92;
+  background: #e9f8f5;
+  box-shadow: 0 0 0 3px rgba(15, 159, 146, .08);
+}
+
+.pf-mobile-money-operator strong {
+  font-size: 13px;
+}
+
+.pf-mobile-money-operator small {
+  min-width: 18px;
+  color: #0f9f92;
+  font-weight: 900;
+  text-align: right;
+}
+
+.pf-mobile-money-operator:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.pf-mobile-money-field > span {
+  display: block;
+  margin-bottom: 8px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pf-mobile-money-field input {
+  width: 100%;
+  min-height: 54px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 1px solid #cfd9e5;
+  border-radius: 13px;
+  outline: none;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  font-size: 16px;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.pf-mobile-money-field input::placeholder {
+  color: #a0aec0;
+}
+
+.pf-mobile-money-field input:focus {
+  border-color: #0f9f92;
+  box-shadow: 0 0 0 4px rgba(15, 159, 146, .10);
+}
+
+.pf-mobile-money-help {
+  margin: 9px 0 0;
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.pf-selected-plan-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #f5f8fb;
+}
+
+.pf-selected-plan-summary span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.pf-selected-plan-summary strong { font-size: 17px; }
+
+.pf-payment-message {
+  margin-top: 16px;
+  padding: 13px 15px;
+  border-radius: 13px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.pf-payment-reference {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px dashed #b9c7d8;
+  border-radius: 13px;
+  background: #f8fafc;
+}
+
+.pf-payment-reference span { color: #64748b; }
+.pf-payment-reference strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.pf-payment-actions {
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.pf-payment-security {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 15px;
+  background: #f7fafc;
+  color: #475569;
+}
+
+.pf-payment-security > span { font-size: 20px; }
+.pf-payment-security strong,
+.pf-payment-security small { display: block; }
+.pf-payment-security small { margin-top: 4px; line-height: 1.5; }
+
+.pf-subscription-information {
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 20px;
+  padding: 20px 24px;
+}
+
+.pf-subscription-information > div { min-width: 0; }
+.pf-subscription-information span,
+.pf-subscription-information strong { display: block; }
+.pf-subscription-information span { color: #718096; font-size: 12px; }
+.pf-subscription-information strong { margin-top: 4px; }
+
+.pf-subscription-return-section {
+  margin-top: 20px;
+  padding: 20px;
+  text-align: center;
+}
+
+.pf-subscription-loading,
+.pf-subscription-error {
+  width: min(620px, calc(100% - 32px));
+  margin: 10vh auto;
+  padding: 36px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e6ebf2;
+  border-radius: 22px;
+  box-shadow: 0 18px 50px rgba(25, 39, 68, .08);
+}
+
+.pf-subscription-spinner {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 18px;
+  border: 4px solid #dce7ee;
+  border-top-color: #0f9f92;
+  border-radius: 50%;
+  animation: pf-spin .8s linear infinite;
+}
+
+@keyframes pf-spin { to { transform: rotate(360deg); } }
+
+.pf-subscription-footer {
+  padding: 30px 20px 40px;
+  text-align: center;
+  color: #718096;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .pf-subscription-container { width: min(100% - 20px, 680px); padding-top: 18px; }
+  .pf-subscription-header { padding: 14px 15px; }
+  .pf-subscription-intro,
+  .pf-subscription-pricing,
+  .pf-payment-method-section { padding: 20px; border-radius: 18px; }
+  .pf-subscription-plans { grid-template-columns: 1fr; }
+  .pf-payment-methods { flex-direction: column; }
+  .pf-payment-actions { flex-direction: column-reverse; }
+  .pf-payment-actions .pf-btn { width: 100%; }
+  .pf-subscription-information { align-items: flex-start; flex-direction: column; }
+  .pf-payment-reference { flex-direction: column; gap: 6px; }
+}
+
+@media (max-width: 480px) {
+  .pf-mobile-money-operators { grid-template-columns: 1fr; }
+  .pf-subscription-header-actions { gap: 5px; }
+  .pf-subscription-brand small { display: none; }
+  .pf-subscription-intro h1 { font-size: 30px; }
+  .pf-mobile-money-panel { padding: 17px; }
+}

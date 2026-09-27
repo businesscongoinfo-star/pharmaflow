@@ -186,8 +186,8 @@ const TEXT = {
     monthly: "Mensuel",
     yearly: "Annuel",
 
-    monthlyPrice: "8 500",
-    yearlyPrice: "85 000",
+    monthlyPrice: "20 000",
+    yearlyPrice: "200 000",
 
     xaf: "XAF",
     perMonth: "/ mois",

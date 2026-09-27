@@ -13,6 +13,8 @@ import {
   useSearchParams,
 } from "next/navigation";
 
+import "./abonnement.css";
+
 /* =========================================================
    TYPES
 ========================================================= */
@@ -26,12 +28,6 @@ type BillingCycle =
 type PaymentMethod =
   | "mobile_money"
   | "card";
-
-type MobileMoneyOperator =
-  | "mpesa"
-  | "airtel"
-  | "orange"
-  | "africell";
 
 type PlanPrice = {
   plan_id: string;
@@ -314,23 +310,23 @@ const TEXT = {
     mobileMoneyDescription:
       "Payez directement avec le service Mobile Money de votre choix.",
 
-    chooseOperator:
-      "Choisissez votre opérateur",
+    mobileMoneyNumberTitle:
+      "Votre numéro Mobile Money",
 
-    operatorRequired:
-      "Veuillez sélectionner votre opérateur Mobile Money.",
+    mobileMoneyNumberDescription:
+      "Entrez le numéro Mobile Money que vous souhaitez utiliser pour recevoir la demande de paiement.",
 
-    mpesa:
-      "M-Pesa",
+    mobileMoneyPhoneLabel:
+      "Numéro de téléphone Mobile Money",
 
-    airtel:
-      "Airtel Money",
+    mobileMoneyPhonePlaceholder:
+      "+242 06 123 45 67",
 
-    orange:
-      "Orange Money",
+    mobileMoneyPhoneHelp:
+      "Entrez votre numéro dans son format international avec l'indicatif du pays. Le réseau compatible est géré automatiquement par PharmaFlow et le fournisseur de paiement.",
 
-    africell:
-      "Africell Money",
+    mobileMoneyPhoneRequired:
+      "Veuillez saisir un numéro Mobile Money valide avec l'indicatif international du pays.",
 
     card:
       "Carte bancaire",
@@ -454,12 +450,6 @@ const TEXT = {
 
     providerUnavailable:
       "Le fournisseur de paiement n'est actuellement pas disponible.",
-
-    mobileMoneyOperatorHint:
-      "Sélectionnez l'opérateur correspondant au numéro Mobile Money utilisé.",
-
-    selectedOperator:
-      "Opérateur sélectionné",
 
     paymentReference:
       "Référence de paiement",
@@ -592,23 +582,23 @@ const TEXT = {
     mobileMoneyDescription:
       "Pay directly with your preferred Mobile Money service.",
 
-    chooseOperator:
-      "Choose your operator",
+    mobileMoneyNumberTitle:
+      "Your Mobile Money number",
 
-    operatorRequired:
-      "Please select your Mobile Money operator.",
+    mobileMoneyNumberDescription:
+      "Enter the Mobile Money number you want to use to receive the payment request.",
 
-    mpesa:
-      "M-Pesa",
+    mobileMoneyPhoneLabel:
+      "Mobile Money phone number",
 
-    airtel:
-      "Airtel Money",
+    mobileMoneyPhonePlaceholder:
+      "+242 06 123 45 67",
 
-    orange:
-      "Orange Money",
+    mobileMoneyPhoneHelp:
+      "Enter your number in international format with the country code. PharmaFlow and the payment provider will handle compatible network selection automatically.",
 
-    africell:
-      "Africell Money",
+    mobileMoneyPhoneRequired:
+      "Please enter a valid Mobile Money number with the international country code.",
 
     card:
       "Bank card",
@@ -733,12 +723,6 @@ const TEXT = {
     providerUnavailable:
       "The payment provider is currently unavailable.",
 
-    mobileMoneyOperatorHint:
-      "Select the operator corresponding to the Mobile Money number you are using.",
-
-    selectedOperator:
-      "Selected operator",
-
     paymentReference:
       "Payment reference",
   },
@@ -824,12 +808,11 @@ export default function SubscriptionPage() {
     );
 
   const [
-    mobileMoneyOperator,
-    setMobileMoneyOperator,
+    mobileMoneyPhone,
+    setMobileMoneyPhone,
   ] =
-    useState<MobileMoneyOperator | null>(
-      null,
-    );
+    useState("");
+
 
   const [
     showPaymentMethods,
@@ -1381,9 +1364,7 @@ export default function SubscriptionPage() {
       null,
     );
 
-    setMobileMoneyOperator(
-      null,
-    );
+    setMobileMoneyPhone("");
 
     setPaymentMessage(
       "",
@@ -1413,33 +1394,12 @@ export default function SubscriptionPage() {
       method,
     );
 
-    /*
-     * L'opérateur ne concerne que Mobile Money.
-     */
     if (
       method !==
       "mobile_money"
     ) {
-      setMobileMoneyOperator(
-        null,
-      );
+      setMobileMoneyPhone("");
     }
-  }
-
-  /* =======================================================
-     CHOIX OPÉRATEUR
-  ======================================================= */
-
-  function chooseMobileMoneyOperator(
-    operator: MobileMoneyOperator,
-  ) {
-    setPaymentMessage("");
-
-    setPaymentReference("");
-
-    setMobileMoneyOperator(
-      operator,
-    );
   }
 
   /* =======================================================
@@ -1480,20 +1440,23 @@ export default function SubscriptionPage() {
       return;
     }
 
-    /*
-     * Mobile Money :
-     * l'opérateur est obligatoire.
-     */
     if (
       paymentMethod ===
-        "mobile_money" &&
-      !mobileMoneyOperator
+        "mobile_money"
     ) {
-      setPaymentMessage(
-        t.operatorRequired,
-      );
+      const normalizedPhone =
+        mobileMoneyPhone.trim();
 
-      return;
+      if (
+        !normalizedPhone ||
+        normalizedPhone.length < 7
+      ) {
+        setPaymentMessage(
+          t.mobileMoneyPhoneRequired,
+        );
+
+        return;
+      }
     }
 
     if (
@@ -1543,7 +1506,7 @@ export default function SubscriptionPage() {
       const requestBody: {
         billingCycle: BillingCycle;
         paymentMethod: PaymentMethod;
-        mobileMoneyOperator?: MobileMoneyOperator;
+        phone?: string;
       } = {
         billingCycle,
 
@@ -1552,11 +1515,10 @@ export default function SubscriptionPage() {
 
       if (
         paymentMethod ===
-          "mobile_money" &&
-        mobileMoneyOperator
+          "mobile_money"
       ) {
-        requestBody.mobileMoneyOperator =
-          mobileMoneyOperator;
+        requestBody.phone =
+          mobileMoneyPhone.trim();
       }
 
       const response =
@@ -1886,6 +1848,10 @@ export default function SubscriptionPage() {
         </div>
       </main>
     );
+  }
+
+  function setMobileMoneyOperator(arg0: null) {
+    throw new Error("Function not implemented.");
   }
 
   /* =======================================================
@@ -2528,173 +2494,99 @@ export default function SubscriptionPage() {
             </div>
 
             {/* ================================================
-                OPÉRATEURS MOBILE MONEY
+                NUMÉRO MOBILE MONEY INTERNATIONAL
             ================================================= */}
 
             {paymentMethod ===
               "mobile_money" && (
-              <div className="pf-mobile-money-operators">
+              <div className="pf-mobile-money-panel">
 
-                <div className="pf-mobile-money-operators-header">
-                  <strong>
-                    {
-                      t.chooseOperator
-                    }
-                  </strong>
+                <div className="pf-mobile-money-panel-header">
+                  <div className="pf-mobile-money-panel-icon">
+                    📱
+                  </div>
 
+                  <div>
+                    <strong>
+                      {t.mobileMoneyNumberTitle}
+                    </strong>
+
+                    <span>
+                      {t.mobileMoneyNumberDescription}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className="pf-mobile-money-field pf-mobile-money-auto-network"
+                >
                   <span>
-                    {
-                      t.mobileMoneyOperatorHint
-                    }
+                    {locale === "fr"
+                      ? "Détection automatique du réseau"
+                      : "Automatic network detection"}
                   </span>
+
+                  <div className="pf-mobile-money-auto-network-box">
+                    <strong>
+                      📱{" "}
+                      {locale === "fr"
+                        ? "Aucun opérateur à sélectionner"
+                        : "No operator to select"}
+                    </strong>
+
+                    <small>
+                      {locale === "fr"
+                        ? "Entrez simplement votre numéro avec l'indicatif international. PharmaFlow transmettra le numéro au système de paiement, qui utilisera le réseau compatible et déclenchera la demande de confirmation sur votre téléphone."
+                        : "Simply enter your number with the international country code. PharmaFlow will send the number to the payment system, which will use the compatible network and trigger the confirmation request on your phone."}
+                    </small>
+                  </div>
                 </div>
 
-                <div className="pf-mobile-money-operator-grid">
+                <label
+                  className="pf-mobile-money-field"
+                  htmlFor="pf-mobile-money-phone"
+                >
+                  <span>
+                    {t.mobileMoneyPhoneLabel}
+                  </span>
 
-                  {/* M-PESA */}
+                  <input
+                    id="pf-mobile-money-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={mobileMoneyPhone}
+                    onChange={(event) => {
+                      setMobileMoneyPhone(
+                        event.target.value,
+                      );
 
-                  <button
-                    type="button"
-                    className={`pf-mobile-money-operator ${
-                      mobileMoneyOperator ===
-                      "mpesa"
-                        ? "is-selected"
-                        : ""
-                    }`}
-                    onClick={() =>
-                      chooseMobileMoneyOperator(
-                        "mpesa",
-                      )
+                      setPaymentMessage(
+                        "",
+                      );
+
+                      setPaymentReference(
+                        "",
+                      );
+                    }}
+                    placeholder={
+                      t.mobileMoneyPhonePlaceholder
                     }
                     disabled={
                       processing ||
                       redirecting
                     }
-                  >
-                    <span>
-                      📲
-                    </span>
+                    aria-describedby="pf-mobile-money-phone-help"
+                  />
+                </label>
 
-                    <strong>
-                      {t.mpesa}
-                    </strong>
+                <p
+                  id="pf-mobile-money-phone-help"
+                  className="pf-mobile-money-help"
+                >
+                  {t.mobileMoneyPhoneHelp}
+                </p>
 
-                    <small>
-                      {mobileMoneyOperator ===
-                      "mpesa"
-                        ? "✓"
-                        : ""}
-                    </small>
-                  </button>
-
-                  {/* AIRTEL */}
-
-                  <button
-                    type="button"
-                    className={`pf-mobile-money-operator ${
-                      mobileMoneyOperator ===
-                      "airtel"
-                        ? "is-selected"
-                        : ""
-                    }`}
-                    onClick={() =>
-                      chooseMobileMoneyOperator(
-                        "airtel",
-                      )
-                    }
-                    disabled={
-                      processing ||
-                      redirecting
-                    }
-                  >
-                    <span>
-                      📱
-                    </span>
-
-                    <strong>
-                      {t.airtel}
-                    </strong>
-
-                    <small>
-                      {mobileMoneyOperator ===
-                      "airtel"
-                        ? "✓"
-                        : ""}
-                    </small>
-                  </button>
-
-                  {/* ORANGE */}
-
-                  <button
-                    type="button"
-                    className={`pf-mobile-money-operator ${
-                      mobileMoneyOperator ===
-                      "orange"
-                        ? "is-selected"
-                        : ""
-                    }`}
-                    onClick={() =>
-                      chooseMobileMoneyOperator(
-                        "orange",
-                      )
-                    }
-                    disabled={
-                      processing ||
-                      redirecting
-                    }
-                  >
-                    <span>
-                      🟠
-                    </span>
-
-                    <strong>
-                      {t.orange}
-                    </strong>
-
-                    <small>
-                      {mobileMoneyOperator ===
-                      "orange"
-                        ? "✓"
-                        : ""}
-                    </small>
-                  </button>
-
-                  {/* AFRICELL */}
-
-                  <button
-                    type="button"
-                    className={`pf-mobile-money-operator ${
-                      mobileMoneyOperator ===
-                      "africell"
-                        ? "is-selected"
-                        : ""
-                    }`}
-                    onClick={() =>
-                      chooseMobileMoneyOperator(
-                        "africell",
-                      )
-                    }
-                    disabled={
-                      processing ||
-                      redirecting
-                    }
-                  >
-                    <span>
-                      📞
-                    </span>
-
-                    <strong>
-                      {t.africell}
-                    </strong>
-
-                    <small>
-                      {mobileMoneyOperator ===
-                      "africell"
-                        ? "✓"
-                        : ""}
-                    </small>
-                  </button>
-                </div>
               </div>
             )}
 
@@ -2742,6 +2634,8 @@ export default function SubscriptionPage() {
                     null,
                   );
 
+                  setMobileMoneyPhone("");
+
                   setMobileMoneyOperator(
                     null,
                   );
@@ -2775,7 +2669,7 @@ export default function SubscriptionPage() {
                   !selectedPlanAvailable ||
                   (paymentMethod ===
                     "mobile_money" &&
-                    !mobileMoneyOperator)
+                    !mobileMoneyPhone.trim())
                 }
               >
                 {processing

@@ -37,8 +37,14 @@ import {
 |    - Visa
 |    - Mastercard
 |
-| Configuration :
+| Architecture internationale :
+| - PharmaFlow ne convertit jamais automatiquement les devises.
+| - Le moteur de paiement choisit le PSP compatible avec le pays,
+|   la devise et le moyen de paiement.
+| - Moko n'est donc pas limité localement à la RDC dans cet adapter.
+| - La couverture réelle reste celle activée sur le compte Moko.
 |
+| Configuration :
 | - platform_integration_configs
 | - variables .env en secours
 |
@@ -128,6 +134,15 @@ function normalizeCurrency(
   ).toUpperCase();
 }
 
+function isFiniteAmount(
+  value: unknown,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  );
+}
+
 /* =========================================================
    CONFIG MOBILE MONEY
 ========================================================= */
@@ -135,6 +150,12 @@ function normalizeCurrency(
 async function getMobileMoneyConfig(): Promise<
   MokoMobileMoneyConfig
 > {
+  /*
+   * Important :
+   * les parenthèses sont volontaires afin que la valeur
+   * runtime/.env ne soit pas ignorée à cause de la priorité
+   * des opérateurs JavaScript.
+   */
   const baseUrl =
     (await runtimeValue(
       "baseUrl",
@@ -381,9 +402,9 @@ function normalizeMobileMoneyMethod(
   }
 }
 
-function getMobileMoneyMethod(
+async function getMobileMoneyMethod(
   input: CreatePaymentInput,
-): string {
+): Promise<string> {
   const metadata =
     input.metadata ?? {};
 
@@ -392,6 +413,8 @@ function getMobileMoneyMethod(
     metadata.providerMethod,
     metadata.mobile_money_method,
     metadata.mobileMoneyMethod,
+    metadata.operator,
+    metadata.mobileMoneyOperator,
     input.paymentMethod,
   ];
 
@@ -401,12 +424,32 @@ function getMobileMoneyMethod(
         candidate,
       );
 
-    if (method) {
+    if (
+      method &&
+      method !== "mobile_money"
+    ) {
       return method;
     }
   }
 
-  return "mobile_money";
+  /*
+   * Si aucun opérateur n'est fourni par le frontend/connecteur,
+   * on peut utiliser une valeur configurée côté serveur.
+   *
+   * IMPORTANT :
+   * PharmaFlow ne déduit jamais l'opérateur à partir du numéro.
+   */
+  const configuredMethod =
+    await runtimeValue(
+      "defaultMobileMoneyMethod",
+      "MOKO_AFRIKA_DEFAULT_MOBILE_MONEY_METHOD",
+    );
+
+  return (
+    normalizeMobileMoneyMethod(
+      configuredMethod,
+    ) || "mobile_money"
+  );
 }
 
 /* =========================================================
@@ -458,14 +501,6 @@ function resolveCustomerName(
     }
   }
 
-  /*
-   * Moko exige parfois les deux champs.
-   *
-   * Si l'utilisateur possède uniquement
-   * un nom, on réutilise ce nom comme
-   * surname afin de ne pas bloquer
-   * inutilement le paiement.
-   */
   if (
     firstName &&
     !lastName
@@ -510,7 +545,7 @@ function createCardSignature(
 }
 
 /* =========================================================
-   SIGNATURE CALLBACK
+   SIGNATURE CALLBACK CARTE
 ========================================================= */
 
 function createCallbackSignature(
@@ -620,7 +655,7 @@ async function createMobileMoneyPayment(
     );
 
   const method =
-    getMobileMoneyMethod(
+    await getMobileMoneyMethod(
       input,
     );
 
@@ -628,6 +663,17 @@ async function createMobileMoneyPayment(
     normalizeCurrency(
       input.currency,
     );
+
+  if (!currency) {
+    return {
+      success: false,
+      status: "failed",
+      message:
+        "La devise du paiement est obligatoire.",
+      errorCode:
+        "MOKO_CURRENCY_MISSING",
+    };
+  }
 
   const payload: Record<
     string,
@@ -656,7 +702,7 @@ async function createMobileMoneyPayment(
     lastname:
       lastName,
 
-    email:
+    "e-mail":
       normalizeString(
         input.customer?.email,
       ),
@@ -756,64 +802,45 @@ async function createMobileMoneyPayment(
 
     return {
       success: false,
-
       status: "failed",
-
       providerTransactionId:
         transactionId,
-
+      merchantReference:
+        input.merchantReference,
       message:
         providerMessage,
-
       errorCode:
         `MOKO_HTTP_${response.status}`,
-
       metadata: {
         httpStatus:
           response.status,
-
         response:
           parsed,
-
         endpoint:
           config.baseUrl,
-
         method,
-
         currency,
-
         reference:
           input.merchantReference,
-
-        /*
-         * Ne jamais enregistrer le merchantSecret.
-         */
       },
     };
   }
 
   const success =
-    status ===
-      "successful" ||
-    status ===
-      "pending" ||
-    status ===
-      "created";
+    status === "successful" ||
+    status === "pending" ||
+    status === "created";
 
   return {
     success,
-
     status:
       success
         ? status
         : "failed",
-
     providerTransactionId:
       transactionId,
-
     merchantReference:
       input.merchantReference,
-
     message:
       getProviderMessage(
         parsed,
@@ -821,26 +848,19 @@ async function createMobileMoneyPayment(
           ? "Paiement Mobile Money créé."
           : "FreshPay n'a pas accepté le paiement.",
       ),
-
     errorCode:
       success
         ? null
         : "MOKO_PAYMENT_REJECTED",
-
     metadata: {
       response:
         parsed,
-
       httpStatus:
         response.status,
-
       endpoint:
         config.baseUrl,
-
       method,
-
       currency,
-
       reference:
         input.merchantReference,
     },
@@ -898,13 +918,10 @@ async function verifyMobileMoneyPayment(
   const payload = {
     merchant_id:
       config.merchantId,
-
     merchant_secrete:
       config.merchantSecret,
-
     action:
       "verify",
-
     reference,
   };
 
@@ -916,20 +933,16 @@ async function verifyMobileMoneyPayment(
         config.baseUrl,
         {
           method: "POST",
-
           headers: {
             "Content-Type":
               "application/json",
-
             Accept:
               "application/json",
           },
-
           body:
             JSON.stringify(
               payload,
             ),
-
           cache:
             "no-store",
         },
@@ -1013,40 +1026,28 @@ async function verifyMobileMoneyPayment(
   if (!response.ok) {
     return {
       success: false,
-
       status: "failed",
-
       providerTransactionId:
         transactionId,
-
       merchantReference:
         reference,
-
       amount:
-        Number.isFinite(
-          amount ?? NaN,
-        )
+        isFiniteAmount(amount)
           ? amount
           : null,
-
       currency,
-
       message:
         getProviderMessage(
           parsed,
           `FreshPay HTTP ${response.status}.`,
         ),
-
       failureReason:
         `MOKO_HTTP_${response.status}`,
-
       metadata: {
         httpStatus:
           response.status,
-
         response:
           parsed,
-
         reference,
       },
     };
@@ -1058,24 +1059,16 @@ async function verifyMobileMoneyPayment(
 
   return {
     success,
-
     status,
-
     providerTransactionId:
       transactionId,
-
     merchantReference:
       reference,
-
     amount:
-      Number.isFinite(
-        amount ?? NaN,
-      )
+      isFiniteAmount(amount)
         ? amount
         : null,
-
     currency,
-
     message:
       getProviderMessage(
         parsed,
@@ -1083,18 +1076,15 @@ async function verifyMobileMoneyPayment(
           ? "Paiement vérifié avec succès."
           : "Le paiement n'est pas encore confirmé.",
       ),
-
     failureReason:
       success
         ? null
         : status === "failed"
           ? "Le fournisseur a indiqué que le paiement a échoué."
           : null,
-
     metadata: {
       response:
         parsed,
-
       httpStatus:
         response.status,
     },
@@ -1440,33 +1430,24 @@ async function createCardPayment(
   if (!response.ok) {
     return {
       success: false,
-
       status: "failed",
-
       providerTransactionId:
         transactionId,
-
       checkoutUrl,
-
       merchantReference:
         input.merchantReference,
-
       message:
         getProviderMessage(
           parsed,
           `Moko Afrika Card HTTP ${response.status}.`,
         ),
-
       errorCode:
         `MOKO_CARD_HTTP_${response.status}`,
-
       metadata: {
         httpStatus:
           response.status,
-
         response:
           parsed,
-
         currency,
       },
     };
@@ -1475,21 +1456,15 @@ async function createCardPayment(
   if (!checkoutUrl) {
     return {
       success: false,
-
       status: "failed",
-
       providerTransactionId:
         transactionId,
-
       merchantReference:
         input.merchantReference,
-
       message:
         "Moko Afrika a créé la demande mais n'a retourné aucune URL de paiement.",
-
       errorCode:
         "MOKO_CARD_CHECKOUT_URL_MISSING",
-
       metadata: {
         response:
           parsed,
@@ -1499,35 +1474,32 @@ async function createCardPayment(
 
   return {
     success: true,
-
     status:
-      status ===
-      "successful"
+      status === "successful"
         ? "successful"
         : "pending",
-
     providerTransactionId:
       transactionId,
-
     merchantReference:
       input.merchantReference,
-
     checkoutUrl,
-
     message:
       getProviderMessage(
         parsed,
         "Paiement par carte créé avec succès.",
       ),
-
     metadata: {
       response:
         parsed,
-
       httpStatus:
         response.status,
-
       currency,
+      rail:
+        "card",
+      payment_method:
+        "card",
+      transaction_uuid:
+        transactionId,
     },
   };
 }
@@ -1704,36 +1676,25 @@ async function verifyCardPayment(
   if (!response.ok) {
     return {
       success: false,
-
       status: "failed",
-
       providerTransactionId:
         transactionUuid,
-
       merchantReference,
-
       amount:
-        Number.isFinite(
-          amount ?? NaN,
-        )
+        isFiniteAmount(amount)
           ? amount
           : null,
-
       currency,
-
       message:
         getProviderMessage(
           parsed,
           `Moko Afrika Card HTTP ${response.status}.`,
         ),
-
       failureReason:
         `MOKO_CARD_HTTP_${response.status}`,
-
       metadata: {
         httpStatus:
           response.status,
-
         response:
           parsed,
       },
@@ -1746,23 +1707,15 @@ async function verifyCardPayment(
 
   return {
     success,
-
     status,
-
     providerTransactionId:
       transactionUuid,
-
     merchantReference,
-
     amount:
-      Number.isFinite(
-        amount ?? NaN,
-      )
+      isFiniteAmount(amount)
         ? amount
         : null,
-
     currency,
-
     message:
       getProviderMessage(
         parsed,
@@ -1770,20 +1723,23 @@ async function verifyCardPayment(
           ? "Paiement carte confirmé."
           : "Le paiement carte n'est pas encore confirmé.",
       ),
-
     failureReason:
       success
         ? null
         : status === "failed"
           ? "Moko Afrika a indiqué que le paiement a échoué."
           : null,
-
     metadata: {
       response:
         parsed,
-
       httpStatus:
         response.status,
+      rail:
+        "card",
+      payment_method:
+        "card",
+      transaction_uuid:
+        transactionUuid,
     },
   };
 }
@@ -1798,12 +1754,20 @@ export function parseMokoCardWebhook(
   const root =
     getObject(payload);
 
+  const data =
+    getNestedData(payload);
+
   const statusValue =
     root.status ??
     root.Status ??
     root.transaction_status ??
     root.transactionStatus ??
-    root.decision;
+    root.decision ??
+    data.status ??
+    data.Status ??
+    data.transaction_status ??
+    data.transactionStatus ??
+    data.decision;
 
   const status =
     normalizePaymentStatus(
@@ -1815,7 +1779,11 @@ export function parseMokoCardWebhook(
       root.transaction_uuid ??
         root.transaction_id ??
         root.transactionId ??
-        root.Transaction_id,
+        root.Transaction_id ??
+        data.transaction_uuid ??
+        data.transaction_id ??
+        data.transactionId ??
+        data.Transaction_id,
     ) || null;
 
   const merchantReference =
@@ -1823,16 +1791,24 @@ export function parseMokoCardWebhook(
       root.merchant_reference ??
         root.merchantReference ??
         root.reference ??
-        root.Reference,
+        root.Reference ??
+        data.merchant_reference ??
+        data.merchantReference ??
+        data.reference ??
+        data.Reference,
     ) || null;
 
   const amountValue =
     root.amount ??
-    root.Amount;
+    root.Amount ??
+    data.amount ??
+    data.Amount;
 
   const currencyValue =
     root.currency ??
-    root.Currency;
+    root.Currency ??
+    data.currency ??
+    data.Currency;
 
   const amount =
     amountValue !==
@@ -1859,33 +1835,29 @@ export function parseMokoCardWebhook(
     success:
       status ===
       "successful",
-
     status,
-
     merchantReference,
-
     providerTransactionId:
       transactionId,
-
     amount:
-      Number.isFinite(
-        amount ?? NaN,
-      )
+      isFiniteAmount(amount)
         ? amount
         : null,
-
     currency,
-
     message,
-
     failureReason:
       status === "failed"
         ? message
         : null,
-
     metadata: {
       webhook:
         payload,
+      rail:
+        "card",
+      payment_method:
+        "card",
+      transaction_uuid:
+        transactionId,
     },
   };
 }
@@ -1952,9 +1924,6 @@ function verifyMokoCardWebhookSignatureFromEnv(
         timestampMilliseconds,
     );
 
-  /*
-   * Tolérance de 5 minutes.
-   */
   if (
     age >
     5 * 60 * 1000
@@ -2002,25 +1971,30 @@ export const mokoAfrikaAdapter:
         .MOKO_AFRIKA_BASE_URL ||
       DEFAULT_MOBILE_MONEY_BASE_URL,
 
-    countries: [
-      "CG",
-      "CD",
-    ],
+    /*
+     * Vide volontairement :
+     * PharmaFlow ne limite pas Moko à une liste
+     * locale de pays.
+     *
+     * Le moteur considère une liste vide comme
+     * "pas de restriction locale".
+     *
+     * La disponibilité réelle dépend du compte Moko,
+     * du pays, du réseau et de la devise activés
+     * chez le PSP.
+     */
+    countries: [],
 
     /*
-     * Moko / FreshPay est actuellement
-     * utilisé par PharmaFlow pour CDF
-     * et USD.
+     * Vide volontairement :
+     * PharmaFlow transmet la devise configurée
+     * par la pharmacie sans conversion automatique.
      *
-     * XAF doit passer par le système
-     * de conversion de devise avant
-     * d'être envoyé à un fournisseur
-     * qui ne le supporte pas.
+     * Cela permet au routeur multi-PSP de sélectionner
+     * un autre agrégateur lorsqu'une devise n'est pas
+     * réellement prise en charge par Moko.
      */
-    currencies: [
-      "USD",
-      "CDF",
-    ],
+    currencies: [],
 
     paymentMethods: [
       "mobile_money",
@@ -2029,16 +2003,6 @@ export const mokoAfrikaAdapter:
       "card",
     ],
 
-    /*
-     * La configuration runtime Supabase
-     * est vérifiée par engine.ts.
-     *
-     * On garde true ici pour éviter
-     * qu'une absence de secret dans .env
-     * désactive Moko alors que les secrets
-     * sont enregistrés dans
-     * platform_integration_configs.
-     */
     enabled: true,
   },
 
@@ -2134,29 +2098,47 @@ export const mokoAfrikaAdapter:
     payload: unknown,
     headers?: Headers,
   ): PaymentWebhookResult {
-    /*
-     * Les webhooks Mobile Money FreshPay
-     * sont également acceptés ici.
-     */
-
     const root =
       getObject(payload);
 
+    const data =
+      getNestedData(payload);
+
+    /*
+     * Si FreshPay/Moko envoie un callback JSON enveloppé
+     * dans { data: {...} }, on examine également data.
+     */
     const hasMobileMoneyFields =
       "Trans_Status" in root ||
       "trans_status" in root ||
       "PayDRC_Reference" in root ||
       "Financial_Institution_id" in root ||
-      "Customer_Details" in root;
+      "Customer_Details" in root ||
+      "Trans_Status" in data ||
+      "trans_status" in data ||
+      "PayDRC_Reference" in data ||
+      "Financial_Institution_id" in data ||
+      "Customer_Details" in data;
 
     if (
       hasMobileMoneyFields
     ) {
+      const source =
+        (
+          "Trans_Status" in root ||
+          "trans_status" in root ||
+          "PayDRC_Reference" in root ||
+          "Financial_Institution_id" in root ||
+          "Customer_Details" in root
+        )
+          ? root
+          : data;
+
       const statusValue =
-        root.Trans_Status ??
-        root.trans_status ??
-        root.Status ??
-        root.status;
+        source.Trans_Status ??
+        source.trans_status ??
+        source.Status ??
+        source.status;
 
       const status =
         normalizePaymentStatus(
@@ -2165,26 +2147,26 @@ export const mokoAfrikaAdapter:
 
       const merchantReference =
         normalizeString(
-          root.Reference ??
-            root.reference ??
-            root.merchant_reference,
+          source.Reference ??
+            source.reference ??
+            source.merchant_reference,
         ) || null;
 
       const transactionId =
         normalizeString(
-          root.Transaction_id ??
-            root.transaction_id ??
-            root.PayDRC_Reference ??
-            root.paydrc_reference,
+          source.Transaction_id ??
+            source.transaction_id ??
+            source.PayDRC_Reference ??
+            source.paydrc_reference,
         ) || null;
 
       const amountValue =
-        root.Amount ??
-        root.amount;
+        source.Amount ??
+        source.amount;
 
       const currencyValue =
-        root.Currency ??
-        root.currency;
+        source.Currency ??
+        source.currency;
 
       const amount =
         amountValue !==
@@ -2203,8 +2185,8 @@ export const mokoAfrikaAdapter:
 
       const method =
         normalizeMobileMoneyMethod(
-          root.Method ??
-            root.method,
+          source.Method ??
+            source.method,
         );
 
       const message =
@@ -2226,9 +2208,7 @@ export const mokoAfrikaAdapter:
           transactionId,
 
         amount:
-          Number.isFinite(
-            amount ?? NaN,
-          )
+          isFiniteAmount(amount)
             ? amount
             : null,
 
@@ -2249,27 +2229,24 @@ export const mokoAfrikaAdapter:
             payload,
 
           method,
+
+          rail:
+            "mobile_money",
+
+          payment_method:
+            method,
         },
       };
     }
 
     /*
-     * Sinon, on traite comme webhook
-     * carte.
+     * Sinon, on traite comme webhook carte.
      */
     const result =
       parseMokoCardWebhook(
         payload,
       );
 
-    /*
-     * La validation cryptographique
-     * peut être effectuée par la route
-     * webhook unifiée avec le secret
-     * runtime.
-     *
-     * Ici on ne modifie pas le résultat.
-     */
     void headers;
 
     return result;

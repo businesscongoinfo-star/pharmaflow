@@ -204,9 +204,31 @@ function normalizePhone(
     return null;
   }
 
-  const phone = value.trim();
+  const raw = value.trim();
 
-  return phone || null;
+  if (!raw) {
+    return null;
+  }
+
+  /*
+   * Les paiements internationaux utilisent un numéro
+   * au format international E.164 :
+   *
+   * +242061234567
+   * +243812345678
+   * +12125551212
+   *
+   * On accepte les espaces, parenthèses, points et tirets
+   * dans la saisie, puis on normalise avant l'envoi au PSP.
+   */
+  const normalized = raw
+    .replace(/[\s().-]/g, "");
+
+  if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
 }
 
 /* =========================================================
@@ -311,22 +333,6 @@ function normalizeProviderCode(
 /* =========================================================
    PRIORITÉ FOURNISSEURS
 ========================================================= */
-
-const COUNTRY_PROVIDER_PRIORITY: Record<
-  string,
-  PaymentProviderCode[]
-> = {
-  CG: [
-    "yabetoo",
-    "gofreshpay",
-    "moko_afrika",
-  ],
-
-  CD: [
-    "moko_afrika",
-    "gofreshpay",
-  ],
-};
 
 /* =========================================================
    MÉTHODES FOURNISSEUR
@@ -929,10 +935,8 @@ export async function POST(
        15. FOURNISSEURS COMPATIBLES
     ======================================================= */
 
-    const providerPriority =
-      COUNTRY_PROVIDER_PRIORITY[
-        countryCode
-      ] ?? [];
+    const providerPriority:
+      PaymentProviderCode[] = [];
 
     const compatibleProviders =
       (providers ?? [])
@@ -983,15 +987,12 @@ export async function POST(
             return false;
           }
 
-          if (
-            providerPriority.length > 0 &&
-            !providerPriority.includes(
-              providerCode,
-            )
-          ) {
-            return false;
-          }
-
+          /*
+           * La priorité géographique sert uniquement à ordonner
+           * les fournisseurs. Elle ne doit pas exclure un fournisseur
+           * réellement compatible, afin d'éviter de bloquer les
+           * paiements internationaux.
+           */
           return true;
         })
         .sort((a, b) => {
@@ -1058,8 +1059,27 @@ export async function POST(
        16. CLIENT
     ======================================================= */
 
+    const requestedPhone =
+      normalizePhone(body.phone);
+
+    if (
+      paymentMethod === "mobile_money" &&
+      typeof body.phone === "string" &&
+      body.phone.trim() &&
+      !requestedPhone
+    ) {
+      return jsonError(
+        "Le numéro Mobile Money doit être saisi au format international, par exemple +242061234567.",
+        400,
+        {
+          code:
+            "INVALID_CUSTOMER_PHONE",
+        },
+      );
+    }
+
     const customerPhone =
-      normalizePhone(body.phone) ??
+      requestedPhone ??
       normalizePhone(profile.phone);
 
     const customerName =
