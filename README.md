@@ -173,11 +173,17 @@ Routes API (`/api/*`) et webhooks → non interceptés par le Proxy.
 | --- | --- |
 | Plateforme | Vercel (projet `pharmaflow.africa`, team *PharmaFlow*) |
 | Environnement | **Production** (`--prod`) |
-| Déploiement | `dpl_G1WAi4Fm5YuzbJXG8Jn1EtczCpoT` — état `READY` (promu) |
-| Commit déployé | `34eae19` — branche `arena/0def7daf-pharmaflow` |
+| Déploiement | `dpl_DnaPp2gwN7T3zao4rrJZJMUuJtbV` — état `READY` (promu) |
+| Commit déployé | `f060386` — `main` (fusion de la PR #1, branche `arena/0def7daf-pharmaflow`) |
 | Build | Node 24.x, 2 cœurs / 8 Go, Next.js 16.3.5, ~56 s |
-| URL de déploiement | <https://pharmaflowafrica-deqwc7ytn-pharma-flow1.vercel.app> |
+| URL de déploiement | <https://pharmaflowafrica-n2or8dshx-pharma-flow1.vercel.app> |
+| Déploiement précédent | `dpl_G1WAi4Fm5YuzbJXG8Jn1EtczCpoT` (commit `34eae19`), conservé comme rollback |
 | URL publique | <https://pharmaflow.africa> — alias `www.pharmaflow.africa`, `pharmaflowafrica.vercel.app` |
+
+Le code est fusionné dans `main` sur GitHub via la
+[PR #1](https://github.com/businesscongoinfo-star/pharmaflow/pull/1) ;
+l'intégration Git Vercel reconstruit automatiquement la production à chaque
+push sur `main`.
 
 Les variables d'environnement de production (Supabase + Postgres) étaient déjà
 présentes sur le projet : aucune variable n'a été créée ni modifiée.
