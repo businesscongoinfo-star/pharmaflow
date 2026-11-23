@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useNow } from "@/app/lib/use-now";
+
 /**
  * ============================================================
  * TYPES
@@ -1139,6 +1141,8 @@ export default function PharmacyActions({
    * ==========================================================
    */
 
+  const now = useNow();
+
   const manualAccessActive =
     pharmacy.manual_access_enabled ===
       true &&
@@ -1150,8 +1154,7 @@ export default function PharmacyActions({
     ) &&
     new Date(
       pharmacy.manual_access_until,
-    ).getTime() >
-      Date.now();
+    ).getTime() > now;
 
   /**
    * ==========================================================

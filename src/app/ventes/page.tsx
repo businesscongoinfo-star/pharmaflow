@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -713,11 +714,90 @@ const paymentLabels = useMemo(
    * =========================================================
    */
 
-  useEffect(() => {
-    loadPage();
-  }, []);
+  const loadProducts = useCallback(async (
+    id: string = pharmacyId
+  ) => {
+    if (!id) return;
 
-  async function loadPage() {
+    const {
+      data,
+      error: productsError,
+    } = await supabase
+      .from("products")
+      .select(
+        `
+        id,
+        name,
+        generic_name,
+        category,
+        barcode,
+        sku,
+        unit,
+        selling_price,
+        stock_quantity,
+        minimum_stock,
+        is_active
+      `
+      )
+      .eq("pharmacy_id", id)
+      .eq("is_active", true)
+      .order("name", {
+        ascending: true,
+      });
+
+    if (productsError) {
+      throw new Error(
+        productsError.message
+      );
+    }
+
+    setProducts(
+      (data || []) as Product[]
+    );
+  }, [pharmacyId, supabase]);
+
+  const loadSales = useCallback(async (
+    id: string = pharmacyId
+  ) => {
+    if (!id) return;
+
+    const {
+      data,
+      error: salesError,
+    } = await supabase
+      .from("sales")
+      .select(
+        `
+        id,
+        sale_number,
+        subtotal,
+        discount,
+        tax,
+        total,
+        status,
+        customer_name,
+        customer_phone,
+        created_at
+      `
+      )
+      .eq("pharmacy_id", id)
+      .order("created_at", {
+        ascending: false,
+      })
+      .limit(20);
+
+    if (salesError) {
+      throw new Error(
+        salesError.message
+      );
+    }
+
+    setSales(
+      (data || []) as Sale[]
+    );
+  }, [pharmacyId, supabase]);
+
+  const loadPage = useCallback(async () => {
     setLoading(true);
     setError("");
 
@@ -821,7 +901,12 @@ const paymentLabels = useMemo(
     } finally {
       setLoading(false);
     }
-  }
+  }, [loadProducts, loadSales, router, supabase, text.loadError, text.pharmacyMissing]);
+
+  useEffect(() => {
+    loadPage();
+  }, [loadPage]);
+
 
   /*
    * =========================================================
@@ -829,47 +914,6 @@ const paymentLabels = useMemo(
    * =========================================================
    */
 
-  async function loadProducts(
-    id = pharmacyId
-  ) {
-    if (!id) return;
-
-    const {
-      data,
-      error: productsError,
-    } = await supabase
-      .from("products")
-      .select(
-        `
-        id,
-        name,
-        generic_name,
-        category,
-        barcode,
-        sku,
-        unit,
-        selling_price,
-        stock_quantity,
-        minimum_stock,
-        is_active
-      `
-      )
-      .eq("pharmacy_id", id)
-      .eq("is_active", true)
-      .order("name", {
-        ascending: true,
-      });
-
-    if (productsError) {
-      throw new Error(
-        productsError.message
-      );
-    }
-
-    setProducts(
-      (data || []) as Product[]
-    );
-  }
 
   /*
    * =========================================================
@@ -877,46 +921,6 @@ const paymentLabels = useMemo(
    * =========================================================
    */
 
-  async function loadSales(
-    id = pharmacyId
-  ) {
-    if (!id) return;
-
-    const {
-      data,
-      error: salesError,
-    } = await supabase
-      .from("sales")
-      .select(
-        `
-        id,
-        sale_number,
-        subtotal,
-        discount,
-        tax,
-        total,
-        status,
-        customer_name,
-        customer_phone,
-        created_at
-      `
-      )
-      .eq("pharmacy_id", id)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(20);
-
-    if (salesError) {
-      throw new Error(
-        salesError.message
-      );
-    }
-
-    setSales(
-      (data || []) as Sale[]
-    );
-  }
 
   async function refreshPage() {
     if (!pharmacyId) return;

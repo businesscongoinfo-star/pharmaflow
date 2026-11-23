@@ -2,6 +2,7 @@
 
 import {
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -70,8 +71,16 @@ export default function UtilisateursPage() {
   const locale = useLocale();
   const isEnglish = locale === "en";
 
-  const t = (fr: string, en: string) =>
-    isEnglish ? en : fr;
+  /*
+   * `t` doit être stable : utilisé dans des useCallback/useEffect.
+   * Une simple fonction recréée à chaque rendu provoquerait une
+   * boucle infinie de rechargements.
+   */
+  const t = useCallback(
+    (fr: string, en: string) =>
+      isEnglish ? en : fr,
+    [isEnglish],
+  );
 
   const supabase = useMemo(
     () => createClient(),
@@ -169,11 +178,36 @@ export default function UtilisateursPage() {
   // CHARGEMENT INITIAL
   // ============================================================
 
-  useEffect(() => {
-    loadCurrentUserAndUsers();
-  }, []);
+  const loadUsers = useCallback(async () => {
+    const response = await fetch(
+      "/api/utilisateurs",
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      },
+    );
 
-  async function loadCurrentUserAndUsers() {
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error ||
+          t(
+            "Impossible de charger les utilisateurs.",
+            "Unable to load users.",
+          ),
+      );
+    }
+
+    setUsers(
+      (result.users || []) as UserProfile[],
+    );
+  }, [t]);
+
+  const loadCurrentUserAndUsers = useCallback(async () => {
     setLoading(true);
     setError("");
 
@@ -241,36 +275,13 @@ export default function UtilisateursPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [loadUsers, router, supabase, t]);
 
-  async function loadUsers() {
-    const response = await fetch(
-      "/api/utilisateurs",
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-        },
-      },
-    );
+  useEffect(() => {
+    loadCurrentUserAndUsers();
+  }, [loadCurrentUserAndUsers]);
 
-    const result = await response.json();
 
-    if (!response.ok) {
-      throw new Error(
-        result.error ||
-          t(
-            "Impossible de charger les utilisateurs.",
-            "Unable to load users.",
-          ),
-      );
-    }
-
-    setUsers(
-      (result.users || []) as UserProfile[],
-    );
-  }
 
   // ============================================================
   // RESET FORMULAIRE CRÉATION

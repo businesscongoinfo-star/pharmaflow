@@ -17,6 +17,8 @@ import {
   type SupportedLocale,
 } from "../lib/i18n/country-language";
 
+import { useNow } from "../lib/use-now";
+
 /* ============================================================
    TYPES
 ============================================================ */
@@ -819,6 +821,12 @@ export default function DashboardPage() {
      INFORMATIONS ABONNEMENT
   ========================================================== */
 
+  /*
+   * Heure courante exposée par un hook : Date.now() ne doit pas
+   * être appelé directement pendant le rendu.
+   */
+  const now = useNow();
+
   const subscriptionInfo =
     useMemo<SubscriptionInfo>(() => {
       const manualIsValid =
@@ -902,7 +910,7 @@ export default function DashboardPage() {
       }
 
       const difference =
-        endTimestamp - Date.now();
+        endTimestamp - now;
 
       const daysRemaining =
         Math.max(
@@ -921,7 +929,7 @@ export default function DashboardPage() {
         isPaid,
         isManualAccess: false,
       };
-    }, [manualAccess, subscription]);
+    }, [manualAccess, subscription, now]);
 
   const subscriptionEndDate =
     subscriptionInfo.endDate

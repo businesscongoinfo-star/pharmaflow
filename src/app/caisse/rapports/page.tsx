@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
@@ -457,11 +457,7 @@ export default function CashierReportsPage() {
 
   const t = TEXT[locale];
 
-  useEffect(() => {
-    loadReports();
-  }, []);
-
-  async function loadReports() {
+  const loadReports = useCallback(async () => {
     setLoading(true);
     setError("");
 
@@ -603,7 +599,12 @@ export default function CashierReportsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [locale, router]);
+
+  useEffect(() => {
+    loadReports();
+  }, [loadReports]);
+
 
   async function handleLogout() {
     await supabase.auth.signOut();

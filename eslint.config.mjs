@@ -49,13 +49,11 @@ const config = [
       "react-hooks/set-state-in-effect": "off",
 
       /*
-       * Conservées en avertissement : elles signalent des points
-       * à améliorer (Date.now() pendant le rendu, deps d'effets)
-       * sans casser le lint.
+       * react-hooks/purity, react-hooks/immutability et
+       * react-hooks/exhaustive-deps restent en erreur (valeur par
+       * défaut) : l'ensemble du code a été corrigé (horloge via
+       * useNow(), dépendances d'effets explicites).
        */
-      "react-hooks/purity": "warn",
-      "react-hooks/immutability": "warn",
-      "react-hooks/exhaustive-deps": "warn",
 
       /*
        * La connexion utilise volontairement window.location.assign

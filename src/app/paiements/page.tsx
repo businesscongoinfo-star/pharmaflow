@@ -248,16 +248,22 @@ export default function PaiementsPage() {
   const [methodFilter, setMethodFilter] = useState("all");
   const [error, setError] = useState("");
 
-  const methodLabels: Record<string, string> = {
-    cash: t.cash,
-    mobile_money: t.mobileMoney,
-    card: t.card,
-    bank_transfer: t.bankTransfer,
-    other: t.other,
-  };
+  const methodLabels: Record<string, string> = useMemo(
+    () => ({
+      cash: t.cash,
+      mobile_money: t.mobileMoney,
+      card: t.card,
+      bank_transfer: t.bankTransfer,
+      other: t.other,
+    }),
+    [t],
+  );
 
-  const getMethodLabel = (method: string | null) =>
-    method ? methodLabels[method] || method : t.unspecified;
+  const getMethodLabel = useCallback(
+    (method: string | null) =>
+      method ? methodLabels[method] || method : t.unspecified,
+    [methodLabels, t],
+  );
 
   const getMethodIcon = (method: string | null) =>
     method ? METHOD_ICONS[method] || "💰" : "💰";
@@ -403,7 +409,7 @@ export default function PaiementsPage() {
       return [saleNumber, customer, phone, method, String(payment.amount)]
         .join(" ").toLowerCase().includes(query);
     });
-  }, [periodPayments, search, methodFilter]);
+  }, [periodPayments, search, methodFilter, getMethodLabel]);
 
   const totalAmount = useMemo(
     () => periodPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),

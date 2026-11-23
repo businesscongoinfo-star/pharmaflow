@@ -124,17 +124,28 @@ src/proxy.ts                  # Proxy global Next.js 16 (session, rôles, abonne
     `SUPABASE_SECRET_KEY`. Les deux nomenclatures sont désormais acceptées.
 13. **`formatPrice` dans `/abonnement`** utilisait `t` avant sa déclaration et
     omettait la dépendance dans le `useCallback`.
+14. **Dépendances d'effets manquantes** (`react-hooks/exhaustive-deps`) sur
+    `/produits`, `/caisse/produits`, `/caisse/rapports`, `/utilisateurs`,
+    `/ventes`, `/support` et `/paiements` : les chargeurs sont désormais des
+    `useCallback` déclarés avant leur `useEffect`, avec des dépendances
+    explicites (`loadUsers`, `methodLabels`, `getMethodLabel`, `t` stabilisé
+    via `useCallback`…). Aucun rechargement supplémentaire n'est déclenché.
+15. **`Date.now()` pendant le rendu** (`react-hooks/purity`) : ajout du hook
+    `useNow()` (`src/app/lib/use-now.ts`) utilisé par `/dashboard` et
+    `PharmacyActions`, et de `getCurrentTimestamp()`
+    (`src/app/lib/current-time.ts`) pour le composant serveur
+    `/super-admin/pharmacies/[id]`.
 
 ### Nettoyage
 
-14. Suppression de 18 fichiers vides issus d'un envoi corrompu (`ccc`, `cc`,
+16. Suppression de 18 fichiers vides issus d'un envoi corrompu (`ccc`, `cc`,
     `CCC` dans `src/app/…`), de `src/app/ventes.zip` (ancienne sauvegarde de la
     page Ventes), de `index.html` (maquette statique obsolète), de
     `tsconfig.tsbuildinfo` (artefact de build) et des doublons morts :
     `src/app/proxy.ts`, `src/app/support/ai/route.ts`,
     `src/app/support/tickets/route.ts`, `src/app/api/agent/support/page.tsx`,
     `src/app/lib/agent/access.ts`, `src/app/lib/supabase/proxy.ts`.
-15. `.gitignore` complété (`*.tsbuildinfo`, `.env*`) et `.env.example` ajouté.
+17. `.gitignore` complété (`*.tsbuildinfo`, `.env*`) et `.env.example` ajouté.
 
 ---
 
@@ -142,7 +153,7 @@ src/proxy.ts                  # Proxy global Next.js 16 (session, rôles, abonne
 
 ```bash
 npx tsc --noEmit   # ✔ aucune erreur
-npm run lint       # ✔ 0 erreur (10 avertissements de dépendances d'effets)
+npm run lint       # ✔ 0 erreur, 0 avertissement
 npm run build      # ✔ build de production, Proxy détecté
 ```
 

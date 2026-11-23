@@ -9,6 +9,10 @@ import {
   createAdminClient,
 } from "@/app/lib/supabase/admin";
 
+import {
+  getCurrentTimestamp,
+} from "@/app/lib/current-time";
+
 type PageProps = {
   params: Promise<{
     id: string;
@@ -416,14 +420,17 @@ export default async function PharmacyDetailsPage({
    * ==========================================================
    */
 
+  /*
+   * Composant serveur : l'heure est évaluée une seule fois par
+   * requête via un utilitaire dédié.
+   */
   const manualAccessValid =
     pharmacy.manual_access_enabled ===
       true &&
     !!pharmacy.manual_access_until &&
     new Date(
       pharmacy.manual_access_until,
-    ).getTime() >
-      Date.now();
+    ).getTime() > getCurrentTimestamp();
 
   return (
     <main className="pf-page">
