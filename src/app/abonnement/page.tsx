@@ -1236,6 +1236,9 @@ export default function SubscriptionPage() {
       ? monthlyAvailable
       : yearlyAvailable;
 
+  const t =
+    TEXT[locale];
+
   const formatPrice =
     useCallback(
       (
@@ -1312,11 +1315,9 @@ export default function SubscriptionPage() {
       [
         currency,
         locale,
+        t,
       ],
     );
-
-  const t =
-    TEXT[locale];
 
   const monthlyLabel =
     monthlyAvailable

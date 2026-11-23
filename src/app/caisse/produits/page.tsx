@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
@@ -126,11 +126,7 @@ export default function CashierProductsPage() {
   const [sidebarOpen, setSidebarOpen] =
     useState(false);
 
-  useEffect(() => {
-    void loadProducts();
-  }, []);
-
-  async function loadProducts() {
+  const loadProducts = useCallback(async () => {
     setLoading(true);
     setError("");
 
@@ -183,14 +179,17 @@ export default function CashierProductsPage() {
        * ======================================================
        */
 
-      if (profileData.role !== "cashier") {
+      if (
+        profileData.role !== "cashier" &&
+        profileData.role !== "employee"
+      ) {
         switch (profileData.role) {
           case "owner":
             router.replace("/dashboard");
             break;
 
           case "admin":
-            router.replace("/admin");
+            router.replace("/dashboard");
             break;
 
           case "pharmacist":
@@ -198,7 +197,7 @@ export default function CashierProductsPage() {
             break;
 
           default:
-            router.replace("/employe");
+            router.replace("/caisse");
             break;
         }
 
@@ -296,7 +295,12 @@ export default function CashierProductsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [router, tErrors]);
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
+
 
   /*
    * ==========================================================

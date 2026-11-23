@@ -2,6 +2,7 @@
 
 import {
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -193,11 +194,7 @@ export default function ProductsPage() {
   const [form, setForm] =
     useState<ProductForm>(EMPTY_FORM);
 
-  useEffect(() => {
-    void loadProducts();
-  }, []);
-
-  async function loadProducts() {
+  const loadProducts = useCallback(async () => {
     setLoading(true);
     setError("");
 
@@ -252,7 +249,7 @@ export default function ProductsPage() {
             break;
 
           default:
-            router.replace("/employe");
+            router.replace("/caisse");
             break;
         }
 
@@ -352,7 +349,12 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [router, tErrors]);
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
+
 
   function openCreateModal() {
     setEditingProduct(null);

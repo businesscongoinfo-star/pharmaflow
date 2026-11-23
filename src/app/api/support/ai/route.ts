@@ -1061,7 +1061,17 @@ export async function POST(
     const model =
       process.env.OPENAI_MODEL ||
       process.env.OPENAI_SUPPORT_MODEL ||
-      "gpt-5.6-luna";
+      /*
+       * IMPORTANT :
+       *
+       * "gpt-5.6-luna" n'existe pas : l'API OpenAI répondait
+       * donc systématiquement par une erreur 400 (modèle
+       * introuvable) et le support IA ne fonctionnait pas.
+       *
+       * Ce modèle peut être remplacé par variable
+       * d'environnement (OPENAI_MODEL / OPENAI_SUPPORT_MODEL).
+       */
+      "gpt-4.1-mini";
 
 
     /* -------------------------------------------------------

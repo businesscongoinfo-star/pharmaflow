@@ -17,6 +17,8 @@ import {
   type SupportedLocale,
 } from "../lib/i18n/country-language";
 
+import { useNow } from "../lib/use-now";
+
 /* ============================================================
    TYPES
 ============================================================ */
@@ -148,7 +150,7 @@ function getRoleRedirect(
       return "/dashboard";
 
     case "admin":
-      return "/admin";
+      return "/dashboard";
 
     case "pharmacist":
       return "/pharmacien";
@@ -157,7 +159,7 @@ function getRoleRedirect(
       return "/caisse";
 
     case "employee":
-      return "/employe";
+      return "/caisse";
 
     default:
       return "/login";
@@ -334,7 +336,9 @@ export default function DashboardPage() {
 
           if (
             currentRole !==
-            "owner"
+              "owner" &&
+            currentRole !==
+              "admin"
           ) {
             setRedirecting(true);
 
@@ -817,6 +821,12 @@ export default function DashboardPage() {
      INFORMATIONS ABONNEMENT
   ========================================================== */
 
+  /*
+   * Heure courante exposée par un hook : Date.now() ne doit pas
+   * être appelé directement pendant le rendu.
+   */
+  const now = useNow();
+
   const subscriptionInfo =
     useMemo<SubscriptionInfo>(() => {
       const manualIsValid =
@@ -900,7 +910,7 @@ export default function DashboardPage() {
       }
 
       const difference =
-        endTimestamp - Date.now();
+        endTimestamp - now;
 
       const daysRemaining =
         Math.max(
@@ -919,7 +929,7 @@ export default function DashboardPage() {
         isPaid,
         isManualAccess: false,
       };
-    }, [manualAccess, subscription]);
+    }, [manualAccess, subscription, now]);
 
   const subscriptionEndDate =
     subscriptionInfo.endDate

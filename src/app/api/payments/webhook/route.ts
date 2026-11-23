@@ -42,8 +42,15 @@ function getSupabaseAdmin(): SupabaseClient {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL;
 
+  /*
+   * Le reste de l'application utilise SUPABASE_SECRET_KEY
+   * (voir src/app/lib/supabase/admin.ts). On accepte les deux
+   * noms afin que ce webhook ne tombe pas en erreur lorsqu'un
+   * seul des deux est configuré.
+   */
   const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.SUPABASE_SECRET_KEY?.trim();
 
   if (!url) {
     throw new Error(

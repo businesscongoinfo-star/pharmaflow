@@ -2410,7 +2410,7 @@ export default function RegisterPage() {
                           t.termsIntro
                         }{" "}
                         <Link
-                          href="/conditions-utilisation"
+                          href="/conditions"
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -2432,7 +2432,7 @@ export default function RegisterPage() {
                           t.privacyAnd
                         }{" "}
                         <Link
-                          href="/politique-confidentialite"
+                          href="/confidentialite"
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -2460,7 +2460,7 @@ export default function RegisterPage() {
                           t.termsIntro
                         }{" "}
                         <Link
-                          href="/terms-of-use"
+                          href="/conditions"
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -2482,7 +2482,7 @@ export default function RegisterPage() {
                           t.privacyAnd
                         }{" "}
                         <Link
-                          href="/privacy-policy"
+                          href="/confidentialite"
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{

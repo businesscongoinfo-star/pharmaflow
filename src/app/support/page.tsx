@@ -1032,7 +1032,9 @@ export default function SupportPage() {
     };
   }, [
     humanMode,
+    ticket?.id,
     ticket?.status,
+    accessToken,
     loadTicket,
   ]);
 

@@ -281,14 +281,14 @@ export default function PharmacienPaymentsPage() {
             currentProfile.role ===
             "admin"
           ) {
-            router.replace("/admin");
+            router.replace("/dashboard");
           } else if (
             currentProfile.role ===
             "cashier"
           ) {
             router.replace("/caisse");
           } else {
-            router.replace("/employe");
+            router.replace("/caisse");
           }
 
           return;

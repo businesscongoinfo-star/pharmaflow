@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { requireSuperAdmin } from "@/app/lib/super-admin/auth";
 import { createSuperAdminClient } from "@/app/lib/super-admin/admin-client";
 
@@ -61,7 +63,7 @@ function ModuleCard({
   tone = "blue",
 }: ModuleCardProps) {
   return (
-    <a
+    <Link
       href={href}
       className={`sa-module-card ${tone}`}
     >
@@ -88,7 +90,7 @@ function ModuleCard({
       <span className="sa-module-arrow">
         →
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -278,7 +280,7 @@ export default async function SuperAdminDashboardPage() {
 
           <nav className="sa-nav">
 
-            <a
+            <Link
               href="/super-admin"
               className="sa-nav-link active"
             >
@@ -289,7 +291,7 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Tableau de bord
               </span>
-            </a>
+            </Link>
 
           </nav>
 
@@ -304,7 +306,7 @@ export default async function SuperAdminDashboardPage() {
 
           <nav className="sa-nav">
 
-            <a
+            <Link
               href="/super-admin/pharmacies"
               className="sa-nav-link"
             >
@@ -315,9 +317,9 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Pharmacies
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/utilisateurs"
               className="sa-nav-link"
             >
@@ -328,9 +330,9 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Utilisateurs
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/abonnements"
               className="sa-nav-link"
             >
@@ -341,9 +343,9 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Abonnements
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/paiements"
               className="sa-nav-link"
             >
@@ -354,7 +356,7 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Transactions
               </span>
-            </a>
+            </Link>
 
           </nav>
 
@@ -369,7 +371,7 @@ export default async function SuperAdminDashboardPage() {
 
           <nav className="sa-nav">
 
-            <a
+            <Link
               href="/super-admin/reclamations"
               className="sa-nav-link"
             >
@@ -384,9 +386,9 @@ export default async function SuperAdminDashboardPage() {
               <span className="sa-nav-count">
                 IA
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/ia"
               className="sa-nav-link"
             >
@@ -397,9 +399,9 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Centre IA
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/equipe"
               className="sa-nav-link"
             >
@@ -410,7 +412,7 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Équipe plateforme
               </span>
-            </a>
+            </Link>
 
           </nav>
 
@@ -425,7 +427,7 @@ export default async function SuperAdminDashboardPage() {
 
           <nav className="sa-nav">
 
-            <a
+            <Link
               href="/super-admin/audit"
               className="sa-nav-link"
             >
@@ -436,9 +438,9 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Journal d'audit
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/devises"
               className="sa-nav-link"
             >
@@ -453,9 +455,9 @@ export default async function SuperAdminDashboardPage() {
               <span className="sa-nav-count">
                 {currenciesCount}
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/site"
               className="sa-nav-link"
             >
@@ -466,9 +468,9 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Site public
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/integrations"
               className="sa-nav-link"
             >
@@ -479,9 +481,9 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Intégrations & API
               </span>
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/super-admin/parametres"
               className="sa-nav-link"
             >
@@ -492,7 +494,7 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Paramètres
               </span>
-            </a>
+            </Link>
 
           </nav>
 
@@ -507,7 +509,7 @@ export default async function SuperAdminDashboardPage() {
 
           <nav className="sa-nav">
 
-            <a
+            <Link
               href="/dashboard"
               className="sa-nav-link"
             >
@@ -518,7 +520,7 @@ export default async function SuperAdminDashboardPage() {
               <span>
                 Retour à PharmaFlow
               </span>
-            </a>
+            </Link>
 
           </nav>
 
@@ -659,19 +661,19 @@ export default async function SuperAdminDashboardPage() {
 
             <div className="sa-welcome-actions">
 
-              <a
+              <Link
                 href="/super-admin/reclamations"
                 className="sa-primary-button"
               >
                 🚨 Voir les réclamations
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/super-admin/abonnements"
                 className="sa-secondary-button"
               >
                 💳 Gérer les abonnements
-              </a>
+              </Link>
 
             </div>
 
@@ -852,7 +854,7 @@ export default async function SuperAdminDashboardPage() {
 
             <div className="sa-quick-actions">
 
-              <a
+              <Link
                 href="/super-admin/reclamations"
                 className="sa-quick-action"
               >
@@ -876,10 +878,10 @@ export default async function SuperAdminDashboardPage() {
                   →
                 </span>
 
-              </a>
+              </Link>
 
 
-              <a
+              <Link
                 href="/super-admin/abonnements"
                 className="sa-quick-action"
               >
@@ -903,10 +905,10 @@ export default async function SuperAdminDashboardPage() {
                   →
                 </span>
 
-              </a>
+              </Link>
 
 
-              <a
+              <Link
                 href="/super-admin/paiements"
                 className="sa-quick-action"
               >
@@ -930,10 +932,10 @@ export default async function SuperAdminDashboardPage() {
                   →
                 </span>
 
-              </a>
+              </Link>
 
 
-              <a
+              <Link
                 href="/super-admin/devises"
                 className="sa-quick-action"
               >
@@ -957,10 +959,10 @@ export default async function SuperAdminDashboardPage() {
                   →
                 </span>
 
-              </a>
+              </Link>
 
 
-              <a
+              <Link
                 href="/super-admin/ia"
                 className="sa-quick-action"
               >
@@ -984,7 +986,7 @@ export default async function SuperAdminDashboardPage() {
                   →
                 </span>
 
-              </a>
+              </Link>
 
             </div>
 
@@ -1106,7 +1108,7 @@ export default async function SuperAdminDashboardPage() {
 
             <div className="sa-integration-grid">
 
-              <a
+              <Link
                 href="/super-admin/integrations"
                 className="sa-integration-card"
               >
@@ -1133,10 +1135,10 @@ export default async function SuperAdminDashboardPage() {
 
                 </div>
 
-              </a>
+              </Link>
 
 
-              <a
+              <Link
                 href="/super-admin/devises"
                 className="sa-integration-card"
               >
@@ -1163,10 +1165,10 @@ export default async function SuperAdminDashboardPage() {
 
                 </div>
 
-              </a>
+              </Link>
 
 
-              <a
+              <Link
                 href="/super-admin/site"
                 className="sa-integration-card"
               >
@@ -1193,10 +1195,10 @@ export default async function SuperAdminDashboardPage() {
 
                 </div>
 
-              </a>
+              </Link>
 
 
-              <a
+              <Link
                 href="/super-admin/parametres"
                 className="sa-integration-card"
               >
@@ -1223,7 +1225,7 @@ export default async function SuperAdminDashboardPage() {
 
                 </div>
 
-              </a>
+              </Link>
 
             </div>
 
@@ -1268,7 +1270,7 @@ export default async function SuperAdminDashboardPage() {
 
               <div className="sa-international-items">
 
-                <a
+                <Link
                   href="/super-admin/site"
                   className="sa-international-item"
                   style={{
@@ -1285,10 +1287,10 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     FR / EN
                   </small>
-                </a>
+                </Link>
 
 
-                <a
+                <Link
                   href="/super-admin/devises"
                   className="sa-international-item"
                   style={{
@@ -1305,10 +1307,10 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     {currenciesCount} actives
                   </small>
-                </a>
+                </Link>
 
 
-                <a
+                <Link
                   href="/super-admin/integrations"
                   className="sa-international-item"
                   style={{
@@ -1325,10 +1327,10 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     APIs & agrégateurs
                   </small>
-                </a>
+                </Link>
 
 
-                <a
+                <Link
                   href="/super-admin/parametres"
                   className="sa-international-item"
                   style={{
@@ -1345,7 +1347,7 @@ export default async function SuperAdminDashboardPage() {
                   <small>
                     Contrôle plateforme
                   </small>
-                </a>
+                </Link>
 
               </div>
 
@@ -1477,7 +1479,7 @@ export default async function SuperAdminDashboardPage() {
               </div>
 
 
-              <a
+              <Link
                 href="/super-admin/devises"
                 className="sa-control-card"
                 style={{
@@ -1503,7 +1505,7 @@ export default async function SuperAdminDashboardPage() {
                   intégrations internationales.
                 </p>
 
-              </a>
+              </Link>
 
             </div>
 

@@ -251,7 +251,7 @@ export default function PharmacienReportsPage() {
           } else if (
             currentProfile.role === "admin"
           ) {
-            router.replace("/admin");
+            router.replace("/dashboard");
           } else if (
             currentProfile.role === "cashier"
           ) {

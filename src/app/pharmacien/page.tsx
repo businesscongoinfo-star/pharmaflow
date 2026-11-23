@@ -403,9 +403,9 @@ export default function PharmacienPage() {
               string
             > = {
               owner: "/dashboard",
-              admin: "/admin",
+              admin: "/dashboard",
               cashier: "/caisse",
-              employee: "/employe",
+              employee: "/caisse",
             };
 
             router.replace(
