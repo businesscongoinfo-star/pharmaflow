@@ -164,3 +164,28 @@ Pages publiques testées : `/`, `/login`, `/register`, `/conditions`,
 Pages protégées (`/dashboard`, `/produits`, `/ventes`, `/super-admin`,
 `/agent`…) → redirection `307` vers `/login?redirect=…` sans session.
 Routes API (`/api/*`) et webhooks → non interceptés par le Proxy.
+
+---
+
+## 5. Déploiement
+
+| Élément | Valeur |
+| --- | --- |
+| Plateforme | Vercel (projet `pharmaflow.africa`, team *PharmaFlow*) |
+| Environnement | **Production** (`--prod`) |
+| Déploiement | `dpl_G1WAi4Fm5YuzbJXG8Jn1EtczCpoT` — état `READY` (promu) |
+| Commit déployé | `34eae19` — branche `arena/0def7daf-pharmaflow` |
+| Build | Node 24.x, 2 cœurs / 8 Go, Next.js 16.3.5, ~56 s |
+| URL de déploiement | <https://pharmaflowafrica-deqwc7ytn-pharma-flow1.vercel.app> |
+| URL publique | <https://pharmaflow.africa> — alias `www.pharmaflow.africa`, `pharmaflowafrica.vercel.app` |
+
+Les variables d'environnement de production (Supabase + Postgres) étaient déjà
+présentes sur le projet : aucune variable n'a été créée ni modifiée.
+
+Vérifications effectuées sur l'URL publique après déploiement :
+
+- `/` → `200`, page marketing complète (FR/EN, tarifs, sections produit) ;
+- `/login` et `/register` → `200`, formulaires rendus en français ;
+- `/dashboard` sans session → redirection vers `/login?redirect=%2Fdashboard`
+  (le `Proxy` `src/proxy.ts` est bien actif en production) ;
+- assets statiques et `og-image.png` servis par le CDN Vercel.
