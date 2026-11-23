@@ -107,5 +107,53 @@ export function createAdminClient() {
  * ============================================================
  */
 
-export const supabaseAdmin =
-  createAdminClient();
+/**
+ * Client admin « paresseux ».
+ *
+ * IMPORTANT :
+ *
+ * L'ancienne version créait le client au moment de l'import
+ * (`export const supabaseAdmin = createAdminClient()`), ce qui
+ * faisait échouer la compilation et le build entier dès que
+ * NEXT_PUBLIC_SUPABASE_URL n'était pas définie (par exemple en
+ * CI ou lors d'un `next build` sans variables d'environnement).
+ *
+ * Le proxy ci-dessous ne crée le client qu'au premier usage réel.
+ */
+
+const globalForSupabase = globalThis as unknown as {
+  __pharmaflowSupabaseAdmin?: ReturnType<
+    typeof createAdminClient
+  >;
+};
+
+function getSharedAdminClient() {
+  if (!globalForSupabase.__pharmaflowSupabaseAdmin) {
+    globalForSupabase.__pharmaflowSupabaseAdmin =
+      createAdminClient();
+  }
+
+  return globalForSupabase.__pharmaflowSupabaseAdmin;
+}
+
+export const supabaseAdmin = new Proxy(
+  {} as ReturnType<typeof createAdminClient>,
+  {
+    get(_target, property) {
+      const client = getSharedAdminClient();
+
+      const value =
+        client[
+          property as keyof typeof client
+        ];
+
+      return typeof value === "function"
+        ? value.bind(client)
+        : value;
+    },
+
+    has(_target, property) {
+      return property in getSharedAdminClient();
+    },
+  },
+);

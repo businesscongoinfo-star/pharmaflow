@@ -496,19 +496,22 @@ export default function CashierReportsPage() {
         return;
       }
 
-      if (profileData.role !== "cashier") {
+      if (
+        profileData.role !== "cashier" &&
+        profileData.role !== "employee"
+      ) {
         if (profileData.role === "owner") {
           router.replace("/dashboard");
         } else if (
           profileData.role === "admin"
         ) {
-          router.replace("/admin");
+          router.replace("/dashboard");
         } else if (
           profileData.role === "pharmacist"
         ) {
           router.replace("/pharmacien");
         } else {
-          router.replace("/employe");
+          router.replace("/caisse");
         }
 
         return;

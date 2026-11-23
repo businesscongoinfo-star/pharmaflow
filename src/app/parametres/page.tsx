@@ -201,10 +201,10 @@ function getRoleLabel(role: string, t: (typeof TEXT)[keyof typeof TEXT]) {
 function getRoleHome(role: string) {
   switch (role) {
     case "owner": return "/dashboard";
-    case "admin": return "/admin";
+    case "admin": return "/dashboard";
     case "pharmacist": return "/pharmacien";
     case "cashier": return "/caisse";
-    case "employee": return "/employe";
+    case "employee": return "/caisse";
     default: return "/login";
   }
 }

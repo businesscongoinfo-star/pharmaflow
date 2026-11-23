@@ -14,6 +14,11 @@ import {
   useSearchParams,
 } from "next/navigation";
 
+import {
+  getAllowedRedirect,
+  normalizeRole,
+} from "../lib/auth/route-access";
+
 import { createClient } from "../lib/supabase/client";
 
 /* ============================================================
@@ -285,106 +290,19 @@ function setLocaleCookie(locale: Locale) {
    RÔLE → ESPACE
 ============================================================ */
 
-function getRoleHome(
-  role: string | null | undefined,
-) {
-  switch (
-    String(role ?? "")
-      .trim()
-      .toLowerCase()
-  ) {
-    case "owner":
-      return "/dashboard";
-
-    case "admin":
-      return "/admin";
-
-    case "pharmacist":
-      return "/pharmacien";
-
-    case "cashier":
-      return "/caisse";
-
-    case "employee":
-      return "/employe";
-
-    default:
-      return "/login";
-  }
-}
-
-/* ============================================================
-   NORMALISATION RÔLE
-============================================================ */
-
-function normalizeRole(
-  role: string | null | undefined,
-) {
-  return String(role ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-/* ============================================================
-   REDIRECTION SÉCURISÉE
-============================================================ */
+/*
+ * Toute la logique de rôle / redirection provient de la source
+ * unique : src/app/lib/auth/route-access.ts
+ *
+ * Cela évite qu'un rôle soit envoyé vers une page inexistante
+ * (c'était le cas de /admin et /employe, qui renvoyaient une 404).
+ */
 
 function getAllowedDestination(
   role: string | null | undefined,
   requestedRedirect: string | null,
 ) {
-  const roleHome = getRoleHome(role);
-
-  if (roleHome === "/login") {
-    return "/login";
-  }
-
-  if (!requestedRedirect) {
-    return roleHome;
-  }
-
-  if (
-    !requestedRedirect.startsWith("/") ||
-    requestedRedirect.startsWith("//")
-  ) {
-    return roleHome;
-  }
-
-  const normalizedRedirect =
-    requestedRedirect
-      .split("?")[0]
-      .split("#")[0];
-
-  const allowedByRole: Record<
-    string,
-    string[]
-  > = {
-    owner: ["/dashboard"],
-    admin: ["/admin"],
-    pharmacist: ["/pharmacien"],
-    cashier: ["/caisse"],
-    employee: ["/employe"],
-  };
-
-  const normalizedRole =
-    normalizeRole(role);
-
-  const allowedRoutes =
-    allowedByRole[normalizedRole] ?? [];
-
-  if (
-    allowedRoutes.some(
-      (route) =>
-        normalizedRedirect === route ||
-        normalizedRedirect.startsWith(
-          `${route}/`,
-        ),
-    )
-  ) {
-    return requestedRedirect;
-  }
-
-  return roleHome;
+  return getAllowedRedirect(role, requestedRedirect);
 }
 
 /* ============================================================

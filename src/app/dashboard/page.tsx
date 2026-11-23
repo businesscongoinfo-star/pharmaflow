@@ -148,7 +148,7 @@ function getRoleRedirect(
       return "/dashboard";
 
     case "admin":
-      return "/admin";
+      return "/dashboard";
 
     case "pharmacist":
       return "/pharmacien";
@@ -157,7 +157,7 @@ function getRoleRedirect(
       return "/caisse";
 
     case "employee":
-      return "/employe";
+      return "/caisse";
 
     default:
       return "/login";
@@ -334,7 +334,9 @@ export default function DashboardPage() {
 
           if (
             currentRole !==
-            "owner"
+              "owner" &&
+            currentRole !==
+              "admin"
           ) {
             setRedirecting(true);
 

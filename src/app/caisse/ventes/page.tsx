@@ -100,13 +100,13 @@ function getRoleHome(role: string) {
       return "/dashboard";
 
     case "admin":
-      return "/admin";
+      return "/dashboard";
 
     case "pharmacist":
       return "/pharmacien";
 
     case "employee":
-      return "/employe";
+      return "/caisse";
 
     case "cashier":
       return "/caisse";
@@ -236,7 +236,8 @@ export default function CashierSalesPage() {
         }
 
         if (
-          profileData.role !== "cashier"
+          profileData.role !== "cashier" &&
+          profileData.role !== "employee"
         ) {
           router.replace(
             getRoleHome(

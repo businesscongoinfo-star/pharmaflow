@@ -183,14 +183,17 @@ export default function CashierProductsPage() {
        * ======================================================
        */
 
-      if (profileData.role !== "cashier") {
+      if (
+        profileData.role !== "cashier" &&
+        profileData.role !== "employee"
+      ) {
         switch (profileData.role) {
           case "owner":
             router.replace("/dashboard");
             break;
 
           case "admin":
-            router.replace("/admin");
+            router.replace("/dashboard");
             break;
 
           case "pharmacist":
@@ -198,7 +201,7 @@ export default function CashierProductsPage() {
             break;
 
           default:
-            router.replace("/employe");
+            router.replace("/caisse");
             break;
         }
 

@@ -331,7 +331,7 @@ export default function PaiementsPage() {
       if (currentProfile.role !== "owner" && currentProfile.role !== "admin") {
         if (currentProfile.role === "pharmacist") router.replace("/pharmacien");
         else if (currentProfile.role === "cashier") router.replace("/caisse");
-        else if (currentProfile.role === "employee") router.replace("/employe");
+        else if (currentProfile.role === "employee") router.replace("/caisse");
         else router.replace("/login");
         return;
       }

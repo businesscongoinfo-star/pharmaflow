@@ -252,7 +252,7 @@ export default function ProductsPage() {
             break;
 
           default:
-            router.replace("/employe");
+            router.replace("/caisse");
             break;
         }
 
