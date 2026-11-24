@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { PHARMAFLOW_PRICING } from "./lib/pricing";
+
 type Locale = "fr" | "en";
 type BillingCycle = "monthly" | "yearly";
 
@@ -35,6 +37,51 @@ const TEXT = {
     heroSecondary: "Découvrir PharmaFlow",
 
     trusted: "Conçu pour les pharmacies modernes",
+
+    heroPoint1: "Aucune installation, tout se passe en ligne",
+    heroPoint2: "Données isolées pour chaque pharmacie",
+    heroPoint3: "Interface et support en français",
+
+    heroNote:
+      "Essai de 7 jours • Sans carte bancaire • Sans engagement",
+
+    faqEyebrow: "QUESTIONS FRÉQUENTES",
+    faqTitle:
+      "Tout ce qu'il faut savoir avant de commencer.",
+    faqText:
+      "Les réponses aux questions les plus fréquentes des pharmacies qui découvrent PharmaFlow.",
+    faqContactText: "Une autre question ?",
+    faqContactLink: "Parler à notre équipe",
+    faq: [
+      {
+        q: "Combien de temps dure l'essai gratuit ?",
+        a: "L'essai dure 7 jours, sans paiement et sans engagement. Vous accédez à toute la plateforme : produits, stock, ventes, caisse, rapports, équipe et paiements. À la fin de l'essai, vous choisissez librement un abonnement mensuel ou annuel.",
+      },
+      {
+        q: "Faut-il installer un logiciel ?",
+        a: "Non. PharmaFlow fonctionne directement dans votre navigateur, sur ordinateur, tablette ou téléphone. Aucune installation, aucune sauvegarde manuelle et aucune mise à jour à gérer.",
+      },
+      {
+        q: "Où sont stockées les données de ma pharmacie ?",
+        a: "Dans une base de données hébergée de façon sécurisée. Chaque pharmacie dispose de son propre espace isolé : les données d'une pharmacie ne sont jamais visibles par une autre. L'accès est contrôlé par rôle et par permission.",
+      },
+      {
+        q: "Puis-je créer des comptes pour mon équipe ?",
+        a: "Oui. Vous créez un compte par collaborateur et choisissez son rôle : propriétaire, administrateur, pharmacien, caissier ou employé. Chaque rôle ne voit que les écrans et les actions auxquels il a droit.",
+      },
+      {
+        q: "Quels moyens de paiement puis-je enregistrer ?",
+        a: "Espèces, mobile money, carte bancaire et virement. Les encaissements sont horodatés, rattachés à la vente et exportables en CSV depuis les rapports et le relevé de paiements.",
+      },
+      {
+        q: "Dans quelles langues et devises PharmaFlow fonctionne-t-il ?",
+        a: "L'interface est disponible en français et en anglais. La devise (XAF, CDF, XOF, GNF, RWF, KES, UGX, TZS, ZAR, USD…) est choisie à la création de la pharmacie.",
+      },
+      {
+        q: "Comment joindre le support ?",
+        a: "Le centre de support combine un assistant IA qui répond immédiatement et un conseiller humain qui prend le relais si nécessaire. Vous pouvez aussi nous écrire à pharmaflowafrica@gmail.com ou sur WhatsApp au +242 04 417 79 09.",
+      },
+    ],
 
     dashboardLabel: "Tableau de bord",
     todaySales: "Ventes aujourd'hui",
@@ -186,9 +233,6 @@ const TEXT = {
     monthly: "Mensuel",
     yearly: "Annuel",
 
-    monthlyPrice: "20 000",
-    yearlyPrice: "200 000",
-
     xaf: "XAF",
     perMonth: "/ mois",
     perYear: "/ an",
@@ -198,6 +242,11 @@ const TEXT = {
 
     choosePlan: "Choisir cette formule",
     popular: "RECOMMANDÉ",
+
+    yearlySaving: "≈ 2 mois offerts",
+
+    pricingNote:
+      "7 jours gratuits • Paiement par mobile money ou carte bancaire • Sans engagement",
 
     pricingFeature1: "Accès complet à la plateforme",
     pricingFeature2: "Gestion des produits et du stock",
@@ -265,6 +314,50 @@ const TEXT = {
     heroSecondary: "Discover PharmaFlow",
 
     trusted: "Built for modern pharmacies",
+
+    heroPoint1: "No installation, everything runs online",
+    heroPoint2: "Data isolated for each pharmacy",
+    heroPoint3: "Interface and support in French and English",
+
+    heroNote:
+      "7-day trial • No credit card • No commitment",
+
+    faqEyebrow: "FREQUENTLY ASKED QUESTIONS",
+    faqTitle: "Everything you need to know before starting.",
+    faqText:
+      "Answers to the questions pharmacies ask most often when discovering PharmaFlow.",
+    faqContactText: "Another question?",
+    faqContactLink: "Talk to our team",
+    faq: [
+      {
+        q: "How long does the free trial last?",
+        a: "The trial lasts 7 days, with no payment and no commitment. You get the whole platform: products, inventory, sales, cashier, reports, team and payments. At the end you freely choose a monthly or yearly plan.",
+      },
+      {
+        q: "Do I need to install any software?",
+        a: "No. PharmaFlow runs directly in your browser, on desktop, tablet or phone. No installation, no manual backups and no updates to manage.",
+      },
+      {
+        q: "Where is my pharmacy data stored?",
+        a: "In a securely hosted database. Each pharmacy has its own isolated workspace: one pharmacy's data is never visible to another. Access is controlled by role and by permission.",
+      },
+      {
+        q: "Can I create accounts for my team?",
+        a: "Yes. You create one account per team member and pick their role: owner, administrator, pharmacist, cashier or employee. Each role only sees the screens and actions it is allowed to use.",
+      },
+      {
+        q: "Which payment methods can I record?",
+        a: "Cash, mobile money, card and bank transfer. Payments are timestamped, linked to the sale and can be exported to CSV from reports and the payment statement.",
+      },
+      {
+        q: "Which languages and currencies are supported?",
+        a: "The interface is available in French and English. The currency (XAF, CDF, XOF, GNF, RWF, KES, UGX, TZS, ZAR, USD…) is selected when the pharmacy is created.",
+      },
+      {
+        q: "How do I reach support?",
+        a: "The support centre combines an AI assistant that answers immediately with a human agent who takes over when needed. You can also email pharmaflowafrica@gmail.com or message us on WhatsApp at +242 04 417 79 09.",
+      },
+    ],
 
     dashboardLabel: "Dashboard",
     todaySales: "Today's sales",
@@ -416,9 +509,6 @@ const TEXT = {
     monthly: "Monthly",
     yearly: "Yearly",
 
-    monthlyPrice: "8,500",
-    yearlyPrice: "85,000",
-
     xaf: "XAF",
     perMonth: "/ month",
     perYear: "/ year",
@@ -428,6 +518,11 @@ const TEXT = {
 
     choosePlan: "Choose this plan",
     popular: "RECOMMENDED",
+
+    yearlySaving: "≈ 2 months free",
+
+    pricingNote:
+      "7-day free trial • Pay by mobile money or card • No commitment",
 
     pricingFeature1: "Full platform access",
     pricingFeature2: "Product and inventory management",
@@ -523,6 +618,31 @@ export default function HomePage() {
     useState(0);
 
   const t = TEXT[locale];
+
+  const priceLabels =
+    PHARMAFLOW_PRICING.labels[locale];
+
+  /*
+   * Données structurées (schema.org) : FAQ de la page publique.
+   * L'organisation et l'application sont déjà décrites dans le layout.
+   */
+
+  const faqStructuredData = useMemo(
+    () => ({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "@id": "https://pharmaflow.africa/#faq",
+      mainEntity: t.faq.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.a,
+        },
+      })),
+    }),
+    [t],
+  );
 
   const advertisingSlides = useMemo(
     () =>
@@ -643,6 +763,22 @@ export default function HomePage() {
 
   return (
     <main className="pf-home">
+
+      <a
+        href="#accueil"
+        className="pf-home-skip-link"
+      >
+        {locale === "fr"
+          ? "Aller au contenu principal"
+          : "Skip to main content"}
+      </a>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqStructuredData),
+        }}
+      />
 
       {/* =====================================================
           HEADER / NAVIGATION
@@ -847,6 +983,25 @@ export default function HomePage() {
               {t.heroText}
             </p>
 
+            <ul className="pf-home-hero-points">
+
+              <li>
+                <span aria-hidden="true">✓</span>
+                {t.heroPoint1}
+              </li>
+
+              <li>
+                <span aria-hidden="true">✓</span>
+                {t.heroPoint2}
+              </li>
+
+              <li>
+                <span aria-hidden="true">✓</span>
+                {t.heroPoint3}
+              </li>
+
+            </ul>
+
             <div className="pf-home-hero-buttons">
 
               <Link
@@ -872,6 +1027,10 @@ export default function HomePage() {
               </button>
 
             </div>
+
+            <p className="pf-home-hero-note">
+              {t.heroNote}
+            </p>
 
             <div className="pf-home-trust-line">
 
@@ -2095,7 +2254,7 @@ export default function HomePage() {
               </span>
 
               <h3>
-                {t.monthlyPrice}
+                {priceLabels.monthly}
 
                 <small>
                   {t.xaf}
@@ -2163,7 +2322,7 @@ export default function HomePage() {
               </span>
 
               <h3>
-                {t.yearlyPrice}
+                {priceLabels.yearly}
 
                 <small>
                   {t.xaf}
@@ -2173,6 +2332,10 @@ export default function HomePage() {
               <p>
                 {t.perYear}
               </p>
+
+              <span className="pf-home-price-saving">
+                {t.yearlySaving}
+              </span>
 
             </div>
 
@@ -2211,6 +2374,83 @@ export default function HomePage() {
           </article>
 
         </div>
+
+        <p className="pf-home-pricing-note">
+          {t.pricingNote}
+        </p>
+
+      </section>
+
+      {/* =====================================================
+          FAQ
+      ====================================================== */}
+
+      <section
+        id="faq"
+        className="pf-home-section pf-home-faq"
+      >
+
+        <div className="pf-home-section-heading">
+
+          <span>
+            {t.faqEyebrow}
+          </span>
+
+          <h2>
+            {t.faqTitle}
+          </h2>
+
+          <p>
+            {t.faqText}
+          </p>
+
+        </div>
+
+        <div className="pf-home-faq-list">
+
+          {t.faq.map((item) => (
+            <details
+              key={item.q}
+              className="pf-home-faq-item"
+            >
+
+              <summary>
+
+                <span className="pf-home-faq-question">
+                  {item.q}
+                </span>
+
+                <span
+                  className="pf-home-faq-icon"
+                  aria-hidden="true"
+                >
+                  +
+                </span>
+
+              </summary>
+
+              <p>
+                {item.a}
+              </p>
+
+            </details>
+          ))}
+
+        </div>
+
+        <div className="pf-home-faq-foot">
+
+          <span>
+            {t.faqContactText}
+          </span>
+
+          <Link href="/support">
+            {t.faqContactLink}
+            <span aria-hidden="true">→</span>
+          </Link>
+
+        </div>
+
       </section>
 
       {/* =====================================================

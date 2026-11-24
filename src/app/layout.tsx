@@ -4,6 +4,8 @@ import { getLocale, getMessages } from "next-intl/server";
 
 import "./globals.css";
 
+import { PHARMAFLOW_PRICING } from "./lib/pricing";
+
 /*
 |--------------------------------------------------------------------------
 | SITE CONFIGURATION
@@ -291,6 +293,37 @@ export default async function RootLayout({
         },
 
         image: `${SITE_URL}/favicon.png`,
+
+        inLanguage: ["fr", "en"],
+
+        featureList: [
+          "Gestion des produits et du stock",
+          "Caisse et enregistrement des ventes",
+          "Rapports et exports CSV",
+          "Gestion d'équipe et permissions par rôle",
+          "Encaissements multi-moyens de paiement",
+        ],
+
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Abonnement mensuel",
+            price: String(PHARMAFLOW_PRICING.monthly),
+            priceCurrency: PHARMAFLOW_PRICING.currency,
+            category: "subscription",
+            url: `${SITE_URL}/register?plan=monthly`,
+            availability: "https://schema.org/InStock",
+          },
+          {
+            "@type": "Offer",
+            name: "Abonnement annuel",
+            price: String(PHARMAFLOW_PRICING.yearly),
+            priceCurrency: PHARMAFLOW_PRICING.currency,
+            category: "subscription",
+            url: `${SITE_URL}/register?plan=yearly`,
+            availability: "https://schema.org/InStock",
+          },
+        ],
       },
     ],
   };

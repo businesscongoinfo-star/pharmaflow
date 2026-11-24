@@ -195,3 +195,36 @@ Vérifications effectuées sur l'URL publique après déploiement :
 - `/dashboard` sans session → redirection vers `/login?redirect=%2Fdashboard`
   (le `Proxy` `src/proxy.ts` est bien actif en production) ;
 - assets statiques et `og-image.png` servis par le CDN Vercel.
+
+---
+
+## 6. Améliorations de la page publique (`/`)
+
+1. **FAQ bilingue** : nouvelle section `#faq` (7 questions FR/EN) en
+   `<details>` natifs — aucun JavaScript supplémentaire, comportement
+   accessible et refermable au clavier.
+2. **Données structurées `FAQPage`** injectées par la page (schema.org), pour
+   l'affichage des questions directement dans les résultats Google. Les
+   descriptions `Organization` / `WebSite` / `SoftwareApplication` restent
+   émises une seule fois par `layout.tsx` (pas de doublon).
+3. **Tarifs unifiés et corrigés** : nouveau module `src/app/lib/pricing.ts`,
+   source unique des prix (8 500 XAF/mois, 85 000 XAF/an, 7 jours d'essai).
+   Il corrige une incohérence réelle : la version française affichait
+   `20 000` / `200 000` XAF alors que la version anglaise affichait
+   `8,500` / `85,000` XAF. Les données structurées du layout utilisent
+   désormais la même source.
+4. **Clarté commerciale** : badge « ≈ 2 mois offerts » sur la formule annuelle
+   et note sous la grille tarifaire (essai, moyens de paiement, sans
+   engagement).
+5. **Argumentaire du hero** : trois points clés (aucune installation, données
+   isolées par pharmacie, interface et support FR/EN) et une mention d'essai
+   « 7 jours • sans carte bancaire • sans engagement ».
+6. **Accessibilité** : lien d'évitement « Aller au contenu principal »,
+   contours de focus visibles (`:focus-visible`) sur liens, boutons et
+   questions de la FAQ, `aria-hidden` sur les glyphes décoratifs.
+7. **Mouvement réduit** : les animations/transitions de la page d'accueil sont
+   neutralisées lorsque `prefers-reduced-motion: reduce` est actif.
+
+Vérifications : `npx tsc --noEmit` ✔, `npx eslint .` ✔ (0 erreur, 0
+avertissement), `npm run build` ✔, rendu serveur contrôlé (`#faq` présent,
+7 questions, prix FR corrigés, JSON-LD valide).
