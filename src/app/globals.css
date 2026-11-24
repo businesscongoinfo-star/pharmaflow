@@ -56176,3 +56176,272 @@ select:focus-visible {
     flex-direction: column;
   }
 }
+/* ============================================================
+   PAGE PUBLIQUE — AMÉLIORATIONS
+   (points clés du hero, FAQ, accessibilité, animations)
+   ============================================================ */
+
+/* ---------- Lien d'évitement (accessibilité) ---------- */
+
+.pf-home-skip-link {
+  position: absolute;
+  top: -80px;
+  left: 16px;
+  z-index: 130;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #10263b;
+  color: #ffffff !important;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: top 0.18s ease;
+}
+
+.pf-home-skip-link:focus {
+  top: 16px;
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* ---------- Points clés du hero ---------- */
+
+.pf-home-hero-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pf-home-hero-points li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #3f5a72;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pf-home-hero-points li span {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e3f7f1;
+  color: #0b8b71;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.pf-home-hero-copy > .pf-home-hero-note {
+  max-width: 560px;
+  margin: 16px 0 0;
+  color: #8b9aab;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+
+/* ---------- FAQ ---------- */
+
+.pf-home-faq-list {
+  display: grid;
+  gap: 12px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.pf-home-faq-item {
+  overflow: hidden;
+  border: 1px solid #e4ebf3;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(15, 43, 70, 0.04);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pf-home-faq-item:hover {
+  border-color: #cddcec;
+  box-shadow:
+    0 12px 26px rgba(15, 43, 70, 0.07);
+}
+
+.pf-home-faq-item[open] {
+  border-color: #c7dcf5;
+  box-shadow:
+    0 14px 30px rgba(17, 103, 216, 0.08);
+}
+
+.pf-home-faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 19px 22px;
+  color: #10263b;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.45;
+  cursor: pointer;
+  list-style: none;
+}
+
+.pf-home-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.pf-home-faq-item summary:focus-visible {
+  outline: 2px solid #1167d8;
+  outline-offset: -3px;
+}
+
+.pf-home-faq-question {
+  min-width: 0;
+}
+
+.pf-home-faq-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #eef5ff;
+  color: #1167d8;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  transition:
+    transform 0.22s ease,
+    background 0.22s ease,
+    color 0.22s ease;
+}
+
+.pf-home-faq-item[open] .pf-home-faq-icon {
+  transform: rotate(45deg);
+  background: #1167d8;
+  color: #ffffff;
+}
+
+.pf-home-faq-item > p {
+  margin: 0;
+  padding: 14px 22px 22px;
+  border-top: 1px solid #eef3f8;
+  color: #64768a;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.pf-home-faq-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 860px;
+  margin: 26px auto 0;
+  color: #718296;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pf-home-faq-foot a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #1167d8;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.pf-home-faq-foot a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Foyers de clavier ---------- */
+
+.pf-home a:focus-visible,
+.pf-home button:focus-visible {
+  outline: 2px solid #1167d8;
+  outline-offset: 3px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 900px) {
+  .pf-home-hero-points {
+    gap: 8px 14px;
+  }
+
+  .pf-home-faq-item summary {
+    padding: 16px 18px;
+    font-size: 14px;
+  }
+
+  .pf-home-faq-item > p {
+    padding: 12px 18px 18px;
+  }
+}
+
+@media (max-width: 650px) {
+  .pf-home-hero-points {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .pf-home-faq-item summary {
+    gap: 12px;
+  }
+
+  .pf-home-faq-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 15px;
+  }
+}
+
+/* ---------- Mouvement réduit ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-home *,
+  .pf-home *::before,
+  .pf-home *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Tarifs : économie annuelle + note ---------- */
+
+.pf-home-price-saving {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #e3f7f1;
+  color: #0b8b71;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.pf-home-pricing-note {
+  max-width: 720px;
+  margin: 30px auto 0;
+  color: #8b9aab;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.7;
+  text-align: center;
+}
